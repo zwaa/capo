@@ -125,7 +125,10 @@ export type CardKind =
   | 'cop'
   | 'tail'
   | 'emergency'
-  | 'betrayal';
+  | 'betrayal'
+  | 'offer'
+  | 'bail'
+  | 'snitch';
 
 export interface Card {
   id: number;
@@ -156,7 +159,7 @@ export interface Op {
 
 export interface ScheduledEvent {
   day: number;
-  kind: 'cop' | 'tail' | 'tip' | 'defect';
+  kind: 'cop' | 'tail' | 'tip' | 'defect' | 'offer' | 'bail' | 'snitch';
   family: FamilyId;
   ref: string | null;
 }

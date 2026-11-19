@@ -274,6 +274,10 @@ function schedule(s: GameState): void {
   if (owned(s, 'player').some((b) => b.racket === 'still') && chance(s, 0.5))
     run.scheduled.push({ day: int(s, 4, 26), kind: 'tail', family: 'player', ref: null });
 
+  const everyday = ['offer', 'bail', 'snitch'] as const;
+  const n = int(s, 1, 2);
+  for (let i = 0; i < n; i++) run.scheduled.push({ day: int(s, 3, 27), kind: pick(s, everyday), family: 'player', ref: null });
+
   for (const l of s.lts) {
     if (l.plotting && l.status === 'active') run.scheduled.push({ day: int(s, 6, 22), kind: 'defect', family: l.family, ref: l.id });
   }
@@ -462,6 +466,55 @@ function fire(s: GameState, ev: ScheduledEvent): void {
         `A bartender on ${addressOf(r)} says ${label(r)} is planning ${what}, maybe in three days. [Likely]`,
         biz(s, op.target) ?? r,
       );
+      return;
+    }
+    case 'offer': {
+      const b = pick(s, s.businesses.filter((x) => x.owner === null));
+      if (!b) return;
+      const price = 500 + b.protection * 2;
+      card(s, {
+        kind: 'offer',
+        title: 'A shopkeeper in trouble',
+        text: `The owner of ${b.name} is behind on his loans to some very impatient people. He'll sign the place over to you for ${'$'}${price}, no questions, if you square his debts.`,
+        options: [
+          { id: 'buy', label: `Buy him out (${'$'}${price})`, hint: 'The shop is ours, quietly. No heat.', disabled: s.families.player.cash < price },
+          { id: 'pass', label: 'Pass', hint: 'Someone else might not' },
+        ],
+        ctx: { biz: b.id, price },
+        focus: b,
+      });
+      return;
+    }
+    case 'bail': {
+      const l = pick(s, activeLts(s, 'player').filter((x) => x.crew > 1));
+      if (!l) return;
+      card(s, {
+        kind: 'bail',
+        title: `One of ${first(l)}'s boys is in the tank`,
+        text: `Young Tony from ${first(l)}'s crew broke a bottle over a sailor's head at a dance hall. He's in a cell and he's scared, and scared men talk.`,
+        options: [
+          { id: 'pay', label: 'Pay his bail ($150)', hint: `${first(l)}'s crew sees you look after your own`, disabled: s.families.player.cash < 150 },
+          { id: 'leave', label: 'Let him sit', hint: 'Lose a hood. He might say something. Heat +5.' },
+        ],
+        ctx: { lt: l.id },
+        focus: l,
+      });
+      return;
+    }
+    case 'snitch': {
+      const r = activeLts(s, 'rival').find((x) => s.run!.ops[x.id] && !s.run!.ops[x.id].done);
+      if (!r) return;
+      card(s, {
+        kind: 'snitch',
+        title: 'A Calloway man wants to sell',
+        text: `A driver for the Calloway Outfit says he knows where ${label(r)} is headed this month. He wants $150 and a promise you never saw him.`,
+        options: [
+          { id: 'buy', label: 'Pay him ($150)', hint: 'Learn their plan. You can change yours.', disabled: s.families.player.cash < 150 },
+          { id: 'pass', label: 'Send him away', hint: 'Could be a trap anyway' },
+        ],
+        ctx: { lt: r.id },
+        focus: null,
+      });
       return;
     }
     case 'defect': {
@@ -1045,6 +1098,37 @@ export function answer(s: GameState, cardId: number, optionId: string): Card | n
         l.plotting = false;
         log(s, `We sent ${first(l)} back. Calloway will hear about it eventually.`, 'player');
       }
+      break;
+    }
+    case 'offer': {
+      if (optionId === 'buy' && b && b.owner === null) {
+        spend(s, 'player', Number(c.ctx.price), `Bought out ${b.name}`);
+        b.owner = 'player';
+        b.managedBy = null;
+        log(s, `${b.name} signed over to the family.`, 'player');
+        story(s, `${b.name.toUpperCase()} SOLD`, `The former owner of ${b.name} has left for his sister's farm "for his health."`, 3);
+      }
+      break;
+    }
+    case 'bail': {
+      if (!l) break;
+      if (optionId === 'pay') {
+        spend(s, 'player', 150, `Bail for one of ${first(l)}'s boys`);
+        l.loyalty = Math.min(100, l.loyalty + 4);
+        l.authority = Math.min(100, l.authority + 3);
+      } else {
+        l.crew = Math.max(0, l.crew - 1);
+        addHeat(s, 'player', 5, 'A scared hood talking in a cell');
+      }
+      break;
+    }
+    case 'snitch': {
+      if (optionId !== 'buy' || !l) break;
+      spend(s, 'player', 150, 'A Calloway driver');
+      const op = run.ops[l.id];
+      const t = op ? (op.goal === 'hit' ? (ltById(s, op.target) ? label(ltById(s, op.target)!) : biz(s, op.target)?.name) : biz(s, op.target)?.name) : null;
+      const what = op ? `${op.goal === 'expand' ? 'taking' : op.goal === 'hit' ? 'a hit on' : op.goal === 'earn' ? 'working' : op.goal === 'hold' ? 'guarding' : op.goal} ${t ?? ''}`.trim() : 'nothing much';
+      emergency(s, 'What the driver said', `${label(l)} is ${what}. [Confirmed]`, (op && biz(s, op.target)) || l);
       break;
     }
     case 'emergency':
