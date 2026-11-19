@@ -45,7 +45,7 @@ When pillars conflict, the higher one wins.
   - **1931: a federal tax case** against a big-name boss sets precedent, and unexplained wealth becomes a serious risk from then on.
   - **1932–33: Repeal approaches.** Booze margins slide each month. Families still relying on liquor in 1933 are in trouble.
 - **The city:** about 12–16 wards, procedurally generated each run. Each run gets a new layout, new businesses, new officials and new rival leaders.
-- **Every run starts from the bottom.** The boss, two or three hoods, a few hundred dollars and no lieutenants. The rival families are already established. Each run follows the same arc: a hustler working one street, then a small outfit, then a family, then a contender for the city. The boss's origin (§6.5) changes what you start with, not where you start.
+- **Every run starts from the bottom.** The boss, two or three hoods, a few hundred dollars and no lieutenants. The rival families are already established. Each run follows the same arc: a hustler working one street, then a small outfit, then a family, then a contender for the city. The boss's origin (§6.6) changes what you start with, not where you start.
 
 ## 5. The turn loop
 
@@ -64,7 +64,7 @@ The family's work is split into four **areas**. Each area is run either by **the
 | **Muscle** | Protection (signing up shops, collecting), guarding, hits, recruiting hoods | From day one |
 | **Property** | Buying or taking over buildings, fitting out back rooms, telephones | As soon as there's cash to spend |
 | **Vice** | Running speakeasies, gambling dens and stills; the booze supply chain from still to bar | Once you own a building with a back room |
-| **Fixing** | Paying off cops and officials, lawyers and bail, laundering; later, elections | Once heat starts to matter |
+| **Fixing** | Paying off cops, captains, judges and aldermen; later, elections | Once heat starts to matter |
 
 **Jobs and priorities.** Each area has a short, ranked list of **standing jobs**. For example, Muscle might be: *1. Collect from our 6 shops · 2. Sign up Novak's Bakery · 3. Guard the café · 4. Recruit.*
 - **Some jobs take a target** (a shop, a building, a rival, an official). **Some are ongoing** (collect, guard, run the speakeasies).
@@ -76,7 +76,9 @@ The family's work is split into four **areas**. Each area is run either by **the
 **The boss in person.** At the start of every run the boss runs all four areas personally:
 - The boss is **on the map** with a small crew, and does jobs **exactly as ordered**, with no personality drift.
 - But the boss's crew is **shared across every area the boss still runs**, so capacity is tight.
-- And the boss on the street is **exposed**. Fights and raids can catch the boss (§6.4).
+- And the boss on the street is **exposed**. Fights and raids can catch the boss (§6.5).
+
+**Specialists** (§6.4) sit alongside the areas: a lawyer, an accountant, an armourer and others who work for the whole family, not one area.
 
 **Hiring a lieutenant for an area** hands over that area's job list and the hoods you give them, and frees the boss's crew for the rest. You gain capacity and lose control. You can run any area yourself for as long as you like. Later, a big area can be **split between two lieutenants by territory**, e.g. Muscle (west side) and Muscle (docks).
 
@@ -143,13 +145,32 @@ Power you give a lieutenant (turf, crew size, money, prestige) raises their **Am
 - If demands go unmet, Ambition turns into **plotting**: skimming, splitting off with their crew and turf, **flipping to the feds**, or a **coup** against you.
 - There are **warning signs** before every betrayal (new car, missed meetings, seen with rival people). Informants inside your own family can confirm them.
 
-### 6.4 The Boss and succession
+### 6.4 Specialists
+Lieutenants run areas with crews of hoods. **Specialists** are professionals who work for **the whole family**. They have no crew and no turf, and they **don't count toward the six-lieutenant cap**.
+
+Each specialist has a **standing service** that applies everywhere, and can take **one job a month on request**:
+
+| Specialist | Standing service | Job on request |
+|---|---|---|
+| **Lawyer** | Bail, shorter sentences, fewer arrests that stick | Defend someone at trial; get a witness's statement "lost" |
+| **Accountant** | Laundering capacity and a better rate; lower tax-case risk | Audit a lieutenant's books (exposes skimming); clean up before an inspection |
+| **Armourer** | Better weapons for every crew: stronger in fights | Equip one job specially: a tommy gun for a hit (very loud) or something quiet |
+| **Doctor** | Wounded people recover faster and die less often. Nobody goes to a hospital, so there are no police reports | Patch up someone important mid-month |
+| **Driver** | Runners arrive faster in a Change of Plans; supply runs lose more tails; fewer arrests at the scene | A getaway for one job |
+| **Brewmaster** | Stills make more and better liquor (better bars, nobody goes blind) | Fix a bad batch before it makes the papers |
+| **Newsman** | Softer headlines: violence adds less heat, and the Morning Edition takes your side | Plant a story about a rival |
+
+**Hiring:** one of each kind at a time, through a boss meeting, with a monthly retainer. Better specialists cost more, and some can only be had by poaching them from a rival.
+
+**The catch:** specialists know everything about their part of the business. A lawyer or an accountant who turns is the most dangerous witness there is; the 1931 tax case (§4) is built on exactly that. They have loyalty and a price like anyone else, rivals try to buy them, and the Task Force (§8.5) goes after them first.
+
+### 6.5 The Boss and succession
 **You are a character on the map.** The boss can be shot, arrested, convicted or indicted for tax evasion.
 - When the boss falls, **succession** happens: the lieutenant with the strongest claim (Authority, Loyalty, crew size) takes over. **That may be the one who arranged it.**
 - The run continues with the new boss's traits, and loyalties reshuffle. Some lieutenants won't accept the new boss and leave.
 - **Game over** only if no viable successor exists or the family collapses.
 
-### 6.5 Creating your boss
+### 6.6 Creating your boss
 Your family starts as a **blank slate**: no archetype, no fixed playstyle. Instead you build the **boss**:
 - **Name, nickname and portrait.**
 - **One origin** (where they came from), which sets starting stats, a head start in one area, and someone ready to become your first lieutenant:
@@ -164,7 +185,7 @@ Your family starts as a **blank slate**: no archetype, no fixed playstyle. Inste
 
 - **Two traits** chosen from a list, each with an **upside and a downside**, e.g. *Silver Tongue* (better deals, rivals expect you to bluff), *Iron Fist* (crews obey, ambitious lieutenants resent you), *Family Man* (high loyalty, family can be targeted), *Showman* (press loves you, more Federal Attention), *Paranoid* (spots moles early, loyal lieutenants feel the suspicion).
 
-**This ties into succession:** when a lieutenant takes over (§6.4), *their* traits become the boss's traits. The family's character shifts with whoever is in charge.
+**This ties into succession:** when a lieutenant takes over (§6.5), *their* traits become the boss's traits. The family's character shifts with whoever is in charge.
 
 ---
 
@@ -182,7 +203,7 @@ Each ward has 4–8 businesses. A building has a **front** (barber, laundry, cig
 
 ### 7.2 Dirty and clean money
 - Most income is **dirty**. Bribes and hood wages can be paid with dirty cash, but businesses, campaign donations and going legit need **clean** cash.
-- **Laundering** goes through fronts, each with a capacity per month. An accountant improves the rate.
+- **Laundering** goes through owned fronts, each with a capacity per month. Without an **accountant** (§6.4) it's slow and leaves a paper trail.
 - **Unexplained wealth** (clean net worth well above legitimate income) builds **tax-case risk**, which rises sharply after 1931.
 
 ### 7.3 The Repeal curve
@@ -342,8 +363,9 @@ Every run, won or lost, ends with a **final front page**: an obituary, a trial v
 2. **Property.** With protection money coming in, buy your first building, maybe Aldo's old café back. Add a telephone. *Teaches:* property vs protection, and telephones (which matter in step 4).
 3. **Vice.** Fit out a back room and open a speakeasy, then set up a still to supply it. *Teaches:* rackets, the supply chain, raids. *Ends:* hire someone to run Vice once you have two rackets.
 4. **Trouble.** Calloway notices you. A hit on one of your shops triggers your first **Change of Plans**, and the telephone you bought decides how fast you can respond. *Teaches:* fights, Change of Plans, the Wire.
-5. **Fixing.** Heat brings your first raid and an arrest. Pay off the precinct captain and get your man a lawyer. *Ends:* hire a fixer.
-6. **Ambition.** Your Muscle lieutenant, now running half your income, makes their first demand. *Teaches:* demands, loyalty signs, betrayal.
+5. **Fixing.** Heat brings your first raid and an arrest. Pay off the precinct captain. *Ends:* hire someone to run Fixing.
+6. **Specialists.** Your arrested man needs a **lawyer**: your first specialist. Soon after, the cash piling up needs an **accountant**. *Teaches:* family-wide services, and the risk of people who know too much.
+7. **Ambition.** Your Muscle lieutenant, now running half your income, makes their first demand. *Teaches:* demands, loyalty signs, betrayal.
 
 After that the lessons switch off, and the run carries on in the same city. Lessons trigger on progress, not on the calendar, so a player can go as fast or as slow as they like and skip any of them.
 
@@ -351,7 +373,7 @@ After that the lessons switch off, and the run carries on in the same city. Less
 
 ## 17. Vertical slice (the first prototype)
 *v1, below, is built and playable. Playtesting led to the areas-and-jobs model (§5.2) and starting from nothing (§4, §16). v2 rebuilds the slice around them:*
-- **v2:** one ward, one established rival, **twelve months** (all of 1927), starting with the boss and two hoods. Four areas with ranked job lists, hoods as capacity, the boss on the map, hiring lieutenants into areas, protection separate from property, and the tutorial lessons. Fixing is kept light (the captain and lawyers). Change of Plans, react cards, heat, the Wire and the Morning Edition carry over from v1.
+- **v2:** one ward, one established rival, **twelve months** (all of 1927), starting with the boss and two hoods. Four areas with ranked job lists, hoods as capacity, the boss on the map, hiring lieutenants into areas, protection separate from property, and the tutorial lessons. Fixing is kept light (the precinct captain). Three specialists: lawyer, armourer and driver. Change of Plans, react cards, heat, the Wire and the Morning Edition carry over from v1.
 
 *v1 scope:*
 **Goal: prove the core loop is fun before building anything else.**
@@ -365,11 +387,12 @@ After that the lessons switch off, and the run carries on in the same city. Less
 ## 18. Open questions
 
 1. **Deed list.** The full set of deeds and unlocks (§14.1). How many is enough at launch?
-2. **Final origin and trait list** (§6.5).
+2. **Final origin and trait list** (§6.6).
 3. **Change of Plans tuning** (§5.5). Is 1–2 per month right? Which events trigger one?
 4. **Job lists.** How many jobs per area before it feels like micromanagement? Can hoods be lent between areas mid-month?
-5. **Boss attention.** Is a shared crew enough of a limit on the boss running everything, or does the boss also need limited attention per month?
-6. **Engine for the full game.** Godot or a web engine (e.g. PixiJS) for the isometric map. Decide after the vertical slice.
+5. **Specialist roster.** Which specialists are in the full game, and can a specialist ever become a lieutenant (or the reverse)?
+6. **Boss attention.** Is a shared crew enough of a limit on the boss running everything, or does the boss also need limited attention per month?
+7. **Engine for the full game.** Godot or a web engine (e.g. PixiJS) for the isometric map. Decide after the vertical slice.
 
 ---
 
@@ -397,6 +420,7 @@ After that the lessons switch off, and the run carries on in the same city. Less
 | Tutorial | First run with lessons switched on ("The Nephew"): learn each area in turn, hiring a lieutenant for each |
 | Run start | Every run starts from the bottom: the boss, two or three hoods, no lieutenants. Origins change what you start with |
 | Orders | Four areas (Muscle, Property, Vice, Fixing), each run by the boss or a lieutenant, with ranked standing jobs, optional targets and hoods as capacity |
+| Specialists | Lawyer, accountant, armourer, doctor, driver, brewmaster and newsman serve the whole family. No crew, outside the lieutenant cap, and dangerous if they turn |
 | Protection vs property | Separate: protection is shops that pay you; property is buildings you own, which can hold back rooms and telephones |
 | Next step | Vertical slice v2: rebuild the prototype around areas, jobs and starting from nothing (§17) |
 | Anti-snowball | Federal attention by share + internal ambition + rival coalitions |
