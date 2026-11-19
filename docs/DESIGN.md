@@ -39,7 +39,7 @@ When pillars conflict, the higher one wins.
 ## 4. Structure of a run
 
 - **Span:** January 1927 to December 1933 (Repeal). **Hard end.**
-- **Turn length:** **one month**, which gives about 84 turns at 2–4 minutes each, or roughly 3–5 hours. *(See open question Q1: weekly turns are more faithful but don't fit the run length.)*
+- **Turn length:** **one month**, which gives about 84 turns at 2–4 minutes each, or roughly 3–5 hours. Unexpected events can interrupt the month for a **Change of Plans** (§5.5).
 - **Fixed historical events** give each run its shape. These are fictionalised and contain no real people:
   - **Oct 1929: the Crash.** Legit businesses lose value, desperate people make good recruits, and gambling and loansharking boom.
   - **1931: a federal tax case** against a big-name boss sets precedent, and unexplained wealth becomes a serious risk from then on.
@@ -85,7 +85,23 @@ Card sources include lieutenant personality clashes, rival moves, police raids, 
 
 **Violence** resolves automatically from numbers, weapons, Muscle and Nerve, surprise and position. Big fights produce **one decisive react card** (*push / retreat / take a hostage / call in reinforcements*) before resolving. Results feed straight into casualties, arrests, heat and headlines.
 
-### 5.5 Fallout (automatic)
+### 5.5 Change of Plans (mid-month re-planning)
+React cards cover small decisions. Sometimes something happens that a single choice can't fix: a lieutenant is arrested, a rival hits your brewery, the Task Force raids a front, an informant reports a rival meeting tomorrow night. Those **big events stop the month** and open a **Change of Plans**:
+
+- The rest of the month pauses, with the event shown on the map.
+- You can **re-issue directives** (goal, posture, resources) to lieutenants for the rest of the month, and use a **boss action** if you have one left.
+- **The message has to reach them.** It's 1929, not 2029:
+  - Lieutenants at a front **with a telephone** get the new orders straight away.
+  - Lieutenants out on the street are reached **by runner** and switch over a few days later, so the old plan keeps running until then.
+  - Lieutenants **lying low** or in hiding can't be reached at all this month.
+  - Telephones are an upgrade you buy for fronts, and lines can be **tapped** by the Task Force or a bent operator.
+- **Limits:** at most **1–2 Changes of Plans per month**. Each one uses up a boss action from *next* month, because emergencies cost you time you'd have spent elsewhere.
+- **Personality still matters.** A *Hothead* ordered to stand down may not, and a *Cautious* lieutenant ordered to retaliate may stall.
+- **Rivals can re-plan too,** under the same rules. A rival who reacts fast to your hit is one with telephones and loyal lieutenants.
+
+The point: monthly turns give the game its pace, but the plan is never locked in. The player responds to events, and how quickly they can respond depends on how well the family is organised.
+
+### 5.6 Fallout (automatic)
 Loyalty, Ambition, Heat, Federal Attention and official relationships update, the AI families commit their next orders, and the next newspaper is written.
 
 ---
@@ -237,6 +253,13 @@ The violence and vice are **in the game**: people die, rackets include brothels 
 
 ### 13.2 Art direction
 - **Isometric city.** A diorama-style isometric map of the city: brownstones, docks, rail yards, city hall. Wards are readable as districts, and fronts show their back-room trade through small details (a lookout on the corner, a truck at night).
+- **Zoom from city to street.** Three levels:
+  1. **City:** the whole map, coloured by family territory, with heat and Federal Attention overlays. Planning happens here.
+  2. **Ward:** blocks, fronts, patrols and crews as small groups. The default view in the watch phase.
+  3. **Street:** individual hoods, cars, doorways and people on the pavement. Scenes such as a collection, a tail, a raid or a meeting play out here, staged Hays Code style (§13.1).
+- **Fog of war applies at every zoom level.** At street level you see only what your people see. Zooming into a ward with no informants shows dark windows and empty streets. Seeing more of the city is something you earn, and the zoom makes that visible.
+- **Street-level details are clues.** A new car outside a lieutenant's house, a rival's truck making deliveries to "your" speakeasy, a stranger watching your front. The player who looks closely can spot betrayals before an informant reports them.
+- **Art cost warning:** street level is the biggest art expense in the game. Keep it **modular**: a kit of building fronts, interiors-through-windows, vehicles and character sprites recombined procedurally, plus a small set of animated, staged scenes. Don't plan bespoke art per location.
 - **Day and night.** The watch phase shows the month passing with lighting shifts. Most business happens after dark.
 - **Character portraits** for the boss, lieutenants, officials and rival bosses: caricatured, pulp-illustration style to match the tone.
 - **UI** in a period paper style (ledgers, telegrams, newspaper pages, dossiers) that stays clean and readable.
@@ -251,12 +274,11 @@ The violence and vice are **in the game**: people die, rackets include brothels 
 
 ## 15. Open questions
 
-1. **Turn length.** Monthly (fits 3–5 hours) vs weekly (closer to the original, but about 360 turns). Could weekly work with fast-forward through quiet weeks?
-2. **Lieutenant cap.** Is 6 the right maximum before it turns back into micromanagement?
-3. **Meta-progression between runs**, like a roguelite (unlock origins and traits, starting lieutenants), or none?
-4. **Tutorial.** A scripted first run or a guided sandbox?
-5. **Boss trait list.** Which origins and traits (§6.5) make the cut, and how many traits does a boss get?
-6. **How zoomed in does the isometric map go?** Ward-level overview only, or down to individual street scenes?
+1. **Lieutenant cap.** Is 6 the right maximum before it turns back into micromanagement?
+2. **Roguelite meta-progression.** Yes in principle; what carries over between runs is still being designed.
+3. **Tutorial.** A scripted first run or a guided sandbox?
+4. **Final origin and trait list** (§6.5).
+5. **Change of Plans tuning** (§5.5). Is 1–2 per month right? Which events trigger one?
 
 ---
 
@@ -275,6 +297,11 @@ The violence and vice are **in the game**: people die, rackets include brothels 
 | Run length | 3–5 hours, procedurally generated city |
 | Command model | Hybrid: lieutenants by default, costly direct orders |
 | Watch phase | Fast map simulation + 2–5 react cards per month |
+| Turn length | Monthly |
+| Mid-month response | Change of Plans: big events pause the month for re-issuing orders; speed depends on telephones and runners |
+| Boss creation | One origin + two traits |
+| Meta-progression | Roguelite, details being designed |
+| Zoom | City → ward → street, with fog of war at every level |
 | Anti-snowball | Federal attention by share + internal ambition + rival coalitions |
 | Clock | Hard end at Repeal, Dec 1933 |
 | Boss | Character on the map + succession system |
