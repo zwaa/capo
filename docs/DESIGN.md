@@ -266,16 +266,57 @@ The violence and vice are **in the game**: people die, rackets include brothels 
 
 ---
 
-## 14. Engineering notes
+## 14. Between runs (roguelite meta-progression)
+
+**Principle: unlocks give you new options, not more power.** Nothing carried between runs makes you stronger. It makes the next run *different*. The anti-snowball brakes (§9) stay meaningful no matter how many hours someone has played.
+
+### 14.1 Deeds unlock content
+Specific accomplishments unlock specific things, so playing in new ways is rewarded and players learn the systems as they go:
+
+| Deed | Unlocks |
+|---|---|
+| Win an election by stuffing ballot boxes | Trait: *Ward Heeler* |
+| Survive a coup attempt | Trait: *Sleeps With One Eye Open* |
+| Go Legit before 1931 | Origin: *Old Money*, a society heir slumming it |
+| Have a lieutenant turn informant and still win | Event pack: *The Rat* |
+| Own every official in the city at once | Rival archetype: *The Reformer*, a crusading family that fights through the law |
+| Run a ward with zero bodies for a year | Racket: *Insurance*, a legal front with an illegal model |
+
+Deeds unlock **origins, traits, rival archetypes, rackets, city districts** (e.g. a racetrack or a port with an island) **and event packs**. A **Rogues' Gallery** shows locked deeds as rumours, with a hint of how to earn each one.
+
+### 14.2 Legacy points buy cosmetics and convenience
+The end-of-run Legacy score (§12) gives **legacy points**, spent only on things that don't change balance:
+- Portrait styles, newspaper mastheads, map palettes, period music.
+- **Saved boss presets** and **city seed selection** (replay a city you liked).
+- **The Family Album:** a record of every past boss, lieutenant and front page.
+
+### 14.3 Counts (the difficulty ladder)
+Winning a run unlocks the next **Count**. Like charges stacking up on an indictment, each Count adds a modifier that stays for all higher Counts:
+
+- **Count I:** standard game.
+- **Count II:** officials' prices rise 25%.
+- **Count III:** the Task Force arrives earlier.
+- **Count IV:** a third rival family.
+- **Count V:** lieutenants start with higher Ambition.
+- …up to **Count X**, with a harsher Repeal curve, rivals forming coalitions sooner, and so on.
+
+Counts give experienced players a long climb without making the first run punishing.
+
+### 14.4 Every ending makes a good story
+Every run, won or lost, ends with a **final front page**: an obituary, a trial verdict, a society-page retirement or a gangland "where are they now." It lists what the run unlocked. Losing always moves something forward, and the ending is something to remember (and screenshot).
+
+---
+
+## 15. Engineering notes
 - **Orders are data.** The player and AI families submit the same order format, so the AI plays by the same rules.
 - **Deterministic resolution** from a seeded RNG, so the same orders and seed always give the same month. That makes bugs reproducible, balance testing possible and seeds shareable.
 
 ---
 
-## 15. Open questions
+## 16. Open questions
 
 1. **Lieutenant cap.** Is 6 the right maximum before it turns back into micromanagement?
-2. **Roguelite meta-progression.** Yes in principle; what carries over between runs is still being designed.
+2. **Deed list.** The full set of deeds and unlocks (§14.1). How many is enough at launch?
 3. **Tutorial.** A scripted first run or a guided sandbox?
 4. **Final origin and trait list** (§6.5).
 5. **Change of Plans tuning** (§5.5). Is 1–2 per month right? Which events trigger one?
@@ -300,7 +341,7 @@ The violence and vice are **in the game**: people die, rackets include brothels 
 | Turn length | Monthly |
 | Mid-month response | Change of Plans: big events pause the month for re-issuing orders; speed depends on telephones and runners |
 | Boss creation | One origin + two traits |
-| Meta-progression | Roguelite, details being designed |
+| Meta-progression | New options, not power. Deeds unlock content, legacy points buy cosmetics and convenience, Counts I–X difficulty ladder, every ending a front page |
 | Zoom | City → ward → street, with fog of war at every level |
 | Anti-snowball | Federal attention by share + internal ambition + rival coalitions |
 | Clock | Hard end at Repeal, Dec 1933 |
