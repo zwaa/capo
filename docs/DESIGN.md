@@ -12,7 +12,7 @@ You run a crime family from the first speakeasy to Repeal in December 1933. Each
 
 A run is **3–5 hours** in a **procedurally generated city** against **2–3 rival families**. You win by wiping out the opposition, by owning city hall, by getting out clean, or by surviving to Repeal with the strongest legacy.
 
-**Inspiration:** the crime-management genre of the late 90s, with its orders phase followed by a watch phase. We keep that core and rebuild the parts that frustrated players: micromanagement, opaque systems, passive AI and a won game that still needs hours of cleanup.
+**Single-player.** **Inspiration:** the crime-management genre of the late 90s, with its orders phase followed by a watch phase. We keep that core and rebuild the parts that frustrated players: micromanagement, opaque systems, passive AI and a won game that still needs hours of cleanup.
 
 ---
 
@@ -115,13 +115,30 @@ Power you give a lieutenant (turf, crew size, money, prestige) raises their **Am
 - The run continues with the new boss's traits, and loyalties reshuffle. Some lieutenants won't accept the new boss and leave.
 - **Game over** only if no viable successor exists or the family collapses.
 
+### 6.5 Creating your boss
+Your family starts as a **blank slate**: no archetype, no fixed playstyle. Instead you build the **boss**:
+- **Name, nickname and portrait.**
+- **One origin** (where they came from), which sets starting stats, a starting lieutenant and a contact:
+
+| Origin | Start with |
+|---|---|
+| **Off the Boat** | Respect in immigrant wards and a loyal old-country lieutenant, but a weak hand with cops and city hall. |
+| **The Trenches** | A war veteran: a strong Muscle crew and an army buddy as lieutenant. Violence draws less loyalty loss and more heat. |
+| **Bent Badge** | A former cop: police contacts on the payroll from day one, but other families distrust you. |
+| **The Docks** | A union man: control of the waterfront and smuggling routes, and a union boss who expects favours. |
+| **Back Office** | A bookkeeper who climbed the ranks: cheaper laundering and an accountant, but a thin crew. |
+
+- **Two traits** chosen from a list, each with an **upside and a downside**, e.g. *Silver Tongue* (better deals, rivals expect you to bluff), *Iron Fist* (crews obey, ambitious lieutenants resent you), *Family Man* (high loyalty, family can be targeted), *Showman* (press loves you, more Federal Attention), *Paranoid* (spots moles early, loyal lieutenants feel the suspicion).
+
+**This ties into succession:** when a lieutenant takes over (§6.4), *their* traits become the boss's traits. The family's character shifts with whoever is in charge.
+
 ---
 
 ## 7. The economy
 
 ### 7.1 Wards and businesses
 Each ward has 4–8 businesses. A business has a **front** (barber, laundry, cigar shop, garage, club) and a **back room** slot:
-- **Speakeasy** · **gambling den** · **numbers bank** · **still / brewery** · **warehouse** · **brothel** (optional; depends on content rating, see Q6)
+- **Speakeasy** · **gambling den** · **numbers bank** · **still / brewery** · **warehouse** · **"hotel"** (a brothel in all but name; see §13.1)
 
 **Rackets:** protection · bootlegging (produce → transport → sell) · gambling · numbers · loansharking · and later, unions, construction and legit holdings.
 
@@ -209,29 +226,37 @@ Together these should keep the last third of a run tense, not a cleanup.
 - **Pulpy and wry.** Period slang, nicknames ("Two-Tone" Benny, Mickey "the Accountant"), caricatured hoods, and front pages with dark humour.
 - The newspaper is the game's narrator. It summarises what happened, with whatever slant the press is being paid for.
 - Clarity comes first: the map and every number must be readable at a glance. Mood comes second.
-- Art direction is not yet decided (see Q3).
+
+### 13.1 Hays Code presentation
+The violence and vice are **in the game**: people die, rackets include brothels and gambling, and bodies end up in the river. What changes is **what the camera shows**. We present it the way a 1934 studio picture would:
+- **Violence happens off-screen or in silhouette.** On the map: muzzle flashes behind a window, a car speeding away, a hat left on the pavement. No blood, no gore, no lingering on bodies. The newspaper and the ledger tell you the cost.
+- **Cut away at the moment of impact.** React cards and events use the movie grammar of the era: a door closes, a shadow on a wall, a jump to the next morning's headline.
+- **Vice is implied, never shown.** A "hotel" with a lot of late-night callers and a "hostess" on the books. The ledger is honest about where the money comes from, and the art and text stay suggestive and period-polite.
+- **Language is period-clean.** Slang and threats, no modern profanity. "You'll be sleeping with the fishes" fits; swearing doesn't.
+- **Wry nod to the Code:** the Code said crime must not pay. The newspapers (and the Task Force) agree, and the moralising headlines are part of the joke. The game itself lets you decide whether crime pays.
+
+### 13.2 Art direction
+- **Isometric city.** A diorama-style isometric map of the city: brownstones, docks, rail yards, city hall. Wards are readable as districts, and fronts show their back-room trade through small details (a lookout on the corner, a truck at night).
+- **Day and night.** The watch phase shows the month passing with lighting shifts. Most business happens after dark.
+- **Character portraits** for the boss, lieutenants, officials and rival bosses: caricatured, pulp-illustration style to match the tone.
+- **UI** in a period paper style (ledgers, telegrams, newspaper pages, dossiers) that stays clean and readable.
 
 ---
 
-## 14. Built for multiplayer later
-The single-player game against AI comes first, but the architecture should allow **async multiplayer**:
-- **Orders are data.** Player and AI submit the same order format.
-- **Simultaneous, deterministic resolution** from a seeded RNG, so the same orders and seed always give the same month.
-- AI families are **just players** using the same interface.
-- The hard part is react cards in multiplayer (see Q2).
+## 14. Engineering notes
+- **Orders are data.** The player and AI families submit the same order format, so the AI plays by the same rules.
+- **Deterministic resolution** from a seeded RNG, so the same orders and seed always give the same month. That makes bugs reproducible, balance testing possible and seeds shareable.
 
 ---
 
 ## 15. Open questions
 
 1. **Turn length.** Monthly (fits 3–5 hours) vs weekly (closer to the original, but about 360 turns). Could weekly work with fast-forward through quiet weeks?
-2. **React cards in multiplayer.** Contingency orders set ahead ("if tailed, lose them")? Timed live prompts? Or the lieutenant's personality decides?
-3. **Art direction and camera.** Top-down 2D map, isometric, or stylised graphic board?
-4. **Does the player's family have an archetype**, with a starting perk and trait, or is it a blank slate?
-5. **Lieutenant cap.** Is 6 the right maximum before it turns back into micromanagement?
-6. **Content limits.** How explicit is the violence? Are vice rackets in or out?
-7. **Meta-progression between runs**, like a roguelite (unlock archetypes, starting lieutenants), or none?
-8. **Tutorial.** A scripted first run or a guided sandbox?
+2. **Lieutenant cap.** Is 6 the right maximum before it turns back into micromanagement?
+3. **Meta-progression between runs**, like a roguelite (unlock origins and traits, starting lieutenants), or none?
+4. **Tutorial.** A scripted first run or a guided sandbox?
+5. **Boss trait list.** Which origins and traits (§6.5) make the cut, and how many traits does a boss get?
+6. **How zoomed in does the isometric map go?** Ward-level overview only, or down to individual street scenes?
 
 ---
 
@@ -242,7 +267,10 @@ The single-player game against AI comes first, but the architecture should allow
 | Setting | Prohibition era, with modern design. |
 | Core pillars | People > Orders/Watch > Economy > Politics |
 | Platform | Design doc only for now |
-| Opponents | AI rivals first, multiplayer-ready architecture |
+| Opponents | Single-player vs AI rivals. **No multiplayer.** |
+| Player family | Blank slate: choose the boss's origin + traits at the start |
+| Content | Violence and vice stay in; shown Hays Code style (implied, off-screen, cutaways) |
+| Art | Isometric city, pulp-illustration portraits, period-paper UI |
 | Politics | Medium depth (elections, officials, trials), paid for by fewer rivals |
 | Run length | 3–5 hours, procedurally generated city |
 | Command model | Hybrid: lieutenants by default, costly direct orders |
