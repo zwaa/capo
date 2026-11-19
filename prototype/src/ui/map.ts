@@ -47,6 +47,10 @@ export class WardMap {
     new ResizeObserver(() => this.resize()).observe(canvas);
     canvas.addEventListener('mousemove', (e) => this.hover(e));
     canvas.addEventListener('mouseleave', () => this.onHover(null, null, 0, 0));
+    // Touch screens have no hover: a tap shows the same details.
+    canvas.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse') this.hover(e);
+    });
     this.loop = this.loop.bind(this);
     this.raf = requestAnimationFrame(this.loop);
   }

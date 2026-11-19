@@ -53,7 +53,7 @@ app.innerHTML = `
       <div class="legend">
         <span><i style="background:#e3a23b"></i>Russo family</span>
         <span><i style="background:#5f9fb8"></i>Calloway Outfit</span>
-        <span>S speakeasy · G gambling · D still · ■ telephone</span>
+        <span class="key">S speakeasy · G gambling · D still · ■ telephone</span>
       </div>
     </div>
     <aside class="side" id="side"></aside>
@@ -153,7 +153,7 @@ function renderBar(): void {
     <div class="stat"><b>${owned(s, 'player').length} <span style="font-size:13px;letter-spacing:0;color:var(--dim);text-transform:none">vs</span> ${owned(s, 'rival').length}</b><span>Shops: us vs Calloway</span></div>
     <div class="stat"><b>${p.actions}</b><span>Meetings left</span></div>
     <div class="spacer"></div>
-    <div class="stat" title="Calloway's heat, as the papers report it"><b style="color:var(--steel)">${r.heat}</b><span>Calloway heat</span></div>
+    <div class="stat rival-heat" title="Calloway's heat, as the papers report it"><b style="color:var(--steel)">${r.heat}</b><span>Calloway heat</span></div>
     <button class="ghost" data-act="new">New game</button>
   `;
 }
@@ -261,7 +261,7 @@ function renderWatch(): string {
       <div class="speed" role="group" aria-label="Speed">
         ${['Pause', 'Slow', 'Normal', 'Fast'].map((t, i) => `<button class="small" data-speed="${i}" aria-pressed="${speed === i}">${t}</button>`).join('')}
       </div>
-      <p class="hint">Changes of Plans left: ${run.changesLeft}. Big events will stop the clock. Space bar pauses.</p>
+      <p class="hint">Changes of Plans left: ${run.changesLeft}. Big events will stop the clock.</p>
     </section>
     <section>
       <h3>Out on the street</h3>
@@ -511,12 +511,15 @@ document.addEventListener('click', (e) => {
       return newGame();
     case 'to-work':
       phase = 'orders';
-      return render();
+      render();
+      return window.scrollTo({ top: 0 });
     case 'begin':
       startMonth(s);
       phase = 'watch';
       if (!speed) speed = 2;
       render();
+      // On a phone the Begin button is far down the page: come back up to the street report.
+      if (window.matchMedia('(max-width: 860px)').matches) window.scrollTo({ top: 0, behavior: 'smooth' });
       return schedule();
     case 'stop-captain':
       stopCaptain(s);
@@ -538,6 +541,10 @@ document.addEventListener('click', (e) => {
       return schedule();
     }
   }
+});
+
+document.addEventListener('pointerdown', (e) => {
+  if (!(e.target as HTMLElement).closest('canvas')) tip.hidden = true;
 });
 
 document.addEventListener('keydown', (e) => {

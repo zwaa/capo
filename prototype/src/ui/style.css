@@ -275,12 +275,33 @@ button { cursor: pointer; }
 /* ---------------------------------------------------------------- narrow */
 @media (max-width: 860px) {
   body { overflow: auto; }
-  #app { height: auto; min-height: 100%; }
-  .main { grid-template-columns: minmax(0, 1fr); }
-  .mapwrap { height: 62vw; min-height: 260px; }
-  .side { border-left: 0; border-top: 1px solid var(--rule); overflow: visible; }
+  #app { height: auto; min-height: 100%; display: block; }
+  .main { display: block; }
+  /* The map stays pinned while orders and the street report scroll beneath it. */
+  .mapwrap {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 3;
+    height: min(64vw, 46vh);
+    min-height: 220px;
+    background: var(--night);
+    border-bottom: 1px solid var(--rule);
+  }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--night); }
+  .legend { bottom: 6px; gap: 10px; font-size: 10px; }
+  .legend .key { display: none; }
+  .side { border-left: 0; overflow: visible; }
   .side section { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   .stories, .cols { grid-template-columns: minmax(0, 1fr); }
   .story.lead { grid-row: auto; }
-  .bar { gap: 14px; }
+  /* Compact top bar: two tidy rows instead of three ragged ones. */
+  .bar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; padding-block: 10px; }
+  .logo { font-size: 22px; }
+  .logo small, .bar .spacer, .bar .rival-heat { display: none; }
+  .stat b { font-size: 16px; }
+  .stat span { font-size: 9px; letter-spacing: 0.1em; }
+  .heatbar { width: 100%; }
+  .bar .ghost { padding: 4px 8px; font-size: 12px; justify-self: start; }
+  .stat .why { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); top: auto; width: auto; margin-top: 8px; }
+  .tip { max-width: 70vw; }
 }
