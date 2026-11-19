@@ -80,6 +80,7 @@ let plans: Record<string, Job[]> = {};
 const app = document.getElementById('app')!;
 app.innerHTML = `
   <header class="bar" id="bar"></header>
+  <div id="overlay"></div>
   <div class="main">
     <div class="mapwrap">
       <canvas id="map" aria-label="Map of the ward"></canvas>
@@ -92,8 +93,10 @@ app.innerHTML = `
     </div>
     <aside class="side" id="side"></aside>
   </div>
-  <div id="overlay"></div>
 `;
+/** Phones show paperwork as ordinary pages, not as a layer that scrolls on its own. */
+const narrow = window.matchMedia('(max-width: 860px)');
+let shownOverlay = '';
 const bar = document.getElementById('bar')!;
 const side = document.getElementById('side')!;
 const overlay = document.getElementById('overlay')!;
@@ -510,9 +513,16 @@ function renderOverlay(): void {
   }
   const keep = overlay.querySelector('.overlay')?.scrollTop ?? 0;
   overlay.innerHTML = html ? `<div class="overlay">${html}</div>` : '';
+  // Full pages (the newspaper, Change of Plans, the final edition) replace the game view on phones.
+  app.classList.toggle('screen', phase === 'paper' || phase === 'plans' || (phase === 'over' && !!s.over));
+  const key = html ? `${phase}:${s.run?.queue[0]?.id ?? ''}` : '';
+  const fresh = key !== shownOverlay;
+  shownOverlay = key;
   const o = overlay.querySelector('.overlay');
   if (o && phase === 'plans') o.scrollTop = keep;
   else overlay.querySelector<HTMLButtonElement>('.opt:not(:disabled), .primary')?.focus({ preventScroll: true });
+  // On a phone, bring anything new into view at the top of the page.
+  if (html && fresh && narrow.matches) window.scrollTo({ top: 0 });
 }
 
 function render(): void {

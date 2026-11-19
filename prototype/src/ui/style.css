@@ -265,13 +265,18 @@ h4.sub { margin: 4px 0 0; font: 700 10.5px var(--head); letter-spacing: 0.16em; 
   inset: 0;
   z-index: 40;
   display: grid;
-  place-items: center;
+  /* Centre when there's room; when there isn't, start at the top so nothing is cut off. */
+  align-items: start;
+  justify-items: center;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   background: rgb(6 8 11 / 0.72);
   padding-block: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-bottom, 0px));
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   overflow-y: auto;
 }
+.overlay > * { margin-block: auto; }
 .paper {
   background: var(--paper);
   color: var(--paper-ink);
@@ -352,6 +357,16 @@ h4.sub { margin: 4px 0 0; font: 700 10.5px var(--head); letter-spacing: 0.16em; 
 
 /* ---------------------------------------------------------------- narrow */
 @media (max-width: 860px) {
+  /* Paperwork becomes part of the page: no inner scrolling, no fixed layer. */
+  .overlay {
+    position: static;
+    display: block;
+    background: none;
+    overflow: visible;
+    padding-block: 12px;
+  }
+  .overlay > * { margin: 0 auto; }
+  #app.screen .main { display: none; }
   body { overflow: auto; }
   #app { height: auto; min-height: 100%; display: block; }
   .main { display: block; }
