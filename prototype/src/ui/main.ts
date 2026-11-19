@@ -1,32 +1,63 @@
 import './style.css';
-import { answer, bossAction, canAct, changePlans, createGame, endMonth, reach, setOrder, startMonth, stepDay, stopCaptain } from '../sim/engine';
-import type { BossAction } from '../sim/engine';
-import { addressOf } from '../sim/setup';
-import type { Business, Card, GameState, Goal, Lieutenant, Line, Order, Posture } from '../sim/types';
 import {
-  CAPTAIN_COST,
+  DRAW_SCORE,
+  WIN_SCORE,
+  addJob,
+  answer,
+  assignBranch,
+  bossAction,
+  canAct,
+  changePlans,
+  createGame,
+  draftJob,
+  endMonth,
+  moveJob,
+  priceOf,
+  purchase,
+  reach,
+  removeJob,
+  score,
+  setPosture,
+  startMonth,
+  stepDay,
+  transferHoods,
+} from '../sim/engine';
+import type { BossAction, Purchase } from '../sim/engine';
+import { LESSONS, advanceLessons, currentLesson } from '../sim/lessons';
+import { POOL, streetOf } from '../sim/setup';
+import type { Branch, Building, Card, GameState, Job, JobKind, Person, Posture, SpecialistKind } from '../sim/types';
+import {
+  BRANCHES,
   HIRE_COST,
+  JOBS,
   LT_CAP,
-  PHONE_COST,
+  MAX_BRANCHES,
   REWARD_COST,
-  activeLts,
-  biz,
+  SPECIALISTS,
+  bossOf,
+  branchesOf,
   first,
+  jobTitle,
+  jobsForBranch,
   label,
-  ltById,
-  lts,
+  lieutenants,
+  members,
   monthName,
-  needsTarget,
   owned,
-  validTargets,
-  visibleToPlayer,
+  person,
+  price,
+  protectedBy,
+  rackets,
+  targets,
+  totalHoods,
+  visible,
 } from '../sim/util';
 import { WardMap } from './map';
 
 // ---------------------------------------------------------------- state
 
 type Phase = 'paper' | 'orders' | 'watch' | 'plans' | 'over';
-const SAVE_KEY = 'capo-slice-v1';
+const SAVE_KEY = 'capo-slice-v2';
 const SPEEDS = [0, 1100, 550, 220];
 
 interface Hot {
@@ -38,10 +69,13 @@ const hot = (window as unknown as { claude?: { hot?: Hot } }).claude?.hot;
 
 let s: GameState;
 let phase: Phase = 'paper';
-let speed = 1;
+let speed = 2;
 let timer = 0;
-let plans: Record<string, Order> = {};
-let flashNote = '';
+let note = '';
+/** The job each person's "add a job" row is building. */
+const adding: Record<string, { kind: JobKind | ''; target: string }> = {};
+/** Draft job lists during a Change of Plans. */
+let plans: Record<string, Job[]> = {};
 
 const app = document.getElementById('app')!;
 app.innerHTML = `
@@ -51,9 +85,9 @@ app.innerHTML = `
       <canvas id="map" aria-label="Map of the ward"></canvas>
       <div class="tip" id="tip" hidden></div>
       <div class="legend">
-        <span><i style="background:#e3a23b"></i>Russo family</span>
-        <span><i style="background:#5f9fb8"></i>Calloway Outfit</span>
-        <span class="key">S speakeasy · G gambling · D still · ■ telephone</span>
+        <span><i style="background:#e3a23b"></i>Russo</span>
+        <span><i style="background:#5f9fb8"></i>Calloway</span>
+        <span class="key">Filled: owned · Striped awning: pays protection · S speakeasy · G gambling · D still · ■ telephone</span>
       </div>
     </div>
     <aside class="side" id="side"></aside>
@@ -68,41 +102,23 @@ const map = new WardMap(document.getElementById('map') as HTMLCanvasElement);
 
 // ---------------------------------------------------------------- helpers
 
-const esc = (t: string | number) =>
-  String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const esc = (t: string | number) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const md = (t: string) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 const money = (n: number) => `${n < 0 ? '−' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0');
+const TRAIT: Record<string, string> = { hothead: 'Hothead', greedy: 'Greedy', cautious: 'Cautious', ambitious: 'Ambitious', oldworld: 'Old-world', loyal: 'Loyal', looselips: 'Loose lips' };
+const POSTURES: Posture[] = ['quiet', 'firm', 'loud'];
 
-const GOALS: { id: Goal; label: string }[] = [
-  { id: 'expand', label: 'Expand: take a shop' },
-  { id: 'earn', label: 'Earn: work a racket' },
-  { id: 'hold', label: 'Hold: guard a shop' },
-  { id: 'hit', label: 'Hit: a man or a racket' },
-  { id: 'recruit', label: 'Recruit hoods' },
-  { id: 'lielow', label: 'Lie low' },
-];
-const GOAL_SHORT: Record<Goal, string> = { expand: 'Expand', earn: 'Earn', hold: 'Hold', hit: 'Hit', recruit: 'Recruit', lielow: 'Lie low' };
-const TRAIT: Record<string, string> = {
-  hothead: 'Hothead',
-  greedy: 'Greedy',
-  cautious: 'Cautious',
-  ambitious: 'Ambitious',
-  oldworld: 'Old-world',
-  loyal: 'Loyal',
-  looselips: 'Loose lips',
-};
-
-function mood(l: Lieutenant): { text: string; cls: string } {
-  // Loyalty is hidden. You only get the signs.
-  if (l.loyalty >= 70) return { text: 'Solid', cls: 'ok' };
-  if (l.loyalty >= 45) return { text: 'Content', cls: '' };
-  if (l.loyalty >= 30) return { text: 'Grumbling', cls: 'warn' };
+function mood(p: Person): { text: string; cls: string } {
+  if (p.role === 'boss') return { text: 'The boss', cls: 'ok' };
+  if (p.loyalty >= 70) return { text: 'Solid', cls: 'ok' };
+  if (p.loyalty >= 45) return { text: 'Content', cls: '' };
+  if (p.loyalty >= 30) return { text: 'Grumbling', cls: 'warn' };
   return { text: 'Restless', cls: 'warn' };
 }
 
-function lines(ls: Line[], empty: string): string {
-  if (!ls.length) return `<p>${esc(empty)}</p>`;
-  return ls.map((l) => `<div class="row"><span>${esc(l.label)}</span><em class="${l.amount < 0 ? 'neg' : ''}">${signed(l.amount)}</em></div>`).join('');
+function statusOf(p: Person): string {
+  return p.status === 'active' ? '' : p.status === 'wounded' ? 'In hospital' : p.status === 'jailed' ? 'In a cell' : p.status === 'dead' ? 'Dead' : 'Gone over';
 }
 
 function save(): void {
@@ -124,175 +140,277 @@ function load(): GameState | null {
   }
 }
 
-function newGame(): void {
+function newGame(lessons = true): void {
   stop();
-  s = createGame((Math.random() * 2 ** 31) | 0);
-  map.state = null;
-  map.setState(s);
+  s = createGame((Math.random() * 2 ** 31) | 0, undefined, lessons);
   phase = 'paper';
+  note = '';
   save();
   render();
+  window.scrollTo({ top: 0 });
 }
 
 // ---------------------------------------------------------------- top bar
 
 function renderBar(): void {
   const p = s.families.player;
-  const r = s.families.rival;
-  const ledger = p.ledger.map((l) => ({ ...l, amount: l.amount }));
-  const cashLines = ledger.map((l) => `<div class="row"><span>${esc(l.label)}</span><em class="${l.amount < 0 ? 'neg' : ''}">${money(l.amount)}</em></div>`).join('');
+  const cash = p.ledger.map((l) => `<div class="row"><span>${esc(l.label)}</span><em class="${l.amount < 0 ? 'neg' : ''}">${l.amount ? money(l.amount) : '·'}</em></div>`).join('');
+  const heat = p.heatLog.map((l) => `<div class="row"><span>${esc(l.label)}</span><em class="${l.amount > 0 ? 'neg' : ''}">${signed(l.amount)}</em></div>`).join('');
   bar.innerHTML = `
-    <div class="logo">Capo<small>Vertical slice</small></div>
+    <div class="logo">Capo<small>Vertical slice · v2</small></div>
     <div class="stat"><b>${esc(monthName(s.month))}</b><span>Month ${s.month + 1} of ${s.lastMonth + 1}</span></div>
     <div class="stat explain" tabindex="0"><b>${money(p.cash)}</b><span>Cash</span>
-      <div class="why"><h4>${s.run ? 'This month so far' : 'Last month'}</h4>${cashLines || '<p>No money has moved yet.</p>'}</div></div>
+      <div class="why"><h4>${s.run ? 'This month so far' : 'Last month'}</h4>${cash || '<p>No money has moved yet.</p>'}</div></div>
     <div class="stat explain" tabindex="0"><b>${p.heat}</b><span>Heat</span>
       <div class="heatbar"><i style="width:${p.heat}%"></i></div>
-      <div class="why"><h4>Why the heat is ${p.heat}</h4>${lines(p.heatLog, 'Nothing new this month.')}
-      <p style="margin-top:8px">High heat means raids. Raids shut rackets and catch lieutenants.</p></div></div>
-    <div class="stat"><b>${owned(s, 'player').length} <span style="font-size:13px;letter-spacing:0;color:var(--dim);text-transform:none">vs</span> ${owned(s, 'rival').length}</b><span>Shops: us vs Calloway</span></div>
-    <div class="stat"><b>${p.actions}</b><span>Meetings left</span></div>
+      <div class="why"><h4>Why the heat is ${p.heat}</h4>${heat || '<p>Nothing new this month.</p>'}
+      <p style="margin-top:8px">High heat means raids. Raids shut rackets and catch people.</p></div></div>
+    <div class="stat explain" tabindex="0"><b>${owned(s, 'player').length} · ${protectedBy(s, 'player').length}</b><span>Owned · Paying</span>
+      <div class="why"><h4>Your piece of the ward</h4><p>${owned(s, 'player').length} buildings owned, ${rackets(s, 'player').length} with a racket, ${protectedBy(s, 'player').length} shops paying protection.</p>
+      <p style="margin-top:6px">Calloway: ${owned(s, 'rival').length} owned, ${rackets(s, 'rival').length} rackets, ${protectedBy(s, 'rival').length} paying.</p>
+      <p style="margin-top:6px">Year-end score so far: ${Math.round(score(s, 'player')).toLocaleString('en-US')} (a win needs ${WIN_SCORE.toLocaleString('en-US')}).</p></div></div>
+    <div class="stat"><b>${p.actions}</b><span>Meetings</span></div>
     <div class="spacer"></div>
-    <div class="stat rival-heat" title="Calloway's heat, as the papers report it"><b style="color:var(--steel)">${r.heat}</b><span>Calloway heat</span></div>
     <button class="ghost" data-act="new">New game</button>
   `;
 }
 
-// ---------------------------------------------------------------- side panel
+// ---------------------------------------------------------------- job lists
 
-function orderEditor(l: Lieutenant, o: Order, scope: 'orders' | 'plans'): string {
-  const targets = validTargets(s, l, o.goal);
-  const tsel = needsTarget(o.goal)
-    ? `<select class="target" data-scope="${scope}" data-lt="${l.id}" data-field="target" aria-label="Target for ${esc(first(l))}">
-        ${targets.length ? '' : '<option value="">No valid target</option>'}
-        ${targets.map((t) => `<option value="${t.id}" ${t.id === o.target ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}
-      </select>`
-    : '';
-  const postures: Posture[] = ['quiet', 'firm', 'loud'];
-  return `
-    <div class="order">
-      <select data-scope="${scope}" data-lt="${l.id}" data-field="goal" aria-label="Goal for ${esc(first(l))}" style="grid-column:1/-1">
-        ${GOALS.map((g) => `<option value="${g.id}" ${g.id === o.goal ? 'selected' : ''}>${g.label}</option>`).join('')}
-      </select>
-      ${tsel}
-      <div class="posture" role="group" aria-label="Posture">
-        ${postures.map((p) => `<button data-scope="${scope}" data-lt="${l.id}" data-posture="${p}" aria-pressed="${o.posture === p}">${p[0].toUpperCase() + p.slice(1)}</button>`).join('')}
-      </div>
-    </div>`;
+function jobStatus(j: Job, scope: string): { text: string; cls: string } {
+  if (scope === 'plans') return { text: JOBS[j.kind].ongoing ? 'Ongoing' : 'One-off', cls: '' };
+  if (j.stalled) return { text: j.stalled, cls: 'bad' };
+  if (j.need === 0) return { text: JOBS[j.kind].ongoing ? 'Nothing to do yet' : 'Ready', cls: 'idle' };
+  const car = j.car ? ' · car' : '';
+  if (j.hoods < j.need) return { text: `${j.hoods} of ${j.need} hands: only partly done${car}`, cls: 'warn' };
+  return { text: `${j.hoods} hand${j.hoods === 1 ? '' : 's'}${car}`, cls: 'ok' };
 }
 
-function ltCard(l: Lieutenant, editable: boolean): string {
-  const m = mood(l);
-  const status =
-    l.status === 'active' ? '' : l.status === 'wounded' ? 'In hospital' : l.status === 'jailed' ? 'In a cell' : l.status === 'dead' ? 'Dead' : 'Gone over';
-  const demand = l.demand
-    ? `<div class="demand"><span>${esc(first(l))} ${esc(l.demand.text)}.${l.demand.age ? ` Waiting ${l.demand.age} month${l.demand.age > 1 ? 's' : ''}.` : ''}</span>
-        ${editable ? actButton({ kind: 'grant', lt: l.id }, 'Grant it (1 meeting)') : ''}</div>`
-    : '';
-  return `
-    <div class="lt ${l.status === 'active' ? '' : 'out'}">
-      <div class="lt-head"><span class="lt-name">${esc(l.name.split(' ')[0])} <q>${esc(l.nickname)}</q> ${esc(l.name.split(' ').slice(1).join(' '))}</span>
-        <span class="chip ${m.cls}" title="Loyalty is hidden. This is how they seem.">${status || m.text}</span></div>
-      <div class="chips">${l.traits.map((t) => `<span class="chip">${TRAIT[t]}</span>`).join('')}</div>
-      <div class="stats"><span>Muscle <b>${l.muscle}</b></span><span>Brains <b>${l.brains}</b></span><span>Nerve <b>${l.nerve}</b></span><span>Charm <b>${l.charm}</b></span><span>Crew <b>${l.crew}</b></span></div>
-      <div class="meter"><span>Ambition</span><div><i style="width:${l.ambition}%"></i></div></div>
-      ${demand}
-      ${editable && l.status === 'active' ? orderEditor(l, l.order, 'orders') : ''}
-    </div>`;
+function jobList(p: Person, jobs: Job[], scope: 'orders' | 'plans'): string {
+  const live = jobs.filter((j) => !j.done);
+  const rows = live
+    .map((j, i) => {
+      const st = jobStatus(j, scope);
+      return `<div class="job ${st.cls}">
+        <span class="rank">${i + 1}</span>
+        <div class="jt"><b>${esc(jobTitle(s, j))}</b><small>${esc(st.text)}</small></div>
+        <div class="jbtns">
+          <span class="mini" role="group" aria-label="Posture">${POSTURES.map((q) => `<button data-jposture="${q}" data-p="${p.id}" data-j="${j.id}" data-scope="${scope}" aria-pressed="${j.posture === q}" title="${q[0].toUpperCase() + q.slice(1)}">${q[0].toUpperCase()}</button>`).join('')}</span>
+          <button class="ic" data-act="up" data-p="${p.id}" data-j="${j.id}" data-scope="${scope}" aria-label="Move up" ${i === 0 ? 'disabled' : ''}>↑</button>
+          <button class="ic" data-act="down" data-p="${p.id}" data-j="${j.id}" data-scope="${scope}" aria-label="Move down" ${i === live.length - 1 ? 'disabled' : ''}>↓</button>
+          <button class="ic" data-act="del" data-p="${p.id}" data-j="${j.id}" data-scope="${scope}" aria-label="Remove">✕</button>
+        </div>
+      </div>`;
+    })
+    .join('');
+  return `<div class="jobs">${rows || '<p class="hint">No jobs. Add one below.</p>'}</div>${addRow(p, scope)}`;
 }
 
-function actButton(a: BossAction, text: string): string {
+function addRow(p: Person, scope: string): string {
+  const key = `${scope}:${p.id}`;
+  const a = (adding[key] ??= { kind: '', target: '' });
+  const mine = branchesOf(s, p);
+  if (!mine.length) return '<p class="hint">Give them a branch under Who runs what, and they can take jobs.</p>';
+  const kinds = mine
+    .map((b) => {
+      const info = BRANCHES.find((x) => x.id === b)!;
+      return `<optgroup label="${esc(info.label)}">${jobsForBranch(b)
+        .map((k) => `<option value="${k}" ${a.kind === k ? 'selected' : ''}>${esc(JOBS[k].label)}</option>`)
+        .join('')}</optgroup>`;
+    })
+    .join('');
+  const needsTarget = a.kind && JOBS[a.kind].target !== 'none';
+  const ts = needsTarget ? targets(s, 'player', a.kind as JobKind) : [];
+  const tsel = needsTarget
+    ? `<select data-add="target" data-key="${key}" aria-label="Target">${ts.length ? '' : '<option value="">No valid target</option>'}${ts.map((t) => `<option value="${t.id}" ${a.target === t.id ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select>`
+    : '';
+  const hint = a.kind ? `<small class="hint">${esc(JOBS[a.kind].hint)}</small>` : '';
+  return `<div class="addjob">
+    <select data-add="kind" data-key="${key}" aria-label="Add a job"><option value="">Add a job…</option>${kinds}</select>
+    ${tsel}
+    <button class="small" data-act="add" data-p="${p.id}" data-scope="${scope}" ${!a.kind || (needsTarget && !ts.length) ? 'disabled' : ''}>Add</button>
+    ${hint}
+  </div>`;
+}
+
+// ---------------------------------------------------------------- orders panel
+
+function actButton(a: BossAction, text: string, extra = ''): string {
   const why = canAct(s, a);
-  return `<button class="small" data-boss='${esc(JSON.stringify(a))}' ${why ? `disabled title="${esc(why)}"` : ''}>${esc(text)}</button>`;
+  return `<button class="small" ${extra} data-boss='${esc(JSON.stringify(a))}' ${why ? `disabled title="${esc(why)}"` : ''}>${esc(text)}</button>`;
+}
+
+function personCard(p: Person): string {
+  const m = mood(p);
+  const st = statusOf(p);
+  const boss = bossOf(s, 'player');
+  const branches = branchesOf(s, p)
+    .map((b) => `<span class="chip ok">${esc(BRANCHES.find((x) => x.id === b)!.label)}</span>`)
+    .join('');
+  const demand = p.demand
+    ? `<div class="demand"><span>${esc(first(p))} ${esc(p.demand.text)}.${p.demand.age ? ` Waiting ${p.demand.age} month${p.demand.age > 1 ? 's' : ''}.` : ''}</span>${actButton({ kind: 'grant', lt: p.id }, 'Grant it (1 meeting)')}</div>`
+    : '';
+  const hoods =
+    p.role === 'boss'
+      ? `<span>Crew <b>${p.crew}</b> + ${esc(first(p))}</span><span class="hint">Buy hoods under Supplies</span>`
+      : `<span>Crew <b>${p.crew}</b> + ${esc(first(p))}</span>
+         <button class="ic" data-act="take" data-p="${p.id}" ${p.crew ? '' : 'disabled'} aria-label="Send a hood back to ${esc(first(boss))}" title="Send a hood back to ${esc(first(boss))}">−</button>
+         <button class="ic" data-act="give" data-p="${p.id}" ${boss.crew ? '' : 'disabled'} aria-label="Give one of ${esc(first(boss))}'s hoods" title="Give one of ${esc(first(boss))}'s hoods">+</button>`;
+  return `<div class="lt ${p.status === 'active' ? '' : 'out'} ${p.role === 'boss' ? 'boss' : ''}">
+    <div class="lt-head"><span class="lt-name">${esc(p.name.split(' ')[0])} <q>${esc(p.nickname)}</q> ${esc(p.name.split(' ').slice(1).join(' '))}</span>
+      <span class="chip ${st ? 'warn' : m.cls}" ${p.role === 'lt' ? 'title="Loyalty is hidden. This is how they seem."' : ''}>${st || m.text}</span></div>
+    ${p.traits.length ? `<div class="chips">${p.traits.map((t) => `<span class="chip">${TRAIT[t]}</span>`).join('')}</div>` : ''}
+    <div class="stats"><span>Muscle <b>${p.muscle}</b></span><span>Brains <b>${p.brains}</b></span><span>Nerve <b>${p.nerve}</b></span><span>Charm <b>${p.charm}</b></span></div>
+    <div class="stats hoods">${hoods}</div>
+    ${p.role === 'lt' ? `<div class="meter"><span>Ambition</span><div><i style="width:${p.ambition}%"></i></div></div>` : ''}
+    <div class="chips">${branches || '<span class="hint">No branches yet</span>'}</div>
+    ${demand}
+    ${jobList(p, p.jobs, 'orders')}
+  </div>`;
+}
+
+function lessonCard(): string {
+  if (!s.lessons.on) return '';
+  const l = currentLesson(s);
+  if (!l) return `<section class="lesson"><h3>Lessons</h3><p class="hint">All ${LESSONS.length} lessons done. The rest of the year is yours.</p></section>`;
+  return `<section class="lesson">
+    <div class="lesson-head"><h3>Lesson ${s.lessons.index + 1} of ${LESSONS.length}</h3><button class="link" data-act="lessons-off">Turn lessons off</button></div>
+    <h2>${esc(l.title)}</h2>
+    <p>${md(l.body)}</p>
+    <p class="goal">Goal: ${esc(l.goal)}</p>
+  </section>`;
+}
+
+function candidates(): string {
+  if (!s.candidates.length) return '';
+  return `<section><h3>Asking for work</h3>${s.candidates
+    .map((i) => {
+      const r = POOL[i];
+      return `<div class="lt candidate"><div class="lt-head"><span class="lt-name">${esc(r.name.split(' ')[0])} <q>${esc(r.nickname)}</q> ${esc(r.name.split(' ').slice(1).join(' '))}</span></div>
+        <div class="chips">${r.traits.map((t) => `<span class="chip">${TRAIT[t]}</span>`).join('')}</div>
+        <div class="stats"><span>Muscle <b>${r.s[0]}</b></span><span>Brains <b>${r.s[1]}</b></span><span>Nerve <b>${r.s[2]}</b></span><span>Charm <b>${r.s[3]}</b></span></div>
+        <p class="hint">${esc(r.pitch)}</p>
+        ${actButton({ kind: 'hire', pool: i }, 'Take them on (free, no meeting)')}</div>`;
+    })
+    .join('')}</section>`;
+}
+
+function whoRunsWhat(): string {
+  const fam = s.families.player;
+  const people = members(s, 'player');
+  const areas = [...new Set(BRANCHES.map((b) => b.area))];
+  return `<section>
+    <h3>Who runs what</h3>
+    <p class="hint">Each branch is run by you or a lieutenant (up to ${MAX_BRANCHES} each). Its jobs move with it. A lieutenant whose stats suit the branch works its jobs faster and safer.</p>
+    <div class="branches">${areas
+      .map(
+        (area) => `<div class="area"><h4>${esc(area)}</h4>${BRANCHES.filter((b) => b.area === area)
+          .map((b) => {
+            const opts = people
+              .map((p) => {
+                const full = p.role === 'lt' && branchesOf(s, p).length >= MAX_BRANCHES && fam.branches[b.id] !== p.id;
+                const tag = p.role === 'boss' ? ' (you)' : full ? ' (full)' : p.status !== 'active' ? ` (${statusOf(p).toLowerCase()})` : '';
+                return `<option value="${p.id}" ${fam.branches[b.id] === p.id ? 'selected' : ''} ${full ? 'disabled' : ''}>${esc(first(p))}${tag}</option>`;
+              })
+              .join('');
+            return `<label class="branch"><span><b>${esc(b.label)}</b><small>${esc(b.blurb)}. Suits ${b.stat}.</small></span><select data-branch="${b.id}" aria-label="Who runs ${esc(b.label)}">${opts}</select></label>`;
+          })
+          .join('')}</div>`,
+      )
+      .join('')}</div>
+  </section>`;
+}
+
+function supplies(): string {
+  const fam = s.families.player;
+  const hoods = totalHoods(s, 'player');
+  const row = (what: Purchase, name: string, have: string) =>
+    `<div class="supply"><span><b>${esc(name)}</b><small>${esc(have)}</small></span><button class="small" data-buy="${what}" ${fam.cash < priceOf(s, what) ? 'disabled title="Not enough cash"' : ''}>Buy (${money(priceOf(s, what))})</button></div>`;
+  return `<section>
+    <h3>Supplies</h3>
+    ${row('hood', 'Hoods', `${hoods} on the books. New hoods join your own crew; pass them on with the + buttons.`)}
+    ${row('gun', 'Pistols', `${fam.guns} for ${hoods} hoods${fam.guns < hoods ? ': some go in bare-handed' : ': everyone is armed'}.`)}
+    ${row('car', 'Cars', `${fam.cars} in the garage. Hits, takeovers and supply runs need one each.`)}
+    <div class="supply"><span><b>Liquor</b><small>${fam.liquor} cases. Bars pour 15 a month each; stills make 25.</small></span></div>
+  </section>`;
+}
+
+function meetings(): string {
+  const fam = s.families.player;
+  const lts = lieutenants(s, 'player').filter((l) => l.status === 'active');
+  const free = POOL.map((r, i) => ({ r, i })).filter(({ r, i }) => !s.people.some((p) => p.name === r.name) && !s.candidates.includes(i));
+  const spec = (k: SpecialistKind) => {
+    const info = SPECIALISTS[k];
+    const hired = fam.specialists.includes(k);
+    return `<div class="meeting"><span><b>${esc(info.title)}</b>${hired ? ` · ${esc(info.name)}` : ''}<small>${esc(info.hint)}. ${money(info.retainer)} a month.</small></span>
+      ${hired ? '<span class="chip ok">Hired</span>' : actButton({ kind: 'specialist', which: k }, 'Hire')}</div>`;
+  };
+  const hire = free.length
+    ? `<select id="hire-pool" aria-label="Who to hire">${free.map(({ r, i }) => `<option value="${i}">${esc(r.name)} (${r.traits.map((t) => TRAIT[t]).join(', ')})</option>`).join('')}</select>${actButton({ kind: 'hire', pool: free[0].i }, 'Hire', 'data-pickhire="1"')}`
+    : '<span class="hint">Nobody else is looking</span>';
+  return `<section>
+    <h3>Meetings: ${fam.actions} left this month</h3>
+    ${note ? `<p class="hint" style="color:var(--lamp)">${esc(note)}</p>` : ''}
+    <div class="meeting"><span><b>Hire a lieutenant</b><small>${lieutenants(s, 'player').length} of ${LT_CAP}. ${money(HIRE_COST)} to sign them on.</small></span>${hire}</div>
+    <h4 class="sub">Specialists</h4>
+    ${(['recruiter', 'armourer', 'mechanic', 'lawyer'] as SpecialistKind[]).map(spec).join('')}
+    ${lts.length ? `<div class="meeting"><span><b>An envelope</b><small>Loyalty up. ${money(REWARD_COST)}.</small></span><select id="reward-lt" aria-label="Who gets the envelope">${lts.map((l) => `<option value="${l.id}">${esc(first(l))}</option>`).join('')}</select>${actButton({ kind: 'reward', lt: lts[0].id }, 'Give', 'data-pickreward="1"')}</div>` : ''}
+  </section>`;
 }
 
 function renderOrders(): string {
-  const p = s.families.player;
-  const mine = lts(s, 'player');
-  const shopsNoPhone = owned(s, 'player').filter((b) => !b.telephone);
-  const activeMine = mine.filter((l) => l.status === 'active');
-  const rivals = lts(s, 'rival');
+  const people = members(s, 'player');
+  const rivals = members(s, 'rival');
   return `
-    <section>
-      <h2>Orders for ${esc(monthName(s.month))}</h2>
-      <p class="hint">Give each lieutenant a goal, a target and a posture. They decide how, and personality decides how closely they listen. Dashed lines on the map show where each one is headed.</p>
-    </section>
-    <section><h3>Your lieutenants (${mine.length} of ${LT_CAP})</h3>${mine.map((l) => ltCard(l, true)).join('')}</section>
-    <section>
-      <h3>Meetings: ${p.actions} left this month</h3>
-      ${flashNote ? `<p class="hint" style="color:var(--lamp)">${esc(flashNote)}</p>` : ''}
-      <div class="meeting">
-        <select id="phone-shop" aria-label="Shop for the telephone">${shopsNoPhone.map((b) => `<option value="${b.id}">${esc(b.name)}</option>`).join('') || '<option value="">Every shop has a line</option>'}</select>
-        ${actButton({ kind: 'phone', biz: shopsNoPhone[0]?.id ?? '' }, `Telephone (${money(PHONE_COST)})`).replace("data-boss='", "data-phone='1' data-boss='")}
-        <span class="why-not">A lieutenant at a shop with a telephone gets new orders at once during a Change of Plans.</span>
-      </div>
-      <div class="meeting">
-        <select id="reward-lt" aria-label="Lieutenant to reward">${activeMine.map((l) => `<option value="${l.id}">${esc(label(l))}</option>`).join('')}</select>
-        ${actButton({ kind: 'reward', lt: activeMine[0]?.id ?? '' }, `Envelope (${money(REWARD_COST)})`).replace("data-boss='", "data-reward='1' data-boss='")}
-        <span class="why-not">Loyalty up. Cheaper than finding out the hard way.</span>
-      </div>
-      <div class="meeting">
-        <span>${p.captainPaid ? 'Captain Hollis is on the payroll.' : 'Put Captain Hollis on the payroll'}</span>
-        ${p.captainPaid ? '<button class="small" data-act="stop-captain">Stop paying</button>' : actButton({ kind: 'captain' }, `${money(CAPTAIN_COST)}/month`)}
-        <span class="why-not">Halves raids and cools heat every month. Stopping makes him angry.</span>
-      </div>
-      <div class="meeting">
-        <span>Hire a new lieutenant</span>
-        ${actButton({ kind: 'hire' }, `Hire (${money(HIRE_COST)})`)}
-      </div>
-    </section>
+    ${lessonCard()}
+    <section><h2>Orders for ${esc(monthName(s.month))}</h2>
+      <p class="hint">Each person works down their own list. Hands go to the jobs at the top first, and jobs that get nobody stall. Ongoing jobs carry over each month; one-off jobs drop off when they're done.</p></section>
+    ${candidates()}
+    ${whoRunsWhat()}
+    <section><h3>Your people</h3>${people.map(personCard).join('')}</section>
+    ${supplies()}
+    ${meetings()}
     <section>
       <h3>${esc(s.families.rival.name)}</h3>
-      <p class="hint">Run by ${esc(s.families.rival.boss)}. ${owned(s, 'rival').length} shops. You only see their people near your shops and your crews.</p>
-      ${rivals.map((l) => `<div class="stats"><span style="color:var(--steel)">${esc(label(l))}</span><span>${l.status === 'active' ? (visibleToPlayer(s, l) ? 'in sight' : 'whereabouts unknown') : l.status === 'wounded' ? 'in hospital' : 'in a cell'}</span></div>`).join('')}
+      <p class="hint">Run by Jim Calloway. ${owned(s, 'rival').length} buildings, ${protectedBy(s, 'rival').length} shops paying. ${s.families.rival.notice ? 'He knows who you are.' : "He hasn't noticed you yet."} You only see his people near your shops and crews.</p>
+      ${rivals.map((p) => `<div class="stats"><span style="color:var(--steel)">${esc(label(p))}</span><span>${p.status === 'active' ? (visible(s, p) ? 'in sight' : 'whereabouts unknown') : statusOf(p).toLowerCase()}</span></div>`).join('')}
     </section>
-    <section>
-      <button class="primary" data-act="begin">Begin the month</button>
-    </section>`;
+    <section><button class="primary" data-act="begin">Begin the month</button></section>`;
 }
+
+// ---------------------------------------------------------------- watch panel
 
 function renderWatch(): string {
   const run = s.run!;
-  const mine = activeLts(s, 'player');
   return `
     <section>
       <div class="clock"><b>Day ${run.day}</b><span class="hint">${esc(monthName(s.month))}</span></div>
       <div class="days"><i style="width:${(run.day / 30) * 100}%"></i></div>
-      <div class="speed" role="group" aria-label="Speed">
-        ${['Pause', 'Slow', 'Normal', 'Fast'].map((t, i) => `<button class="small" data-speed="${i}" aria-pressed="${speed === i}">${t}</button>`).join('')}
-      </div>
-      <p class="hint">Changes of Plans left: ${run.changesLeft}. Big events will stop the clock.</p>
+      <div class="speed" role="group" aria-label="Speed">${['Pause', 'Slow', 'Normal', 'Fast'].map((t, i) => `<button class="small" data-speed="${i}" aria-pressed="${speed === i}">${t}</button>`).join('')}</div>
+      <p class="hint">Changes of Plans left: ${run.changesLeft}. Big events stop the clock.</p>
     </section>
-    <section>
-      <h3>Out on the street</h3>
-      ${mine
-        .map((l) => {
-          const op = run.ops[l.id];
-          if (!op) return '';
-          const t = op.goal === 'hit' ? ltById(s, op.target) ? first(ltById(s, op.target)!) : biz(s, op.target)?.name : biz(s, op.target)?.name;
-          const pct = op.daysNeeded > 100 ? 100 : Math.min(100, (op.progress / op.daysNeeded) * 100);
-          const pend = op.pending ? ` · runner arrives day ${op.pending.arriveDay}` : '';
-          return `<div class="lt"><div class="lt-head"><span class="lt-name">${esc(first(l))}</span><span class="chip">${op.posture}</span></div>
-            <span class="hint">${GOAL_SHORT[op.goal]}${t ? `: ${esc(t)}` : ''}${op.done ? ' · finished' : ''}${esc(pend)}</span>
-            <div class="meter"><span>${op.daysNeeded > 100 ? 'All month' : 'Progress'}</span><div><i style="width:${pct}%"></i></div></div></div>`;
-        })
-        .join('')}
-    </section>
-    <section>
-      <h3>The word</h3>
-      <div class="ticker">${run.log
+    <section><h3>Out on the street</h3>${members(s, 'player')
+      .map((p) => {
+        const jobs = p.jobs
+          .map((j) => {
+            const info = JOBS[j.kind];
+            const pct = info.ongoing ? (j.stalled || !j.hoods ? 0 : 100) : Math.min(100, (j.progress / Math.max(1, j.days)) * 100);
+            const st = j.done ? 'Done' : j.stalled ? j.stalled : info.ongoing ? (j.hoods ? 'All month' : 'Nothing to do') : j.progress ? `Day ${j.progress} of ${j.days}` : 'On the way';
+            return `<div class="wjob ${j.stalled ? 'bad' : ''}"><span>${esc(jobTitle(s, j))}</span><small>${esc(st)}</small><div class="bar"><i style="width:${pct}%"></i></div></div>`;
+          })
+          .join('');
+        return `<div class="lt ${p.status === 'active' ? '' : 'out'}"><div class="lt-head"><span class="lt-name">${esc(first(p))}</span><span class="chip">${statusOf(p) || `crew ${p.crew} + 1`}</span></div>${p.pending ? `<span class="hint">Runner arrives day ${p.pending.arriveDay}</span>` : ''}${jobs || '<span class="hint">No jobs</span>'}</div>`;
+      })
+      .join('')}</section>
+    <section><h3>The word</h3><div class="ticker">${
+      run.log
         .slice()
         .reverse()
+        .filter((e) => e.family !== 'rival' || /took|driven|hit|raid|gone over|muscled|new orders|wrecked|taken in/i.test(e.text))
         .slice(0, 14)
-        .filter((e) => e.family !== 'rival' || /took|driven|hit|raid|went over|new orders|wrecked/i.test(e.text))
         .map((e) => `<p class="${e.family ?? 'none'}"><span>d${e.day}</span>${esc(e.family === 'rival' ? `Calloway: ${e.text}` : e.text)}</p>`)
-        .join('') || '<p class="none"><span></span>Quiet so far.</p>'}</div>
-    </section>`;
-}
-
-function renderSide(): void {
-  if (phase === 'watch' || phase === 'plans') side.innerHTML = renderWatch();
-  else side.innerHTML = renderOrders();
+        .join('') || '<p class="none"><span></span>Quiet so far.</p>'
+    }</div></section>`;
 }
 
 // ---------------------------------------------------------------- overlays
@@ -316,18 +434,16 @@ function renderCard(c: Card): string {
     <div class="kind ${alarm ? 'alarm' : ''}"><span>${KIND[c.kind]}</span><span>Day ${c.day}, ${esc(monthName(s.month))}</span></div>
     <h2 id="card-title">${esc(c.title)}</h2>
     <p>${esc(c.text)}</p>
-    <div class="opts">${c.options
-      .map((o) => `<button class="opt" data-card="${c.id}" data-opt="${o.id}" ${o.disabled ? 'disabled' : ''}><b>${esc(o.label)}</b><small>${esc(o.hint)}</small></button>`)
-      .join('')}</div>
+    <div class="opts">${c.options.map((o) => `<button class="opt" data-card="${c.id}" data-opt="${o.id}" ${o.disabled ? 'disabled' : ''}><b>${esc(o.label)}</b><small>${esc(o.hint)}</small></button>`).join('')}</div>
   </div>`;
 }
 
 function renderEdition(): string {
   const p = s.families.player;
   const [lead, ...rest] = s.news;
-  const ledger = p.ledger;
-  const total = ledger.reduce((n, l) => n + l.amount, 0);
-  const trouble = lts(s, 'player').filter((l) => l.demand);
+  const total = p.ledger.reduce((n, l) => n + l.amount, 0);
+  const trouble = lieutenants(s, 'player').filter((l) => l.demand);
+  const l = currentLesson(s);
   return `<div class="paper edition" role="dialog" aria-modal="true" aria-labelledby="ed-title">
     <div class="masthead">
       <div class="dateline"><span>Vol. XLI · No. ${s.month + 112}</span><span>Two cents</span></div>
@@ -341,30 +457,28 @@ function renderEdition(): string {
     <div class="cols">
       <div class="wire"><h3>The Wire</h3>${s.wire.length ? s.wire.map((w) => `<p><em>${w.confidence}</em>${esc(w.text)}</p>`).join('') : '<p>Your informants heard nothing worth repeating.</p>'}</div>
       <div class="ledger"><h3>The Ledger</h3>${
-        ledger.length
-          ? ledger.map((l) => `<p><span>${esc(l.label)}</span><em>${money(l.amount)}</em></p>`).join('') + `<p class="total"><span>Net</span><em>${money(total)}</em></p>`
-          : `<p>Uncle Aldo left ${money(p.cash)} in the coffee tin and a ledger nobody can read.</p>`
+        p.ledger.length
+          ? p.ledger.map((x) => `<p><span>${esc(x.label)}</span><em>${x.amount ? money(x.amount) : '·'}</em></p>`).join('') + `<p class="total"><span>Net</span><em>${money(total)}</em></p>`
+          : `<p>${money(p.cash)} in an envelope, two cousins and two pistols. A rented room on ${esc(streetOf({ y: bossOf(s, 'player').homeY }))}.</p>`
       }</div>
-      <div class="trouble"><h3>Trouble at home</h3>${
-        trouble.length ? trouble.map((l) => `<p>${esc(label(l))} ${esc(l.demand!.text)}.</p>`).join('') : '<p>Nobody is asking for anything. Yet.</p>'
-      }${s.month === 0 ? '<p>Calloway runs the east end of the ward. You have the café, a barber shop and three of Aldo\'s people.</p>' : ''}</div>
+      <div class="trouble"><h3>Trouble at home</h3>${trouble.length ? trouble.map((x) => `<p>${esc(label(x))} ${esc(x.demand!.text)}.</p>`).join('') : '<p>Nobody is asking for anything. Yet.</p>'}
+      ${l ? `<p><b>Lesson ${s.lessons.index + 1}:</b> ${esc(l.title)}. ${esc(l.goal)}.</p>` : ''}</div>
     </div>
     <button class="primary go" data-act="to-work">To work</button>
   </div>`;
 }
 
 function renderPlans(): string {
-  const mine = activeLts(s, 'player');
+  const people = members(s, 'player').filter((p) => p.status === 'active');
   return `<div class="paper plans" role="dialog" aria-modal="true" aria-labelledby="plans-title">
     <h2 id="plans-title">Change of Plans</h2>
-    <p class="hint" style="color:var(--paper-dim)">New orders only reach a lieutenant as fast as the message can. Anyone at a shop with a telephone hears now. Anyone else waits for a runner. Unchanged orders cost nothing.</p>
-    <div class="grid">${mine
-      .map((l) => {
-        const r = reach(s, l.id);
-        const o = plans[l.id] ?? l.order;
-        return `<div class="lt"><div class="lt-head"><span class="lt-name">${esc(label(l))}</span></div>
+    <p class="hint">Re-rank, add or drop jobs for the rest of the month. Your own list changes at once. A lieutenant at a building with a telephone hears now; anyone else waits for a runner, and keeps working the old list until it arrives.</p>
+    <div class="grid">${people
+      .map((p) => {
+        const r = reach(s, p.id);
+        return `<div class="lt"><div class="lt-head"><span class="lt-name">${esc(label(p))}</span></div>
           <span class="reach ${r.kind}">${esc(r.text)}</span>
-          ${r.kind === 'phone' || r.kind === 'runner' ? orderEditor(l, o, 'plans') : ''}</div>`;
+          ${r.kind !== 'unavailable' ? jobList(p, plans[p.id] ?? p.jobs, 'plans') : ''}</div>`;
       })
       .join('')}</div>
     <div class="row"><button class="small" data-act="plans-cancel">Never mind</button><button class="primary" data-act="plans-go">Send the orders</button></div>
@@ -373,13 +487,14 @@ function renderPlans(): string {
 
 function renderOver(): string {
   const o = s.over!;
-  const verdict = o.result === 'win' ? 'The ward is yours' : o.result === 'loss' ? 'The family is finished' : 'A stalemate';
+  const verdict = o.result === 'win' ? 'A family to be reckoned with' : o.result === 'draw' ? 'A small outfit, still standing' : 'Back to the rented room';
   return `<div class="paper over" role="dialog" aria-modal="true" aria-labelledby="over-title">
     <div class="masthead"><div class="dateline"><span>Final edition</span><span>${esc(monthName(Math.min(s.month, s.lastMonth)))}</span></div></div>
     <h1 id="over-title">${esc(o.headline)}</h1>
     <p>${esc(o.text)}</p>
     <p class="verdict">${verdict}</p>
-    <button class="primary" data-act="new">Play again in a new city</button>
+    <p class="hint" style="color:var(--paper-dim)">Score ${Math.round(score(s, 'player')).toLocaleString('en-US')}. A draw needs ${DRAW_SCORE.toLocaleString('en-US')}, a win ${WIN_SCORE.toLocaleString('en-US')}.</p>
+    <div class="row center"><button class="primary" data-act="new">Play again with lessons</button><button class="small" data-act="new-nolessons">Without lessons</button></div>
   </div>`;
 }
 
@@ -393,16 +508,18 @@ function renderOverlay(): void {
     html = renderCard(c);
     map.focus(c.focus);
   }
+  const keep = overlay.querySelector('.overlay')?.scrollTop ?? 0;
   overlay.innerHTML = html ? `<div class="overlay">${html}</div>` : '';
-  const btn = overlay.querySelector<HTMLButtonElement>('.opt:not(:disabled), .primary');
-  btn?.focus({ preventScroll: true });
+  const o = overlay.querySelector('.overlay');
+  if (o && phase === 'plans') o.scrollTop = keep;
+  else overlay.querySelector<HTMLButtonElement>('.opt:not(:disabled), .primary')?.focus({ preventScroll: true });
 }
 
 function render(): void {
   map.setState(s);
   map.showOrders = phase === 'orders';
   renderBar();
-  renderSide();
+  side.innerHTML = phase === 'watch' || phase === 'plans' ? renderWatch() : renderOrders();
   renderOverlay();
 }
 
@@ -423,18 +540,16 @@ function tick(): void {
   timer = 0;
   if (phase !== 'watch') return;
   map.beginStep(SPEEDS[speed] || 600);
-  const r = stepDay(s);
-  if (r === 'done') {
+  if (stepDay(s) === 'done') {
     endMonth(s);
     phase = s.over ? 'over' : 'paper';
-    flashNote = '';
-    if (!s.over) save();
-    else
-      try {
-        localStorage.removeItem(SAVE_KEY);
-      } catch {
-        /* ignore */
-      }
+    note = '';
+    try {
+      if (s.over) localStorage.removeItem(SAVE_KEY);
+      else save();
+    } catch {
+      /* ignore */
+    }
     render();
     return;
   }
@@ -444,45 +559,56 @@ function tick(): void {
 
 // ---------------------------------------------------------------- input
 
-function editOrder(scope: string, ltId: string, patch: Partial<Order>): void {
-  const l = ltById(s, ltId);
-  if (!l) return;
-  const cur = scope === 'plans' ? plans[ltId] ?? { ...l.order } : { ...l.order };
-  const next: Order = { ...cur, ...patch };
-  if (patch.goal) {
-    const t = validTargets(s, l, patch.goal);
-    next.target = needsTarget(patch.goal) ? (t.find((x) => x.id === cur.target)?.id ?? t[0]?.id ?? null) : null;
-  }
-  if (scope === 'plans') plans[ltId] = next;
-  else setOrder(s, ltId, next);
-  render();
+function draft(pid: string): Job[] {
+  const p = person(s, pid)!;
+  return (plans[pid] ??= p.jobs.filter((j) => !j.done).map((j) => ({ ...j })));
 }
 
-app.addEventListener('change', (e) => {
+function onChange(e: Event): void {
   const el = e.target as HTMLSelectElement;
-  const { scope, lt, field } = el.dataset;
-  if (scope && lt && field) editOrder(scope, lt, { [field]: el.value || null } as Partial<Order>);
-});
-
-overlay.addEventListener('change', (e) => {
-  const el = e.target as HTMLSelectElement;
-  const { scope, lt, field } = el.dataset;
-  if (scope && lt && field) editOrder(scope, lt, { [field]: el.value || null } as Partial<Order>);
-});
+  const d = el.dataset;
+  if (d.branch) {
+    note = assignBranch(s, 'player', d.branch as Branch, el.value) ?? '';
+    advanceLessons(s);
+    return render();
+  }
+  if (d.add && d.key) {
+    const a = (adding[d.key] ??= { kind: '', target: '' });
+    if (d.add === 'kind') {
+      a.kind = el.value as JobKind | '';
+      a.target = a.kind && JOBS[a.kind].target !== 'none' ? (targets(s, 'player', a.kind)[0]?.id ?? '') : '';
+    } else a.target = el.value;
+    render();
+  }
+}
+app.addEventListener('change', onChange);
+overlay.addEventListener('change', onChange);
 
 document.addEventListener('click', (e) => {
   const el = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
   if (!el || el.disabled) return;
   const d = el.dataset;
+  const scope = d.scope ?? 'orders';
 
-  if (d.posture && d.lt && d.scope) return editOrder(d.scope, d.lt, { posture: d.posture as Posture });
+  if (d.jposture && d.p && d.j) {
+    if (scope === 'plans') {
+      const j = draft(d.p).find((x) => x.id === d.j);
+      if (j) j.posture = d.jposture as Posture;
+    } else setPosture(s, d.p, d.j, d.jposture as Posture);
+    return render();
+  }
 
   if (d.boss) {
     let a = JSON.parse(d.boss) as BossAction;
-    if (d.phone) a = { kind: 'phone', biz: (document.getElementById('phone-shop') as HTMLSelectElement).value };
-    if (d.reward) a = { kind: 'reward', lt: (document.getElementById('reward-lt') as HTMLSelectElement).value };
-    flashNote = bossAction(s, a);
+    if (d.pickhire) a = { kind: 'hire', pool: Number((document.getElementById('hire-pool') as HTMLSelectElement).value) };
+    if (d.pickreward) a = { kind: 'reward', lt: (document.getElementById('reward-lt') as HTMLSelectElement).value };
+    note = bossAction(s, a);
     save();
+    return render();
+  }
+
+  if (d.buy) {
+    note = purchase(s, 'player', d.buy as Purchase) ?? '';
     return render();
   }
 
@@ -494,8 +620,7 @@ document.addEventListener('click', (e) => {
 
   if (d.card && d.opt) {
     const c = s.run?.queue.find((x) => x.id === Number(d.card));
-    const done = answer(s, Number(d.card), d.opt);
-    if (!done) return;
+    if (!answer(s, Number(d.card), d.opt)) return;
     if (c?.kind === 'fight' && !['back', 'give'].includes(d.opt) && c.focus) map.flash(c.focus);
     map.focus(null);
     if (d.opt === 'replan') {
@@ -507,8 +632,46 @@ document.addEventListener('click', (e) => {
   }
 
   switch (d.act) {
+    case 'up':
+    case 'down': {
+      if (scope === 'plans') {
+        const list = draft(d.p!);
+        const i = list.findIndex((j) => j.id === d.j);
+        const k = i + (d.act === 'up' ? -1 : 1);
+        if (i >= 0 && k >= 0 && k < list.length) [list[i], list[k]] = [list[k], list[i]];
+      } else moveJob(s, d.p!, d.j!, d.act === 'up' ? -1 : 1);
+      return render();
+    }
+    case 'del':
+      if (scope === 'plans') plans[d.p!] = draft(d.p!).filter((j) => j.id !== d.j);
+      else removeJob(s, d.p!, d.j!);
+      return render();
+    case 'add': {
+      const key = `${scope}:${d.p}`;
+      const a = adding[key];
+      if (!a?.kind) return;
+      const target = JOBS[a.kind].target === 'none' ? null : a.target || null;
+      if (scope === 'plans') {
+        const list = draft(d.p!);
+        if (!list.some((j) => j.kind === a.kind && j.target === target)) list.push(draftJob(s, a.kind, target));
+      } else note = addJob(s, d.p!, a.kind, target) ? '' : 'That job is already on the list.';
+      adding[key] = { kind: '', target: '' };
+      return render();
+    }
+    case 'give':
+      transferHoods(s, s.families.player.bossId, d.p!, 1);
+      return render();
+    case 'take':
+      transferHoods(s, d.p!, s.families.player.bossId, 1);
+      return render();
     case 'new':
-      return newGame();
+      return newGame(true);
+    case 'new-nolessons':
+      return newGame(false);
+    case 'lessons-off':
+      s.lessons.on = false;
+      advanceLessons(s);
+      return render();
     case 'to-work':
       phase = 'orders';
       render();
@@ -518,22 +681,18 @@ document.addEventListener('click', (e) => {
       phase = 'watch';
       if (!speed) speed = 2;
       render();
-      // On a phone the Begin button is far down the page: come back up to the street report.
       if (window.matchMedia('(max-width: 860px)').matches) window.scrollTo({ top: 0, behavior: 'smooth' });
       return schedule();
-    case 'stop-captain':
-      stopCaptain(s);
-      return render();
     case 'plans-cancel':
-      // Changing your mind is free: the Change of Plans is only spent when orders go out.
       phase = 'watch';
       render();
       return schedule();
     case 'plans-go': {
-      const changed: Record<string, Order> = {};
-      for (const [id, o] of Object.entries(plans)) {
-        const l = ltById(s, id);
-        if (l && JSON.stringify(l.order) !== JSON.stringify(o)) changed[id] = o;
+      const changed: Record<string, Job[]> = {};
+      for (const [id, list] of Object.entries(plans)) {
+        const p = person(s, id);
+        const before = p?.jobs.filter((j) => !j.done).map((j) => `${j.id}:${j.posture}`).join();
+        if (p && before !== list.map((j) => `${j.id}:${j.posture}`).join()) changed[id] = list;
       }
       if (Object.keys(changed).length) changePlans(s, changed);
       phase = 'watch';
@@ -549,35 +708,34 @@ document.addEventListener('pointerdown', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.code !== 'Space' || phase !== 'watch' || s.run?.queue.length) return;
-  if ((e.target as HTMLElement).closest('select, button')) return;
+  if ((e.target as HTMLElement).closest('select, button, input')) return;
   e.preventDefault();
   speed = speed ? 0 : 2;
   render();
   schedule();
 });
 
-map.onHover = (b: Business | null, l: Lieutenant | null, px: number, py: number) => {
-  if (!b && !l) {
+map.onHover = (b: Building | null, p: Person | null, px: number, py: number) => {
+  if (!b && !p) {
     tip.hidden = true;
     return;
   }
   let html = '';
-  if (l) {
-    const op = s.run?.ops[l.id];
-    html += `<b>${esc(label(l))}</b>${l.family === 'rival' ? 'Calloway Outfit' : 'Russo family'} · crew ${l.crew}${op && l.family === 'player' ? `<br>${GOAL_SHORT[op.goal]}` : ''}`;
+  if (p) {
+    const top = p.jobs.find((j) => !j.done && !j.stalled && j.hoods);
+    html += `<b>${esc(label(p))}</b>${p.family === 'rival' ? 'Calloway Outfit' : 'Russo family'} · crew ${p.crew}${top && p.family === 'player' ? `<br>${esc(jobTitle(s, top))}` : ''}`;
   }
   if (b) {
-    const who = b.owner === 'player' ? 'Ours' : b.owner === 'rival' ? 'Calloway' : 'Independent';
-    const mgr = ltById(s, b.managedBy);
-    html += `${html ? '<hr style="border:0;border-top:1px solid #bbb;margin:6px 0">' : ''}<b>${esc(b.name)}</b>${esc(addressOf(b))}<br>${who}${mgr && b.owner === mgr.family ? `, run by ${esc(first(mgr))}` : ''}<br>
+    const who = b.owner === 'player' ? 'Ours' : b.owner === 'rival' ? "Calloway's" : b.protectedBy === 'player' ? 'Pays us protection' : b.protectedBy === 'rival' ? 'Pays Calloway protection' : 'Independent';
+    html += `${html ? '<hr style="border:0;border-top:1px solid #bbb;margin:6px 0">' : ''}<b>${esc(b.name)}</b>${esc(streetOf(b))}<br>${who}<br>
       ${b.racket ? `Back room: ${b.racket}${b.raided ? ' (shut by a raid)' : ''}` : `Could hold a ${b.suits}`}<br>
-      Pays ${money(b.protection)}/month protection${b.telephone ? '<br>Telephone line' : ''}`;
+      ${b.owner ? '' : `Protection: ${money(b.protection)} a month<br>`}${!b.owner && b.protectedBy !== 'rival' ? `To buy: ${money(price(b, 'player'))}<br>` : ''}${b.telephone ? 'Telephone line' : ''}`;
   }
   tip.innerHTML = html;
   tip.hidden = false;
   const wrap = tip.parentElement!.getBoundingClientRect();
-  tip.style.left = `${Math.min(px + 14, wrap.width - 250)}px`;
-  tip.style.top = `${Math.min(py + 14, wrap.height - 130)}px`;
+  tip.style.left = `${Math.max(4, Math.min(px + 14, wrap.width - 250))}px`;
+  tip.style.top = `${Math.max(4, Math.min(py + 14, wrap.height - 150))}px`;
 };
 
 // ---------------------------------------------------------------- boot
@@ -592,14 +750,11 @@ function start(data?: Hot['data']): void {
   s = restored ?? load() ?? createGame((Math.random() * 2 ** 31) | 0);
   phase = restored && data?.phase ? data.phase : s.over ? 'over' : s.run ? 'watch' : 'paper';
   if (phase === 'plans') phase = 'watch';
-  map.setState(s);
+  if (phase === 'watch') speed = 0;
   render();
-  if (phase === 'watch') {
-    speed = 0;
-    render();
-  }
 }
 
 hot?.snapshot?.(() => ({ save: JSON.stringify(s), phase }));
 if (hot?.ready) hot.ready(start);
 else start(hot?.data);
+

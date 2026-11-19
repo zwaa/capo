@@ -1,64 +1,71 @@
-// Headless balance check: the AI plays both sides over many seeds.
-// Usage: npm run sim -- [games]
+// Headless balance check: an AI plays the Russo side over many seeds.
+// Usage: npm run sim -- [games]   (CAPO_RANDOM=1 answers cards at random,
+// CAPO_NOLESSONS=1 plays without the tutorial lessons)
 import { planFamily } from '../src/sim/ai';
-import { aiChangePlans, answer, bossAction, canAct, changePlans, createGame, endMonth, startMonth, stepDay } from '../src/sim/engine';
-import { biz } from '../src/sim/util';
+import { answer, assignBranch, bossAction, canAct, createGame, endMonth, startMonth, stepDay, transferHoods } from '../src/sim/engine';
 import { rand } from '../src/sim/rng';
-import type { GameState } from '../src/sim/types';
-import { activeLts, owned } from '../src/sim/util';
+import { POOL } from '../src/sim/setup';
+import type { Branch, GameState } from '../src/sim/types';
+import { bossOf, lieutenants, owned, protectedBy, rackets } from '../src/sim/util';
 
-export function autoplay(seed: number, verbose = false, random = false): GameState {
-  const s = createGame(seed);
+const PLAN: Branch[][] = [
+  ['protection', 'enforcement'],
+  ['speakeasies', 'gambling', 'bootlegging'],
+  ['police', 'acquisitions', 'fronts'],
+];
+
+function manage(s: GameState): void {
+  const fam = s.families.player;
+  for (const c of [...s.candidates]) bossAction(s, { kind: 'hire', pool: c });
+  if (!s.lessons.on && fam.cash > 1500 && lieutenants(s, 'player').length < 3) {
+    const i = POOL.findIndex((p) => !s.people.some((x) => x.name === p.name));
+    if (i >= 0) bossAction(s, { kind: 'hire', pool: i });
+  }
+  lieutenants(s, 'player').forEach((l, i) => {
+    // Someone inside or laid up can't run anything: the boss covers.
+    for (const b of PLAN[i] ?? []) assignBranch(s, 'player', b, l.status === 'active' ? l.id : fam.bossId);
+  });
+  for (const k of ['recruiter', 'armourer', 'lawyer'] as const) {
+    if (fam.cash > 1500 && canAct(s, { kind: 'specialist', which: k }) === null) bossAction(s, { kind: 'specialist', which: k });
+  }
+  for (const l of lieutenants(s, 'player')) {
+    if (l.demand && canAct(s, { kind: 'grant', lt: l.id }) === null) bossAction(s, { kind: 'grant', lt: l.id });
+  }
+  planFamily(s, 'player');
+  // Spread the boss's hoods to lieutenants who need them.
+  const boss = bossOf(s, 'player');
+  for (const l of lieutenants(s, 'player').filter((x) => x.status === 'active')) {
+    const want = l.jobs.length * 2 - l.crew;
+    if (want > 0 && boss.crew > 1) transferHoods(s, boss.id, l.id, Math.min(want, boss.crew - 1));
+  }
+}
+
+export function autoplay(seed: number, verbose = false, random = false, lessons = true): GameState {
+  const s = createGame(seed, undefined, lessons);
   const pick = { rng: seed ^ 0x5eed };
-  for (let guard = 0; guard < 20 && !s.over; guard++) {
-    if (!random) {
-      // Use meetings the way a sensible player might.
-      const fam = s.families.player;
-      for (let k = 0; k < 3 && fam.actions > 0; k++) {
-        const demander = s.lts.find((l) => l.family === 'player' && l.demand && canAct(s, { kind: 'grant', lt: l.id }) === null);
-        if (demander) bossAction(s, { kind: 'grant', lt: demander.id });
-        else if (fam.cash > 2000 && canAct(s, { kind: 'hire' }) === null) bossAction(s, { kind: 'hire' });
-        else if (fam.heat > 35 && canAct(s, { kind: 'captain' }) === null) bossAction(s, { kind: 'captain' });
-        else {
-          const shop = owned(s, 'player').find((b) => !b.telephone);
-          if (shop && canAct(s, { kind: 'phone', biz: shop.id }) === null) bossAction(s, { kind: 'phone', biz: shop.id });
-          else break;
-        }
-      }
-    }
-    planFamily(s, 'player');
+  const prefs = ['leash', 'lean', 'bribe', 'steady', 'help', 'stand', 'accept', 'lose', 'carry', 'pay', 'buy'];
+  for (let guard = 0; guard < 30 && !s.over; guard++) {
+    manage(s);
     startMonth(s);
     for (;;) {
       const r = stepDay(s);
       if (r === 'done') break;
       if (r === 'card') {
         const c = s.run!.queue[0];
-        const opts = c.options.filter((o) => !o.disabled);
-        // A sensible-but-unremarkable player: preferred answers, else random.
-        const prefs = ['leash', 'lean', 'bribe', 'steady', 'help', 'stand', 'accept', 'lose', 'carry'];
-        const o = random ? opts[Math.floor(rand(pick) * opts.length)] : opts.find((x) => prefs.includes(x.id)) ?? opts[0];
+        const opts = c.options.filter((o) => !o.disabled && o.id !== 'replan');
+        const o = random ? opts[Math.floor(rand(pick) * opts.length)] : (opts.find((x) => prefs.includes(x.id)) ?? opts[0]);
         answer(s, c.id, o.id);
-        if (c.kind === 'emergency' && !random) {
-          const where = s.businesses.find((b) => c.focus && b.x === c.focus.x && b.y === c.focus.y);
-          aiChangePlans(s, 'player', biz(s, where?.id ?? null));
-        }
-        if (o.id === 'replan' && random) {
-          const orders: Record<string, GameState['lts'][number]['order']> = {};
-          for (const l of activeLts(s, 'player')) orders[l.id] = { ...l.order, posture: 'loud' };
-          changePlans(s, orders);
-        }
       }
     }
+    endMonth(s);
     if (verbose) {
       const p = s.families.player;
       const r = s.families.rival;
       console.log(
-        `month ${s.month}: us $${p.cash} heat ${p.heat} shops ${owned(s, 'player').length} | them $${r.cash} heat ${r.heat} shops ${owned(s, 'rival').length}`,
+        `${String(s.month).padStart(2)} us $${p.cash} heat ${p.heat} own ${owned(s, 'player').length} prot ${protectedBy(s, 'player').length} rackets ${rackets(s, 'player').length} hoods ${s.people.filter((x) => x.family === 'player').reduce((n, x) => n + x.crew, 0)} lts ${lieutenants(s, 'player').length} lesson ${s.lessons.index} | them $${r.cash} own ${owned(s, 'rival').length} prot ${protectedBy(s, 'rival').length} notice ${r.notice}`,
       );
-      for (const n of s.run?.news ?? []) console.log('   ', n.headline);
+      for (const n of s.news.slice(0, 2)) console.log('     *', n.headline);
     }
-    endMonth(s);
-    if (verbose) for (const n of s.news) console.log('    *', n.headline);
   }
   return s;
 }
@@ -66,16 +73,12 @@ export function autoplay(seed: number, verbose = false, random = false): GameSta
 if (process.env.CAPO_AUTOPLAY) {
   const games = Number(process.argv.find((a) => /^\d+$/.test(a)) ?? 200);
   const tally = { win: 0, loss: 0, draw: 0, none: 0 };
-  let shops = 0;
-  let cash = 0;
-  let dead = 0;
+  let lessonsDone = 0;
   for (let i = 1; i <= games; i++) {
-    const s = autoplay(i, games === 1, !!process.env.CAPO_RANDOM);
+    const s = autoplay(i, games === 1, !!process.env.CAPO_RANDOM, !process.env.CAPO_NOLESSONS);
     tally[s.over?.result ?? 'none']++;
-    shops += owned(s, 'player').length;
-    cash += s.families.player.cash;
-    dead += s.lts.filter((l) => l.status === 'dead').length;
+    lessonsDone += s.lessons.index;
     if (games === 1) console.log(s.over);
   }
-  console.log(tally, { avgShops: (shops / games).toFixed(1), avgCash: Math.round(cash / games), avgDeadLts: (dead / games).toFixed(1) });
+  console.log(tally, { avgLessonsDone: (lessonsDone / games).toFixed(1) });
 }

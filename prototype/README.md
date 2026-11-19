@@ -1,20 +1,25 @@
-# Capo: vertical slice
+# Capo: vertical slice (v2)
 
-The first playable prototype of [Capo](../docs/DESIGN.md), scoped as in §17 of the design doc:
-one ward, one rival family (the Calloway Outfit), three lieutenants, six months (January to June 1927).
+The playable prototype of [Capo](../docs/DESIGN.md), scoped as in §17 of the design doc:
+one ward, one established rival (the Calloway Outfit), and **all of 1927, starting from nothing**.
+
+v1 (three lieutenants, one order each) taught us that one order a month is too limiting and that the
+tutorial should build the family up from scratch. v2 is rebuilt around that.
 
 ## What's in it
 
-- **Orders.** Give each lieutenant a goal (expand, earn, hold, hit, recruit, lie low), a target and a posture (quiet, firm, loud).
-- **Personality.** Hotheads escalate, cautious lieutenants hang back, greedy ones skim, and ambitious ones make demands and may betray you.
-- **The watch phase.** The month plays out day by day on the map and stops for decisions (react cards) when something happens.
-- **Change of Plans.** Big events let you re-issue orders mid-month. A lieutenant at a shop with a telephone hears immediately. Anyone else waits for a runner.
-- **Heat and raids.** Hover over Heat or Cash to see every cause, itemised.
-- **The Morning Edition.** Each month opens with a newspaper, the informants' Wire, the Ledger and trouble at home.
-- **Fog of war.** You only see Calloway's people near your shops and crews.
-- **The rival AI** uses the same order system and the same rules, including its own Change of Plans.
+- **Start from nothing.** The boss, two cousins, two pistols, $300 and a rented room. No lieutenants, no property.
+- **Branches and job lists.** Eight branches in four areas (Muscle, Property, Vice, Fixing). Each branch is run by the boss or a lieutenant, and a lieutenant can take up to three. Every person ranks the jobs across their branches in one list.
+- **Hands are the capacity.** Each job needs a number of hands (and sometimes a car or cash). The person running a list works too, so a crew of two is three hands. Hands go to the top of the list first; jobs that get nobody stall, and the orders screen says why.
+- **Protection and property are separate.** Shops pay protection (and stop if nobody collects). Owned buildings can hold a back room (speakeasy, gambling den or still) and a telephone.
+- **Inventory.** Hoods, pistols, cars and liquor are counted. Bars pour liquor; stills make it; without a supply run, you buy on the open market.
+- **Specialists:** recruiter, armourer, mechanic and lawyer. Nothing is locked without one; they make things cheaper, better or safer.
+- **Lessons** (switch off any time): work the street, hand it to Sal, buy a building, open a back room, Calloway notices, fix the police, hire a specialist, ambition. Lessons finish on progress, not on the calendar, and three of them bring a lieutenant asking for work.
+- **Carried over from v1:** the watch phase with telegram decisions, Change of Plans (your own list changes at once; lieutenants hear by telephone or wait for a runner), heat with itemised causes, the Morning Edition and the Wire, fog of war, ambition, demands and betrayal, and a rival AI that uses the same job lists.
 
-Out of scope for the slice: politics, laundering, boss succession, the roguelite layer, and isometric art.
+**How the year is judged:** on what you built (buildings, rackets and paying shops, plus some of your cash), not on beating Calloway outright. A draw needs 2,500 points and a win 5,000. Driving Calloway out of the ward entirely wins at once.
+
+Not in the slice: City Hall and elections, laundering, the doctor, brewmaster, accountant and newsman, boss succession, the roguelite layer, and isometric art.
 
 ## Running it
 
@@ -23,25 +28,25 @@ npm install
 npm run dev        # play at http://localhost:5173
 npm test           # simulation tests
 npm run sim -- 300 # headless balance check: an AI plays the Russo side over 300 seeds
-npm run build      # single-file build in dist/index.html
+npm run artifact   # single-file build for publishing (dist/capo.html)
 ```
 
 ## Layout
 
 - `src/sim/` is the deterministic simulation, with no DOM. The same seed and the same choices always give the same game.
-  - `engine.ts` covers the month loop, cards, fights, Change of Plans and month-end settlement.
-  - `ai.ts` holds the family AI (used for Calloway; autoplay uses it for the Russo side too).
-  - `setup.ts` generates the ward and the starting cast. `types.ts`, `util.ts` and `rng.ts` are support code.
-- `src/ui/` is the browser front end: `map.ts` (the ward at night, on canvas) and `main.ts` (panels, telegrams, the Morning Edition).
+  - `engine.ts` covers the orders API, hand and car allocation, the day loop, fights, Change of Plans and month-end settlement.
+  - `ai.ts` builds job lists for a family (Calloway every month; the autoplay script uses it for the Russos too).
+  - `lessons.ts` holds the tutorial. `setup.ts` builds the ward and the hiring pool. `util.ts` holds branches, jobs, prices and targeting rules.
+- `src/ui/` is the browser front end: `map.ts` (the ward at night) and `main.ts` (panels, telegrams, the Morning Edition).
 - `scripts/autoplay.ts` is the headless balance runner.
 
 ## Balance snapshot
 
-From `npm run sim -- 300` (Russo side played by AI):
+From `npm run sim -- 300`. The Russo side is played by a simple autopilot that hires whoever the lessons offer, hands out branches and answers telegrams. It never really plans:
 
 | Russo player | Win | Draw | Loss |
 |---|---|---|---|
-| Random choices (`CAPO_RANDOM=1`) | 1% | 2% | 96% |
-| Sensible answers + meetings (hire, telephones, captain, grant demands) | 52% | 14% | 33% |
+| Autopilot, sensible answers | 5% | 20% | 75% |
+| Autopilot, random answers | 7% | 31% | 62% |
 
-Calloway is meant to be the favourite. A thoughtful human should beat these numbers.
+The autopilot is weak, so these numbers say little about a human. The thresholds need tuning from real play.

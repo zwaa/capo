@@ -1,9 +1,12 @@
 // The ward at night. Plain grid for the vertical slice (isometric comes later),
 // but it should already feel like a city after dark.
+//  - Owned buildings are filled in the family colour.
+//  - Shops that only pay protection get a coloured awning stripe.
+//  - Squads out on a job show as small dots; guards as dots on the door.
 
 import { isLot } from '../sim/setup';
-import type { Business, GameState, Lieutenant } from '../sim/types';
-import { biz, dist, ltById, owned, activeLts, visibleToPlayer } from '../sim/util';
+import type { Building, GameState, Person } from '../sim/types';
+import { JOBS, building, person, seenTile, visible } from '../sim/util';
 
 const C = {
   night: '#0f1318',
@@ -11,7 +14,6 @@ const C = {
   lot: '#20262f',
   lotEdge: '#2c3440',
   lamp: '#e3a23b',
-  lampDeep: '#8a5a14',
   ourFill: '#3a2a12',
   steel: '#5f9fb8',
   theirFill: '#16303b',
@@ -37,10 +39,10 @@ export class WardMap {
   private animDur = 1;
   private pulse: { at: Pos; until: number } | null = null;
   private flashes: { at: Pos; t: number }[] = [];
-  private raf = 0;
+  raf = 0;
   showOrders = true;
   state: GameState | null = null;
-  onHover: (b: Business | null, l: Lieutenant | null, px: number, py: number) => void = () => {};
+  onHover: (b: Building | null, p: Person | null, px: number, py: number) => void = () => {};
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -55,15 +57,14 @@ export class WardMap {
     this.raf = requestAnimationFrame(this.loop);
   }
 
-  destroy(): void {
-    cancelAnimationFrame(this.raf);
-  }
-
   /** Remember where everyone is before a day ticks, so moves can glide. */
   beginStep(durationMs: number): void {
     if (!this.state) return;
     this.prev.clear();
-    for (const l of this.state.lts) this.prev.set(l.id, { x: l.x, y: l.y });
+    for (const p of this.state.people) {
+      this.prev.set(p.id, { x: p.x, y: p.y });
+      for (const j of p.jobs) this.prev.set(j.id, { x: j.x, y: j.y });
+    }
     this.animStart = performance.now();
     this.animDur = Math.max(1, durationMs * 0.85);
   }
@@ -83,14 +84,14 @@ export class WardMap {
     this.canvas.height = Math.max(1, Math.round(r.height * dpr));
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (!this.state) return;
-    const pad = 24;
-    this.tile = Math.floor(Math.min((r.width - pad * 2) / this.state.width, (r.height - pad * 2 - 20) / this.state.height));
+    const pad = 20;
+    this.tile = Math.max(8, Math.floor(Math.min((r.width - pad * 2) / this.state.width, (r.height - pad * 2 - 18) / this.state.height)));
     this.ox = Math.round((r.width - this.tile * this.state.width) / 2);
-    this.oy = Math.round((r.height - 20 - this.tile * this.state.height) / 2);
+    this.oy = Math.round((r.height - 18 - this.tile * this.state.height) / 2);
   }
 
   setState(s: GameState): void {
-    const first = !this.state;
+    const first = this.state !== s;
     this.state = s;
     if (first) this.resize();
   }
@@ -103,10 +104,9 @@ export class WardMap {
     const py = e.clientY - r.top;
     const tx = Math.floor((px - this.ox) / this.tile);
     const ty = Math.floor((py - this.oy) / this.tile);
-    const b = s.businesses.find((b) => b.x === tx && b.y === ty) ?? null;
-    const l =
-      s.lts.find((l) => l.status === 'active' && l.x === tx && l.y === ty && visibleToPlayer(s, l)) ?? null;
-    this.onHover(b, l, px, py);
+    const b = s.buildings.find((b) => b.x === tx && b.y === ty) ?? null;
+    const p = s.people.find((p) => p.status === 'active' && p.x === tx && p.y === ty && visible(s, p)) ?? null;
+    this.onHover(b, p, px, py);
   }
 
   private loop(now: number): void {
@@ -118,6 +118,13 @@ export class WardMap {
     return { x: this.ox + (p.x + 0.5) * this.tile, y: this.oy + (p.y + 0.5) * this.tile };
   }
 
+  private glide(id: string, to: Pos, now: number): Pos {
+    const from = this.prev.get(id) ?? to;
+    const k = Math.min(1, (now - this.animStart) / this.animDur);
+    const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    return { x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e };
+  }
+
   private draw(now: number): void {
     const s = this.state;
     const g = this.ctx;
@@ -127,31 +134,20 @@ export class WardMap {
     if (!s) return;
     const T = this.tile;
 
-    // Visible tiles (fog of war).
-    const ours = owned(s, 'player');
-    const ourMen = activeLts(s, 'player');
-    const seen = (x: number, y: number) =>
-      ours.some((b) => dist(b, { x, y }) <= 2) || ourMen.some((l) => dist(l, { x, y }) <= 2);
-
     for (let y = 0; y < s.height; y++) {
       for (let x = 0; x < s.width; x++) {
         const X = this.ox + x * T;
         const Y = this.oy + y * T;
-        if (!isLot(x, y)) {
-          g.fillStyle = C.street;
-          g.fillRect(X, Y, T, T);
-          continue;
-        }
-        g.fillStyle = C.lot;
-        g.fillRect(X + 1, Y + 1, T - 2, T - 2);
+        g.fillStyle = isLot(x, y) ? C.lot : C.street;
+        if (isLot(x, y)) g.fillRect(X + 1, Y + 1, T - 2, T - 2);
+        else g.fillRect(X, Y, T, T);
       }
     }
-    // Streetlamps at the crossings.
     for (let y = 0; y < s.height; y += 3) {
       for (let x = 0; x < s.width; x += 4) {
         const c = this.px({ x, y });
         const glow = g.createRadialGradient(c.x, c.y, 0, c.x, c.y, T * 1.1);
-        glow.addColorStop(0, 'rgba(227,162,59,0.22)');
+        glow.addColorStop(0, 'rgba(227,162,59,0.2)');
         glow.addColorStop(1, 'rgba(227,162,59,0)');
         g.fillStyle = glow;
         g.fillRect(c.x - T * 1.1, c.y - T * 1.1, T * 2.2, T * 2.2);
@@ -162,72 +158,109 @@ export class WardMap {
       }
     }
 
-    // Shops.
-    for (const b of s.businesses) this.drawShop(b, now);
+    // The boss's rented room.
+    const boss = person(s, s.families.player.bossId);
+    if (boss) {
+      const X = this.ox + boss.homeX * T;
+      const Y = this.oy + boss.homeY * T;
+      const m = T * 0.28;
+      g.fillStyle = '#2b2418';
+      g.fillRect(X + m, Y + m, T - 2 * m, T - 2 * m);
+      g.fillStyle = 'rgba(240,200,120,0.85)';
+      g.fillRect(X + T / 2 - 2, Y + T / 2 - 2, 4, 4);
+    }
 
-    // Orders: where our people are headed.
+    for (const b of s.buildings) this.drawBuilding(b, now);
+
+    // Orders: dashed lines from each of our people to their one-off jobs.
     if (this.showOrders && !s.run) {
       g.save();
       g.setLineDash([4, 5]);
       g.lineWidth = 1.5;
-      for (const l of ourMen) {
-        const t = l.order.goal === 'hit' ? ltById(s, l.order.target) ?? biz(s, l.order.target) : biz(s, l.order.target);
-        if (!t) continue;
-        const a = this.px(l);
-        const b = this.px(t);
-        g.strokeStyle = l.order.goal === 'hit' ? C.blood : 'rgba(227,162,59,0.75)';
-        g.beginPath();
-        g.moveTo(a.x, a.y);
-        g.lineTo(b.x, b.y);
-        g.stroke();
+      for (const p of s.people.filter((p) => p.family === 'player' && p.status === 'active')) {
+        for (const j of p.jobs) {
+          if (JOBS[j.kind].ongoing && j.kind !== 'guard') continue;
+          const t = building(s, j.target) ?? person(s, j.target);
+          if (!t) continue;
+          const a = this.px({ x: p.homeX, y: p.homeY });
+          const b = this.px(t);
+          g.strokeStyle = j.kind === 'hit' || j.kind === 'takeover' || j.kind === 'wreck' ? C.blood : j.stalled ? 'rgba(141,149,161,0.5)' : 'rgba(227,162,59,0.75)';
+          g.beginPath();
+          g.moveTo(a.x, a.y);
+          g.lineTo(b.x, b.y);
+          g.stroke();
+        }
       }
       g.restore();
+    }
+
+    // Squads out on jobs this month.
+    if (s.run) {
+      for (const p of s.people) {
+        if (p.status !== 'active') continue;
+        for (const j of p.jobs) {
+          if (j.done || j.stalled || !j.hoods) continue;
+          if (JOBS[j.kind].ongoing && j.kind !== 'guard') continue;
+          if (p.family === 'rival' && !seenTile(s, j.x, j.y)) continue;
+          const at = this.px(this.glide(j.id, { x: j.x, y: j.y }, now));
+          g.fillStyle = p.family === 'player' ? C.lamp : C.steel;
+          const n = Math.min(4, j.hoods);
+          for (let i = 0; i < n; i++) {
+            g.beginPath();
+            g.arc(at.x - T * 0.28 + i * T * 0.13, at.y + T * 0.3, Math.max(1.6, T * 0.05), 0, Math.PI * 2);
+            g.fill();
+          }
+        }
+      }
     }
 
     // Fog.
     for (let y = 0; y < s.height; y++) {
       for (let x = 0; x < s.width; x++) {
-        if (seen(x, y)) continue;
+        if (seenTile(s, x, y)) continue;
         g.fillStyle = C.fog;
         g.fillRect(this.ox + x * T, this.oy + y * T, T, T);
       }
     }
 
-    // Lieutenants (rivals only where our people can see them).
-    const k = Math.min(1, (now - this.animStart) / this.animDur);
-    const ease = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    // People (rivals only where our people can see them).
     const placed = new Map<string, number>();
-    for (const l of s.lts) {
-      if (l.status !== 'active' || !visibleToPlayer(s, l)) continue;
-      const from = this.prev.get(l.id) ?? l;
-      const p = { x: from.x + (l.x - from.x) * ease, y: from.y + (l.y - from.y) * ease };
-      const key = `${l.x},${l.y}`;
+    for (const p of s.people) {
+      if (p.status !== 'active' || !visible(s, p)) continue;
+      const pos = this.glide(p.id, p, now);
+      const key = `${p.x},${p.y}`;
       const n = placed.get(key) ?? 0;
       placed.set(key, n + 1);
-      const c = this.px(p);
+      const c = this.px(pos);
       const ang = n * 2.1 + 0.6;
       const off = n === 0 ? 0 : T * 0.22;
       const cx = c.x + Math.cos(ang) * off;
       const cy = c.y + Math.sin(ang) * off - T * 0.08;
-      const rad = Math.max(6, T * 0.17);
-      g.fillStyle = l.family === 'player' ? C.lamp : C.steel;
+      const rad = Math.max(6, T * (p.role === 'boss' ? 0.2 : 0.16));
+      g.fillStyle = p.family === 'player' ? C.lamp : C.steel;
       g.strokeStyle = C.night;
       g.lineWidth = 2;
       g.beginPath();
       g.arc(cx, cy, rad, 0, Math.PI * 2);
       g.fill();
       g.stroke();
+      if (p.role === 'boss') {
+        g.strokeStyle = p.family === 'player' ? C.lamp : C.steel;
+        g.lineWidth = 1.5;
+        g.beginPath();
+        g.arc(cx, cy, rad + 3, 0, Math.PI * 2);
+        g.stroke();
+      }
       g.fillStyle = C.night;
       g.font = `700 ${Math.round(rad * 1.05)}px Oswald, 'Arial Narrow', sans-serif`;
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      g.fillText(l.name[0], cx, cy + 0.5);
+      g.fillText(p.name[0], cx, cy + 0.5);
     }
 
-    // Focus pulse for the current telegram.
     if (this.pulse && now < this.pulse.until) {
       const c = this.px(this.pulse.at);
-      const ph = ((now / 900) % 1);
+      const ph = (now / 900) % 1;
       g.strokeStyle = `rgba(227,162,59,${1 - ph})`;
       g.lineWidth = 2;
       g.beginPath();
@@ -238,10 +271,9 @@ export class WardMap {
     // Hays Code violence: a flash behind the windows, nothing more.
     this.flashes = this.flashes.filter((f) => now - f.t < 1400);
     for (const f of this.flashes) {
-      const c = this.px(f.at);
       const t = (now - f.t) / 1400;
-      const on = Math.floor(t * 12) % 2 === 0 && t < 0.6;
-      if (!on) continue;
+      if (Math.floor(t * 12) % 2 !== 0 || t > 0.6) continue;
+      const c = this.px(f.at);
       const glow = g.createRadialGradient(c.x, c.y, 0, c.x, c.y, T * 0.9);
       glow.addColorStop(0, 'rgba(255,236,190,0.9)');
       glow.addColorStop(1, 'rgba(255,200,120,0)');
@@ -250,35 +282,43 @@ export class WardMap {
     }
   }
 
-  private drawShop(b: Business, now: number): void {
+  private drawBuilding(b: Building, now: number): void {
     const g = this.ctx;
     const T = this.tile;
     const X = this.ox + b.x * T;
     const Y = this.oy + b.y * T;
     const m = Math.max(3, T * 0.1);
-    const fill = b.owner === 'player' ? C.ourFill : b.owner === 'rival' ? C.theirFill : C.free;
-    const edge = b.owner === 'player' ? C.lamp : b.owner === 'rival' ? C.steel : C.lotEdge;
-    g.fillStyle = fill;
-    g.fillRect(X + m, Y + m, T - 2 * m, T - 2 * m);
-    g.strokeStyle = edge;
-    g.lineWidth = b.owner ? 2 : 1;
-    g.strokeRect(X + m + 0.5, Y + m + 0.5, T - 2 * m - 1, T - 2 * m - 1);
-
-    // Lit windows: busier shops burn more lamps after dark.
-    const seed = [...b.id].reduce((n, ch) => n * 31 + ch.charCodeAt(0), 7);
-    const lit = b.racket ? 0.7 : b.owner ? 0.45 : 0.2;
-    const w = Math.max(2, T * 0.08);
-    for (let i = 0; i < 6; i++) {
-      const r = ((seed * (i + 3) * 2654435761) >>> 0) / 4294967296;
-      const flicker = b.racket && Math.sin(now / 700 + i * 2 + seed) > 0.96 ? 0.3 : 1;
-      if (r > lit) continue;
-      const wx = X + m + T * 0.12 + (i % 3) * T * 0.22;
-      const wy = Y + m + T * 0.12 + Math.floor(i / 3) * T * 0.22;
-      g.fillStyle = `rgba(240,200,120,${0.75 * flicker})`;
-      g.fillRect(wx, wy, w, w);
+    const w = T - 2 * m;
+    g.fillStyle = b.owner === 'player' ? C.ourFill : b.owner === 'rival' ? C.theirFill : C.free;
+    g.fillRect(X + m, Y + m, w, w);
+    if (b.owner) {
+      g.strokeStyle = b.owner === 'player' ? C.lamp : C.steel;
+      g.lineWidth = 2;
+      g.strokeRect(X + m + 0.5, Y + m + 0.5, w - 1, w - 1);
+    } else {
+      g.strokeStyle = C.lotEdge;
+      g.lineWidth = 1;
+      g.strokeRect(X + m + 0.5, Y + m + 0.5, w - 1, w - 1);
+    }
+    // Protection: an awning stripe across the top in the family colour.
+    if (b.protectedBy && !b.owner) {
+      g.fillStyle = b.protectedBy === 'player' ? C.lamp : C.steel;
+      const stripes = 4;
+      const sw = w / (stripes * 2 - 1);
+      for (let i = 0; i < stripes; i++) g.fillRect(X + m + i * sw * 2, Y + m, sw, Math.max(3, T * 0.09));
     }
 
-    // Racket letter and telephone.
+    const seed = [...b.id].reduce((n, ch) => n * 31 + ch.charCodeAt(0), 7);
+    const lit = b.racket ? 0.75 : b.owner ? 0.5 : b.protectedBy ? 0.35 : 0.2;
+    const ws = Math.max(2, T * 0.08);
+    for (let i = 0; i < 6; i++) {
+      const rr = ((seed * (i + 3) * 2654435761) >>> 0) / 4294967296;
+      if (rr > lit) continue;
+      const flicker = b.racket && Math.sin(now / 700 + i * 2 + seed) > 0.96 ? 0.3 : 1;
+      g.fillStyle = `rgba(240,200,120,${0.75 * flicker})`;
+      g.fillRect(X + m + T * 0.12 + (i % 3) * T * 0.22, Y + m + T * 0.18 + Math.floor(i / 3) * T * 0.22, ws, ws);
+    }
+
     const label = b.racket === 'speakeasy' ? 'S' : b.racket === 'gambling' ? 'G' : b.racket === 'still' ? 'D' : '';
     if (label) {
       g.fillStyle = b.raided ? C.dim : C.ink;
@@ -289,8 +329,8 @@ export class WardMap {
     }
     if (b.telephone) {
       g.fillStyle = b.owner === 'rival' ? C.steel : C.lamp;
-      const s = Math.max(3, T * 0.09);
-      g.fillRect(X + m + 3, Y + T - m - s - 3, s, s);
+      const sz = Math.max(3, T * 0.09);
+      g.fillRect(X + m + 3, Y + T - m - sz - 3, sz, sz);
     }
     if (b.raided) {
       g.strokeStyle = C.blood;

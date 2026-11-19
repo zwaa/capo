@@ -393,7 +393,7 @@ After that the lessons switch off, and the run carries on in the same city. Less
 ---
 
 ## 17. Vertical slice (the first prototype)
-*v1, below, is built and playable. Playtesting led to the areas-and-jobs model (§5.2) and starting from nothing (§4, §16). v2 rebuilds the slice around them:*
+*v1 and v2 are built and playable (see `prototype/README.md`). Playtesting led to the areas-and-jobs model (§5.2) and starting from nothing (§4, §16). v2 rebuilds the slice around them:*
 - **v2:** one ward, one established rival, **twelve months** (all of 1927), starting with the boss and two hoods. Four areas split into nine branches, with lieutenants taking one to three branches each, ranked job lists, hoods as capacity, the boss on the map, protection separate from property, counted guns, cars and liquor, and the tutorial lessons. Fixing is kept light (the precinct captain). Four specialists: recruiter, armourer, mechanic and lawyer. Change of Plans, react cards, heat, the Wire and the Morning Edition carry over from v1.
 
 *v1 scope:*

@@ -1,70 +1,105 @@
-// The rival family. It uses exactly the same Order format as the player and
-// is resolved by exactly the same engine. It only knows what is public plus
-// what its own people can see.
+// Family AI. Calloway uses it every month; the autoplay script uses it for the
+// Russo side too. It builds ranked job lists in the same format the player
+// does, and only targets what its people could know about.
 
 import { chance } from './rng';
-import type { GameState, Lieutenant, Order } from './types';
-import { activeLts, dist, hqOf, other, owned } from './util';
+import { blankJob } from './setup';
+import type { FamilyId, GameState, JobKind, Person, Posture } from './types';
+import { JOBS, active, carPrice, dist, gunPrice, hoodPrice, members, other, owned, price, protectedBy, rackets, runner, targets, totalHoods } from './util';
 
-export function planFamily(s: GameState, f: 'rival' | 'player'): void {
+export function planFamily(s: GameState, f: FamilyId): void {
   const fam = s.families[f];
-  const mine = activeLts(s, f);
-  const taken = new Set<string>();
   const foe = other(f);
-  let lyingLow = false;
-  const hq = hqOf(s, f);
+  const aggressive = f === 'rival' ? fam.notice : s.families.rival.notice;
+  const id = () => `j${s.nextId++}`;
 
-  for (const l of mine) {
-    const o = choose(s, l);
-    l.order = o;
-    if (o.target) taken.add(o.target);
+  for (const p of members(s, f)) p.jobs = p.jobs.filter((j) => !j.done && (!j.target || targets(s, f, j.kind).some((t) => t.id === j.target)));
+
+  const ensure = (kind: JobKind, want: boolean) => {
+    const r = runner(s, f, JOBS[kind].branch);
+    const has = r.jobs.some((j) => j.kind === kind);
+    if (want && !has) r.jobs.push(blankJob(id(), kind));
+    if (!want && has) r.jobs = r.jobs.filter((j) => j.kind !== kind);
+  };
+  const bars = rackets(s, f, 'speakeasy').length;
+  const stills = rackets(s, f, 'still').length;
+  ensure('collect', protectedBy(s, f).length > 0);
+  ensure('runSpeak', bars > 0);
+  ensure('runGamble', rackets(s, f, 'gambling').length > 0);
+  ensure('distill', stills > 0);
+  ensure('supply', stills > 0 && bars > 0 && fam.cars > 0);
+  ensure('payoff', fam.heat > 25 && fam.cash > 400);
+
+  const oneOff = (kind: JobKind, target: string | null, posture: Posture = 'firm', max = 1) => {
+    const r = runner(s, f, JOBS[kind].branch);
+    if (r.jobs.filter((j) => j.kind === kind && !JOBS[kind].ongoing).length >= max || r.jobs.some((j) => j.target === target && target)) return;
+    r.jobs.push(blankJob(id(), kind, target, posture));
+  };
+  const home = runner(s, f, 'protection');
+  const near = <T extends { x: number; y: number }>(xs: T[], from: Person = home) => xs.sort((a, b) => dist(a, from) - dist(b, from));
+
+  // Protection: sign up the nearest free shop; once at war, muscle in on theirs.
+  // Before the war, Calloway keeps to the east end of the ward.
+  const inReach = (b: { x: number }) => aggressive || f === 'player' || b.x >= s.width / 2;
+  const free = near(s.buildings.filter((b) => b.owner === null && b.protectedBy === null && inReach(b)));
+  for (const b of free.slice(0, 2)) if (dist(b, home) <= 7) oneOff('signup', b.id, home.traits.includes('hothead') ? 'loud' : 'firm', 2);
+  if (aggressive && chance(s, 0.6)) {
+    const theirs = near(protectedBy(s, foe));
+    if (theirs[0]) {
+      const r = runner(s, f, 'protection');
+      if (!r.jobs.some((j) => j.target === theirs[0].id)) r.jobs.push(blankJob(id(), 'signup', theirs[0].id, 'loud'));
+    }
   }
 
-  function choose(s: GameState, l: Lieutenant): Order {
-    const loud = l.traits.includes('hothead') ? 'loud' : 'firm';
-    if (fam.heat > 65 && !lyingLow && !l.traits.includes('hothead')) {
-      lyingLow = true;
-      return { goal: 'lielow', target: null, posture: 'quiet' };
-    }
-    if (l.crew < 3) return { goal: 'recruit', target: null, posture: 'quiet' };
-
-    // Grudge: someone killed one of ours. Hit back at a lieutenant we can see.
-    if (fam.grudge && chance(s, 0.7)) {
-      const seen = activeLts(s, foe).filter((t) => owned(s, f).some((b) => dist(b, t) <= 3) || mine.some((m) => dist(m, t) <= 3));
-      const victim = seen.sort((a, b) => dist(a, l) - dist(b, l))[0];
-      if (victim && !taken.has(victim.id)) return { goal: 'hit', target: victim.id, posture: 'loud' };
-    }
-
-    // Greedy lieutenants want rackets running in their shops.
-    if (l.traits.includes('greedy')) {
-      const bare = owned(s, f).find((b) => !b.racket && !taken.has(b.id));
-      if (bare && fam.cash > 600) return { goal: 'earn', target: bare.id, posture: 'quiet' };
-    }
-
-    // Someone guards headquarters if the enemy is close.
-    if (hq && !taken.has(hq.id) && activeLts(s, foe).some((e) => dist(e, hq) <= 3)) {
-      return { goal: 'hold', target: hq.id, posture: 'firm' };
-    }
-
-    // The Bootlegger expands: free shops first, then the enemy's weakest.
-    const free = s.businesses.filter((b) => b.owner === null && !taken.has(b.id)).sort((a, b) => dist(a, l) - dist(b, l));
-    if (free[0] && dist(free[0], l) <= 7) return { goal: 'expand', target: free[0].id, posture: loud };
-
-    const theirs = owned(s, foe)
-      .filter((b) => !taken.has(b.id))
-      .sort((a, b) => guards(s, a.id) - guards(s, b.id) || dist(a, l) - dist(b, l));
-    if (theirs[0] && l.muscle >= 5) return { goal: 'expand', target: theirs[0].id, posture: 'loud' };
-    if (free[0]) return { goal: 'expand', target: free[0].id, posture: loud };
-
-    const bare = owned(s, f).find((b) => !b.racket && !taken.has(b.id));
-    if (bare && fam.cash > 500) return { goal: 'earn', target: bare.id, posture: 'quiet' };
-    const any = owned(s, f).find((b) => b.racket && !taken.has(b.id));
-    if (any) return { goal: 'earn', target: any.id, posture: 'firm' };
-    return { goal: 'hold', target: hq?.id ?? null, posture: 'firm' };
+  // Property: buy when there's money; take by force once at war.
+  const acq = runner(s, f, 'acquisitions');
+  // An established outfit buys slowly; the newcomer buys whenever it can.
+  const cap = f === 'rival' ? (fam.notice ? 8 : 5) : 99;
+  const margin = f === 'rival' ? 800 : 250;
+  const forSale = near(
+    s.buildings.filter((b) => b.owner === null && b.protectedBy !== foe && inReach(b) && fam.cash > price(b, f) + margin),
+    acq,
+  );
+  if (forSale[0] && owned(s, f).length < cap && (f === 'player' || chance(s, 0.25))) oneOff('buy', forSale[0].id);
+  if (aggressive && f === 'rival' && s.month >= 5 && fam.cash > 1200 && chance(s, 0.35)) {
+    const prize = near(owned(s, foe), acq)[0];
+    if (prize) oneOff('takeover', prize.id, 'loud');
   }
-  fam.grudge = null;
-}
+  const bare = owned(s, f).find((b) => !b.racket);
+  if (bare && fam.cash > 450 && (f === 'player' || chance(s, 0.4))) oneOff('fitout', bare.id);
+  const hq = owned(s, f)[0];
+  if (hq && !hq.telephone && fam.cash > 900) oneOff('phone', hq.id);
 
-function guards(s: GameState, bizId: string): number {
-  return s.lts.filter((l) => l.status === 'active' && l.order.goal === 'hold' && l.order.target === bizId).length;
+  // Enforcement: guard the best place if the enemy is close; settle grudges.
+  const enf = runner(s, f, 'enforcement');
+  const prized = owned(s, f).filter((b) => b.racket).sort((a, b) => Math.min(...active(s, foe).map((p) => dist(p, a)), 99) - Math.min(...active(s, foe).map((p) => dist(p, b)), 99))[0];
+  if (aggressive && prized && !enf.jobs.some((j) => j.kind === 'guard')) enf.jobs.push(blankJob(id(), 'guard', prized.id));
+  if (fam.grudge) {
+    const victim = targets(s, f, 'hit')[0];
+    if (victim) oneOff('hit', victim.id, 'loud');
+  }
+
+  // Supplies: arm everyone, keep a car, hire enough hoods for the lists.
+  const buy = (what: 'hood' | 'gun' | 'car', to?: Person) => {
+    const cost = what === 'hood' ? hoodPrice(s, f) : what === 'gun' ? gunPrice(s, f) : carPrice(s, f);
+    fam.cash -= cost;
+    fam.ledger.push({ label: what === 'hood' ? 'New hood' : what === 'gun' ? 'A pistol' : 'A car', amount: -cost });
+    if (what === 'hood') to!.crew++;
+    else if (what === 'gun') fam.guns++;
+    else fam.cars++;
+  };
+  if (fam.cars < 1 && fam.cash > carPrice(s, f) + 600) buy('car');
+  for (let i = 0; i < 6; i++) {
+    const short = members(s, f)
+      .filter((p) => p.status === 'active')
+      .map((p) => ({ p, gap: p.jobs.reduce((n, j) => n + (JOBS[j.kind].ongoing ? 1 : j.kind === 'takeover' ? 4 : 2), 0) - p.crew }))
+      .sort((a, b) => b.gap - a.gap)[0];
+    if (!short || short.gap <= 0 || fam.cash < hoodPrice(s, f) + 250) break;
+    buy('hood', short.p);
+  }
+  while (fam.guns < totalHoods(s, f) && fam.cash > gunPrice(s, f) + 300) buy('gun');
+
+  // Ongoing work first, then one-off jobs.
+  for (const p of members(s, f)) p.jobs.sort((a, b) => Number(!JOBS[a.kind].ongoing) - Number(!JOBS[b.kind].ongoing));
+  fam.grudge = false;
 }

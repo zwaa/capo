@@ -1,92 +1,121 @@
 export type FamilyId = 'player' | 'rival';
 export type Racket = 'speakeasy' | 'gambling' | 'still';
-export type Goal = 'expand' | 'earn' | 'hold' | 'hit' | 'lielow' | 'recruit';
 export type Posture = 'quiet' | 'firm' | 'loud';
-export type Trait =
-  | 'hothead'
-  | 'greedy'
-  | 'cautious'
-  | 'ambitious'
-  | 'oldworld'
-  | 'loyal'
-  | 'looselips';
+export type Trait = 'hothead' | 'greedy' | 'cautious' | 'ambitious' | 'oldworld' | 'loyal' | 'looselips';
+export type Status = 'active' | 'wounded' | 'jailed' | 'dead' | 'defected';
 
-export type LtStatus = 'active' | 'wounded' | 'jailed' | 'dead' | 'defected';
+/** The branches of the business in this slice (City Hall comes later). */
+export type Branch =
+  | 'protection'
+  | 'enforcement'
+  | 'acquisitions'
+  | 'fronts'
+  | 'speakeasies'
+  | 'gambling'
+  | 'bootlegging'
+  | 'police';
 
-/** Orders are data: the player and the AI submit exactly the same shape. */
-export interface Order {
-  goal: Goal;
-  /** Business id (expand/earn/hold) or lieutenant id / business id (hit). */
+export type JobKind =
+  | 'collect'
+  | 'signup'
+  | 'guard'
+  | 'hit'
+  | 'wreck'
+  | 'buy'
+  | 'takeover'
+  | 'fitout'
+  | 'phone'
+  | 'runSpeak'
+  | 'runGamble'
+  | 'distill'
+  | 'supply'
+  | 'payoff';
+
+export type SpecialistKind = 'recruiter' | 'armourer' | 'mechanic' | 'lawyer';
+
+/**
+ * A standing job. The plan part (kind, target, posture) persists month to
+ * month; the rest is worked out when a month starts.
+ */
+export interface Job {
+  id: string;
+  kind: JobKind;
   target: string | null;
   posture: Posture;
+  // --- this month
+  need: number;
+  hoods: number;
+  car: boolean;
+  /** Why it isn't running, if it isn't. */
+  stalled: string | null;
+  progress: number;
+  days: number;
+  done: boolean;
+  /** Where the squad is (one-off jobs travel to their target). */
+  x: number;
+  y: number;
+  checked: boolean;
 }
 
-export interface Business {
+export interface Building {
   id: string;
   name: string;
   front: string;
-  /** The back-room trade this front is suited to. */
   suits: Racket;
   x: number;
   y: number;
+  /** Monthly protection money while someone protects (and collects from) it. */
+  protection: number;
+  protectedBy: FamilyId | null;
   owner: FamilyId | null;
   racket: Racket | null;
   telephone: boolean;
-  /** Lieutenant who runs it day to day (feeds their ambition). */
-  managedBy: string | null;
-  /** Monthly protection money this shop pays its owner. */
-  protection: number;
-  /** Racket shut down by a raid for the rest of the month. */
   raided: boolean;
-  /** Pushed this month by an Earn order: +50% racket income. */
-  pushed: boolean;
+  /** Months in a row nobody collected. Shops stop paying after a while. */
+  uncollected: number;
 }
 
 export interface Demand {
-  kind: 'raise' | 'business';
-  /** Raise amount per month, or the business id they want. */
+  kind: 'raise' | 'building';
   amount: number;
-  businessId: string | null;
+  buildingId: string | null;
   text: string;
-  /** Months it has gone unanswered. */
   age: number;
 }
 
-export interface Lieutenant {
+export interface Person {
   id: string;
   name: string;
   nickname: string;
   family: FamilyId;
+  role: 'boss' | 'lt';
   muscle: number;
   brains: number;
   nerve: number;
   charm: number;
   traits: Trait[];
-  /** Hidden from the player; shown only as signs. 0-100. */
   loyalty: number;
-  /** Visible meter. 0-100. */
   ambition: number;
-  /** How well the crew obeys. 0-100. */
   authority: number;
   crew: number;
-  /** Monthly cut paid to the lieutenant. */
   cut: number;
-  status: LtStatus;
-  /** Months left until a wounded lieutenant is back. */
+  status: Status;
   recover: number;
   x: number;
   y: number;
-  order: Order;
+  /** Where they work from. */
+  homeX: number;
+  homeY: number;
+  /** Ranked standing jobs across all the branches this person runs. */
+  jobs: Job[];
+  /** New job list on its way by runner during a Change of Plans. */
+  pending: { jobs: Job[]; arriveDay: number } | null;
   demand: Demand | null;
-  /** Business id they were given as "their own" (they keep half). */
-  ownBusiness: string | null;
-  /** Month on which they will betray the family, if plotting. */
+  ownBuilding: string | null;
   plotting: boolean;
-  /** Successes this month (feeds ambition). */
   wins: number;
 }
 
-/** A single itemised cause, so every number can explain itself. */
 export interface Line {
   label: string;
   amount: number;
@@ -95,20 +124,24 @@ export interface Line {
 export interface Family {
   id: FamilyId;
   name: string;
-  boss: string;
+  bossId: string;
   cash: number;
   heat: number;
-  /** Heat changes this month, itemised. */
   heatLog: Line[];
-  /** Money in and out this month, itemised. */
   ledger: Line[];
-  /** Boss actions available this month. */
   actions: number;
-  /** Actions lost next month (each Change of Plans costs one). */
   actionDebt: number;
-  captainPaid: boolean;
-  /** Family id that killed one of ours last month, for AI grudges. */
-  grudge: string | null;
+  /** Who runs each branch (person id). */
+  branches: Record<Branch, string>;
+  guns: number;
+  cars: number;
+  liquor: number;
+  specialists: SpecialistKind[];
+  /** Captain paid this month (a staffed payoff job). */
+  captain: boolean;
+  grudge: boolean;
+  /** Rival only: has Calloway noticed you yet? */
+  notice: boolean;
 }
 
 export interface CardOption {
@@ -137,51 +170,30 @@ export interface Card {
   title: string;
   text: string;
   options: CardOption[];
-  /** Free-form context the resolver needs. */
   ctx: Record<string, string | number>;
-  /** Business or lieutenant to focus the map on. */
   focus: { x: number; y: number } | null;
-}
-
-export interface Op {
-  ltId: string;
-  goal: Goal;
-  target: string | null;
-  posture: Posture;
-  daysNeeded: number;
-  progress: number;
-  done: boolean;
-  /** New orders on their way by runner. */
-  pending: { order: Order; arriveDay: number } | null;
-  /** Personality checks already made this op. */
-  checked: boolean;
 }
 
 export interface ScheduledEvent {
   day: number;
   kind: 'cop' | 'tail' | 'tip' | 'defect' | 'offer' | 'bail' | 'snitch';
-  family: FamilyId;
   ref: string | null;
 }
 
 export interface MonthRun {
   day: number;
-  ops: Record<string, Op>;
   queue: Card[];
   scheduled: ScheduledEvent[];
   changesLeft: number;
   rivalChangesLeft: number;
   nextCardId: number;
-  /** Stories for next month's Morning Edition. */
-  news: NewsItem[];
-  /** Short log lines for the ticker during the watch phase. */
   log: { day: number; text: string; family: FamilyId | null }[];
+  news: NewsItem[];
 }
 
 export interface NewsItem {
   headline: string;
   body: string;
-  /** Lead story gets the big type. */
   weight: number;
 }
 
@@ -196,22 +208,30 @@ export interface GameOver {
   text: string;
 }
 
+export interface Stats {
+  fights: number;
+  changes: number;
+  demandsSeen: number;
+  raids: number;
+}
+
 export interface GameState {
   seed: number;
   rng: number;
-  /** 0-based month of the run (0 = January 1927). */
   month: number;
   lastMonth: number;
   width: number;
   height: number;
-  /** Each family's headquarters business id. */
-  hqs: Record<FamilyId, string>;
-  businesses: Business[];
-  lts: Lieutenant[];
+  buildings: Building[];
+  people: Person[];
   families: Record<FamilyId, Family>;
-  /** The Morning Edition for the coming month. */
   news: NewsItem[];
   wire: WireItem[];
   run: MonthRun | null;
   over: GameOver | null;
+  nextId: number;
+  /** Candidate lieutenants waiting to be hired (indexes into the hiring pool). */
+  candidates: number[];
+  lessons: { on: boolean; index: number };
+  stats: Stats;
 }
