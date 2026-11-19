@@ -108,7 +108,7 @@ Loyalty, Ambition, Heat, Federal Attention and official relationships update, th
 
 ## 6. People
 
-### 6.1 Lieutenants (3–6)
+### 6.1 Lieutenants (3–6, hard cap 6)
 The core of the game. Each one has:
 - **Stats:** Muscle · Brains · Nerve · Charm
 - **2–3 traits:** e.g. *Hothead, Greedy, Old-world, Family Man, Loose Lips, Ambitious, Cautious, Ladies' Man, Teetotaller, Butcher*
@@ -313,13 +313,31 @@ Every run, won or lost, ends with a **final front page**: an obituary, a trial v
 
 ---
 
-## 16. Open questions
+## 16. Tutorial
+**A scripted first run: "The Nephew."** It's January 1927. Your uncle Aldo, who ran a single speakeasy behind a café, has just been sent to Joliet. You inherit the café, his three lieutenants and his debts. The tutorial is a short, scripted opening (about 3 months) that introduces one system at a time:
+1. **Month 1:** orders and the watch phase. Expand to one shop with a single lieutenant.
+2. **Month 2:** react cards and heat. A cop comes sniffing.
+3. **Month 3:** a rival hit triggers your first Change of Plans, and a lieutenant makes their first demand.
 
-1. **Lieutenant cap.** Is 6 the right maximum before it turns back into micromanagement?
-2. **Deed list.** The full set of deeds and unlocks (§14.1). How many is enough at launch?
-3. **Tutorial.** A scripted first run or a guided sandbox?
-4. **Final origin and trait list** (§6.5).
-5. **Change of Plans tuning** (§5.5). Is 1–2 per month right? Which events trigger one?
+It then hands over to a normal run in the same city.
+
+---
+
+## 17. Vertical slice (the first prototype)
+**Goal: prove the core loop is fun before building anything else.**
+- **One ward, one rival family (the Bootlegger), three lieutenants each side, six months** (Jan–Jun 1927).
+- **In:** lieutenant orders (goal + posture), personality deviations, the watch phase with react cards, Change of Plans with telephones and runners, heat with itemised causes, a simple economy (protection + three rackets), ambition, demands and betrayal, the AI rival using the same order system, fog of war on rival lieutenants, the Morning Edition.
+- **Out:** politics, elections, trials, laundering, boss vulnerability and succession, the roguelite layer, isometric art (boxes on a grid).
+- **Test questions:** Is it fun when lieutenants go off-script? Do Change of Plans moments create tension? Does the newspaper make you care what happened?
+
+---
+
+## 18. Open questions
+
+1. **Deed list.** The full set of deeds and unlocks (§14.1). How many is enough at launch?
+2. **Final origin and trait list** (§6.5).
+3. **Change of Plans tuning** (§5.5). Is 1–2 per month right? Which events trigger one?
+4. **Engine for the full game.** Godot or a web engine (e.g. PixiJS) for the isometric map. Decide after the vertical slice.
 
 ---
 
@@ -329,7 +347,7 @@ Every run, won or lost, ends with a **final front page**: an obituary, a trial v
 |---|---|
 | Setting | Prohibition era, with modern design. |
 | Core pillars | People > Orders/Watch > Economy > Politics |
-| Platform | Design doc only for now |
+| Platform | Design doc first, then a browser prototype of the core loop; final engine decided later |
 | Opponents | Single-player vs AI rivals. **No multiplayer.** |
 | Player family | Blank slate: choose the boss's origin + traits at the start |
 | Content | Violence and vice stay in; shown Hays Code style (implied, off-screen, cutaways) |
@@ -343,6 +361,9 @@ Every run, won or lost, ends with a **final front page**: an obituary, a trial v
 | Boss creation | One origin + two traits |
 | Meta-progression | New options, not power. Deeds unlock content, legacy points buy cosmetics and convenience, Counts I–X difficulty ladder, every ending a front page |
 | Zoom | City → ward → street, with fog of war at every level |
+| Lieutenant cap | 6 |
+| Tutorial | Scripted first run ("The Nephew") |
+| Next step | Vertical slice: browser prototype, one ward, one rival, three lieutenants, six months |
 | Anti-snowball | Federal attention by share + internal ambition + rival coalitions |
 | Clock | Hard end at Repeal, Dec 1933 |
 | Boss | Character on the map + succession system |
