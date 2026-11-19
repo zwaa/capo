@@ -56,34 +56,38 @@ The month opens with a newspaper front page in a wry, pulpy voice:
 - **The Wire:** intel reports from informants, each with a confidence rating: *Rumour / Likely / Confirmed*.
 - **Trouble at Home:** lieutenant demands, grudges and warning signs.
 
-### 5.2 Orders: the four areas of the business (planning, about 1–2 min)
-The family's work is split into four **areas**. Each area is run either by **the boss in person** or by **a lieutenant** you've put in charge of it.
+### 5.2 Orders: the business and who runs it (planning, about 1–2 min)
+The family's work is split into four **areas**, and each area into **branches**. There are nine branches in all, more than you'll ever have lieutenants:
 
-| Area | Covers | Becomes relevant |
+| Area | Branches | Becomes relevant |
 |---|---|---|
-| **Muscle** | Protection (signing up shops, collecting), guarding, hits, recruiting hoods | From day one |
-| **Property** | Buying or taking over buildings, fitting out back rooms, telephones | As soon as there's cash to spend |
-| **Vice** | Running speakeasies, gambling dens and stills; the booze supply chain from still to bar | Once you own a building with a back room |
-| **Fixing** | Paying off cops, captains, judges and aldermen; later, elections | Once heat starts to matter |
+| **Muscle** | **Protection** (signing up shops, collecting) · **Enforcement** (guarding, hits, retaliation) | From day one |
+| **Property** | **Acquisitions** (buying or taking over buildings) · **Fronts** (fitting out back rooms, telephones, the legit trade) | As soon as there's cash to spend |
+| **Vice** | **Speakeasies** · **Gambling** (dens and the numbers) · **Bootlegging** (stills, and the supply run from still to bar) | Once you own a building with a back room |
+| **Fixing** | **The Police** (beat cops, captains) · **City Hall** (judges, aldermen, elections) | Once heat starts to matter |
 
-**Jobs and priorities.** Each area has a short, ranked list of **standing jobs**. For example, Muscle might be: *1. Collect from our 6 shops · 2. Sign up Novak's Bakery · 3. Guard the café · 4. Recruit.*
+**Who runs what.** Every branch is run by **the boss** or by **a lieutenant**. A lieutenant can take **one to three branches**, from any areas: a whole area, part of one, or an odd mix that suits them (Rosa on Speakeasies and City Hall, because both run on Charm). Branches nobody has been given stay with the boss.
+- **One crew, shared.** A lieutenant's hoods are split across the jobs in all their branches, in your priority order. Giving one person three branches makes each of them thinner. Spreading branches across more people costs more lieutenants (and more ambition).
+- **Stats fit branches.** Muscle helps Protection and Enforcement, Brains helps Property, Bootlegging and Gambling, and Charm helps Speakeasies and Fixing. A good fit makes jobs faster and safer.
+
+**Jobs and priorities.** Each branch has a short list of **standing jobs**, and each runner (the boss or a lieutenant) ranks all the jobs across their branches in one list. For example, Sal running Protection and Enforcement: *1. Collect from our 6 shops · 2. Guard the café · 3. Sign up Novak's Bakery · 4. Lean on Calloway's newsstand.*
 - **Some jobs take a target** (a shop, a building, a rival, an official). **Some are ongoing** (collect, guard, run the speakeasies).
-- **Hoods are the capacity.** Each job says how many hoods it needs. The area's crew is handed out from the top of the list down. Jobs at the bottom that get nobody stall, and the orders screen shows that before you commit ("Guard the café: nobody left").
-- **Posture** (*Quiet / Firm / Loud*) is set per area, with an override per job. It sets how much violence and heat the job may cause.
+- **Hoods are the capacity.** Each job says how many hoods it needs (and sometimes guns, cars or liquor; §7.3). The runner's crew is handed out from the top of the list down. Jobs at the bottom that get nobody stall, and the orders screen shows that before you commit ("Guard the café: nobody left").
+- **Posture** (*Quiet / Firm / Loud*) is set per branch, with an override per job. It sets how much violence and heat the job may cause.
 - **Jobs carry over.** Ongoing jobs keep running every month. One-off jobs (sign up X, buy Y, hit Z) drop off when they're done. A quiet month is a glance and "Begin the month".
 - **Personality reinterprets the list.** A *Hothead* running Muscle adds jobs you didn't ask for, like leaning on a Calloway shopkeeper. A *Greedy* one running Vice skims the take. A *Cautious* one sends fewer hoods to risky jobs. Stats matter too: Muscle helps the Muscle area, Brains helps Property and Fixing, and Charm helps Vice and Fixing.
 
-**The boss in person.** At the start of every run the boss runs all four areas personally:
+**The boss in person.** At the start of every run the boss runs every branch personally:
 - The boss is **on the map** with a small crew, and does jobs **exactly as ordered**, with no personality drift.
-- But the boss's crew is **shared across every area the boss still runs**, so capacity is tight.
+- But the boss's crew is **shared across every branch the boss still runs**, so capacity is tight.
 - And the boss on the street is **exposed**. Fights and raids can catch the boss (§6.5).
 
-**Specialists** (§6.4) sit alongside the areas: a lawyer, an accountant, an armourer and others who work for the whole family, not one area.
+**Specialists** (§6.4) sit alongside the branches. Lieutenants run **activities**; specialists look after **resources** (hoods, guns, cars, liquor, money, legal cover) for the whole family.
 
-**Hiring a lieutenant for an area** hands over that area's job list and the hoods you give them, and frees the boss's crew for the rest. You gain capacity and lose control. You can run any area yourself for as long as you like. Later, a big area can be **split between two lieutenants by territory**, e.g. Muscle (west side) and Muscle (docks).
+**Handing a branch to a lieutenant** hands over its jobs and the hoods you give them, and frees the boss's crew for the rest. You gain capacity and lose control. You can run any branch yourself for as long as you like. Later, a busy branch can be **split between two lieutenants by territory**, e.g. Protection (west side) and Protection (docks).
 
 **Boss actions:** a limited number of meetings per month (more as the family grows):
-- Bribe or pay off an official · negotiate with a rival (truce, territory, a joint hit, a betrayal) · back an election candidate · arrange laundering · promote, discipline or reward a lieutenant · hire a specialist (accountant, lawyer, bootlegger, hitman)
+- Bribe or pay off an official · negotiate with a rival (truce, territory, a joint hit, a betrayal) · back an election candidate · promote, discipline or reward a lieutenant · hand branches to lieutenants · hire a lieutenant or a specialist
 
 **Standing orders:** directives carry over unless you change them, so a quiet month needs only a few clicks.
 
@@ -146,19 +150,24 @@ Power you give a lieutenant (turf, crew size, money, prestige) raises their **Am
 - There are **warning signs** before every betrayal (new car, missed meetings, seen with rival people). Informants inside your own family can confirm them.
 
 ### 6.4 Specialists
-Lieutenants run areas with crews of hoods. **Specialists** are professionals who work for **the whole family**. They have no crew and no turf, and they **don't count toward the six-lieutenant cap**.
+Lieutenants run **activities** with crews of hoods. **Specialists** look after the family's **resources**: each one keeps one kind of thing supplied, cheap and in good condition for **the whole family**. They have no crew and no turf, and they **don't count toward the six-lieutenant cap**.
 
 Each specialist has a **standing service** that applies everywhere, and can take **one job a month on request**:
 
-| Specialist | Standing service | Job on request |
-|---|---|---|
-| **Lawyer** | Bail, shorter sentences, fewer arrests that stick | Defend someone at trial; get a witness's statement "lost" |
-| **Accountant** | Laundering capacity and a better rate; lower tax-case risk | Audit a lieutenant's books (exposes skimming); clean up before an inspection |
-| **Armourer** | Better weapons for every crew: stronger in fights | Equip one job specially: a tommy gun for a hit (very loud) or something quiet |
-| **Doctor** | Wounded people recover faster and die less often. Nobody goes to a hospital, so there are no police reports | Patch up someone important mid-month |
-| **Driver** | Runners arrive faster in a Change of Plans; supply runs lose more tails; fewer arrests at the scene | A getaway for one job |
-| **Brewmaster** | Stills make more and better liquor (better bars, nobody goes blind) | Fix a bad batch before it makes the papers |
-| **Newsman** | Softer headlines: violence adds less heat, and the Morning Edition takes your side | Plant a story about a rival |
+| Specialist | Resource | Standing service | Job on request |
+|---|---|---|---|
+| **Recruiter** | Hoods | A steady supply of new hoods, cheaper and better than whoever's hanging round the pool hall | Find someone specific: a safecracker, a marksman, a future lieutenant |
+| **Armourer** | Guns | Buys guns cheaper and keeps them working: stronger in fights, fewer jams | Equip one job specially: a tommy gun for a hit (very loud) or something quiet |
+| **Mechanic** | Cars and trucks | Cheaper, faster, better-hidden vehicles: fewer tails on supply runs, faster runners | Armour a car, or make one disappear after a job |
+| **Brewmaster** | Liquor | Stills make more, and better: better bars, nobody goes blind | Fix a bad batch before it makes the papers |
+| **Accountant** | Money | Laundering capacity and a better rate; lower tax-case risk | Audit a lieutenant's books (exposes skimming); clean up before an inspection |
+| **Lawyer** | Legal cover | Bail, shorter sentences, fewer arrests that stick | Defend someone at trial; get a witness's statement "lost" |
+| **Doctor** | Health | Wounded people recover faster and die less often. Nobody goes to a hospital, so there are no police reports | Patch up someone important mid-month |
+| **Newsman** | Reputation | Softer headlines: violence adds less heat, and the Morning Edition takes your side | Plant a story about a rival |
+
+Driving isn't a specialism: every hood drives, and how well is part of their stats.
+
+**Nothing is locked without a specialist.** You can always hire hoods off the street, buy guns and cars on the open market, or launder through a crooked bank. It costs more, the quality is worse, or it draws more heat. A specialist makes that resource cheaper, better or safer.
 
 **Hiring:** one of each kind at a time, through a boss meeting, with a monthly retainer. Better specialists cost more, and some can only be had by poaching them from a rival.
 
@@ -206,7 +215,19 @@ Each ward has 4–8 businesses. A building has a **front** (barber, laundry, cig
 - **Laundering** goes through owned fronts, each with a capacity per month. Without an **accountant** (§6.4) it's slow and leaves a paper trail.
 - **Unexplained wealth** (clean net worth well above legitimate income) builds **tax-case risk**, which rises sharply after 1931.
 
-### 7.3 The Repeal curve
+### 7.3 Resources and inventory
+Some resources are **counted**, because they move around and can be lost. Others are **levels**, because they're about quality, not quantity.
+
+| Counted (stock you can lose) | Levels (quality of service) |
+|---|---|
+| **Hoods** (people, each named) · **Guns** (pistols, shotguns, tommy guns) · **Cars and trucks** · **Liquor** (cases) · **Cash** (dirty and clean) | **Legal cover** (lawyer) · **Health** (doctor) · **Reputation** (newsman) |
+
+- **Jobs use stock.** A hit needs guns and a car. A supply run needs a truck and the liquor in it. A job that's short of what it needs stalls or goes in worse equipped.
+- **Stock can be lost.** Raids seize liquor and guns, a crashed truck loses the load, and a lost fight loses guns. Rivals can hijack a supply run.
+- **Specialists produce and maintain it** (§6.4). Without them you buy on the open market (§6.4).
+- **Where it's kept matters.** Stock sits in owned buildings (§7.1), so a raid on the warehouse is a raid on the arsenal.
+
+### 7.4 The Repeal curve
 Bootlegging margins stay high until 1931, then fall every month. Legit holdings and diversified rackets keep their value. The economy shifts under you, and families that don't diversify lose ground.
 
 ---
@@ -359,11 +380,11 @@ Every run, won or lost, ends with a **final front page**: an obituary, a trial v
 ## 16. Tutorial: learning the business
 **The first run, with lessons switched on: "The Nephew."** It's January 1927. Uncle Aldo has been sent to Joliet and the police seized his café. You have $300, two cousins who can handle themselves, and his old street. The run starts from nothing like every other run (§4), and each lesson starts when you reach it. Each one ends with the option to **hire a lieutenant to take that area over**:
 
-1. **Muscle.** The boss and the cousins sign up shops on one street and collect each month. *Teaches:* jobs, ranking priorities, posture, the watch phase, react cards. *Ends:* once five shops are paying, a candidate lieutenant comes asking for work. Hire them to run Muscle. *Teaches:* delegation and personality.
+1. **Muscle.** The boss and the cousins sign up shops on one street and collect each month. *Teaches:* jobs, ranking priorities, posture, the watch phase, react cards. *Ends:* once five shops are paying, a candidate lieutenant comes asking for work. Hire them and hand over Protection (and Enforcement too, if you trust them). *Teaches:* delegation, branches and personality.
 2. **Property.** With protection money coming in, buy your first building, maybe Aldo's old café back. Add a telephone. *Teaches:* property vs protection, and telephones (which matter in step 4).
-3. **Vice.** Fit out a back room and open a speakeasy, then set up a still to supply it. *Teaches:* rackets, the supply chain, raids. *Ends:* hire someone to run Vice once you have two rackets.
+3. **Vice.** Fit out a back room and open a speakeasy, then set up a still to supply it. *Teaches:* rackets, the supply chain, raids. *Ends:* once you have two rackets, give the Vice branches to a lieutenant, either a new hire or one with room for another branch.
 4. **Trouble.** Calloway notices you. A hit on one of your shops triggers your first **Change of Plans**, and the telephone you bought decides how fast you can respond. *Teaches:* fights, Change of Plans, the Wire.
-5. **Fixing.** Heat brings your first raid and an arrest. Pay off the precinct captain. *Ends:* hire someone to run Fixing.
+5. **Fixing.** Heat brings your first raid and an arrest. Pay off the precinct captain. *Ends:* hand The Police to whoever has the Charm for it.
 6. **Specialists.** Your arrested man needs a **lawyer**: your first specialist. Soon after, the cash piling up needs an **accountant**. *Teaches:* family-wide services, and the risk of people who know too much.
 7. **Ambition.** Your Muscle lieutenant, now running half your income, makes their first demand. *Teaches:* demands, loyalty signs, betrayal.
 
@@ -373,7 +394,7 @@ After that the lessons switch off, and the run carries on in the same city. Less
 
 ## 17. Vertical slice (the first prototype)
 *v1, below, is built and playable. Playtesting led to the areas-and-jobs model (§5.2) and starting from nothing (§4, §16). v2 rebuilds the slice around them:*
-- **v2:** one ward, one established rival, **twelve months** (all of 1927), starting with the boss and two hoods. Four areas with ranked job lists, hoods as capacity, the boss on the map, hiring lieutenants into areas, protection separate from property, and the tutorial lessons. Fixing is kept light (the precinct captain). Three specialists: lawyer, armourer and driver. Change of Plans, react cards, heat, the Wire and the Morning Edition carry over from v1.
+- **v2:** one ward, one established rival, **twelve months** (all of 1927), starting with the boss and two hoods. Four areas split into nine branches, with lieutenants taking one to three branches each, ranked job lists, hoods as capacity, the boss on the map, protection separate from property, counted guns, cars and liquor, and the tutorial lessons. Fixing is kept light (the precinct captain). Four specialists: recruiter, armourer, mechanic and lawyer. Change of Plans, react cards, heat, the Wire and the Morning Edition carry over from v1.
 
 *v1 scope:*
 **Goal: prove the core loop is fun before building anything else.**
@@ -419,8 +440,9 @@ After that the lessons switch off, and the run carries on in the same city. Less
 | Lieutenant cap | 6 |
 | Tutorial | First run with lessons switched on ("The Nephew"): learn each area in turn, hiring a lieutenant for each |
 | Run start | Every run starts from the bottom: the boss, two or three hoods, no lieutenants. Origins change what you start with |
-| Orders | Four areas (Muscle, Property, Vice, Fixing), each run by the boss or a lieutenant, with ranked standing jobs, optional targets and hoods as capacity |
-| Specialists | Lawyer, accountant, armourer, doctor, driver, brewmaster and newsman serve the whole family. No crew, outside the lieutenant cap, and dangerous if they turn |
+| Orders | Four areas split into nine branches. Each branch is run by the boss or a lieutenant; a lieutenant takes 1–3 branches with one shared crew. Ranked standing jobs, optional targets, hoods as capacity |
+| Specialists | One per resource: recruiter (hoods), armourer (guns), mechanic (cars), brewmaster (liquor), accountant (money), lawyer (legal cover), doctor (health), newsman (reputation). No crew, outside the lieutenant cap, and dangerous if they turn. Never required: without one you pay more or get worse |
+| Resources | Mixed: hoods, guns, cars, liquor and cash are counted stock; legal cover, health and reputation are levels |
 | Protection vs property | Separate: protection is shops that pay you; property is buildings you own, which can hold back rooms and telephones |
 | Next step | Vertical slice v2: rebuild the prototype around areas, jobs and starting from nothing (§17) |
 | Anti-snowball | Federal attention by share + internal ambition + rival coalitions |
