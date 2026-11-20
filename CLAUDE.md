@@ -92,6 +92,9 @@ look at it in the browser (desktop and phone width) or say that you didn't.
   tagged `vX.Y.Z` (matching `version` in `prototype/package.json`). Never commit to it directly.
 - **`develop`**: the integration branch and GitHub's default. Finished features land here. Never commit
   to it directly either.
+- **Starting work:** `git switch develop && git pull`, then `git switch -c feature/<short-name>`. If a
+  session starts on some other branch (e.g. an auto-named `claude/*` or `ccr-*` one), treat it as the
+  feature branch: base it on the latest `develop` and merge it into `develop` the same way.
 - **`feature/<short-name>`**: one per idea or change, branched from `develop`, merged back with
   `git merge --no-ff` once `npm run check` passes. Throwaway experiments are features that get deleted
   instead of merged.
@@ -100,6 +103,8 @@ look at it in the browser (desktop and phone width) or say that you didn't.
 - **`hotfix/X.Y.Z`**: from `main` for an urgent fix to a release; merge into `main` (tag) and `develop`.
 - The pre-commit hook (`.githooks/pre-commit`) refuses commits on `main`/`develop` and runs
   `npm run check` when prototype files are staged. Don't bypass it with `--no-verify` unless asked.
+  `npm install` in `prototype/` turns it on; in a fresh clone check `git config core.hooksPath` says
+  `.githooks`, and set it if not.
 - Commit when a change is finished and its checks pass: one logical change per commit. Messages: a short
   imperative subject (e.g. "Prototype: named hoods with promotion"), a blank line, then a body saying
   what changed and why. Mention any balance numbers that moved.
