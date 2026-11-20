@@ -27,6 +27,7 @@ import {
   FITOUT_COST,
   INCOME,
   PROMOTE_XP,
+  onTurf,
   crewOf,
   crewSize,
   hood,
@@ -73,6 +74,9 @@ import {
 // ---------------------------------------------------------------- small helpers
 
 const HEAT: Record<Posture, number> = { quiet: 1, firm: 4, loud: 9 };
+/** Sign-up odds next to (or away from) our turf, and the extra days a job takes off it. */
+export const TURF_BONUS = 0.15;
+export const OFF_TURF_DAYS = 2;
 const FORCE: Record<Posture, number> = { quiet: 0.8, firm: 1, loud: 1.3 };
 
 function log(s: GameState, text: string, family: FamilyId | null): void {
@@ -552,7 +556,13 @@ function prepare(s: GameState, p: Person, j: Job): void {
     return;
   }
   const adj = j.posture === 'quiet' ? 1 : j.posture === 'loud' ? -1 : 0;
-  j.days = Math.max(1, info.work - Math.floor((squadStat(s, j) - 5) / 2) + adj + (info.risky && p.traits.includes('cautious') ? 2 : 0));
+  // Working off your own turf takes longer: nobody knows you there.
+  const t = building(s, j.target);
+  const away = (j.kind === 'signup' || j.kind === 'takeover') && t && !onTurf(s, p.family, t, t.id) ? OFF_TURF_DAYS : 0;
+  j.days = Math.max(
+    1,
+    info.work - Math.floor((squadStat(s, j) - 5) / 2) + adj + away + (info.risky && p.traits.includes('cautious') ? 2 : 0),
+  );
 }
 
 function schedule(s: GameState): void {
@@ -919,7 +929,9 @@ function complete(s: GameState, p: Person, j: Job): void {
           0.4 +
             squadStat(s, j, 'charm') * 0.04 +
             squadStat(s, j, 'muscle') * 0.02 +
-            (j.posture === 'quiet' ? -0.1 : j.posture === 'loud' ? 0.15 : 0),
+            (j.posture === 'quiet' ? -0.1 : j.posture === 'loud' ? 0.15 : 0) +
+            // Shopkeepers next to our turf have seen what happens to the ones who say no.
+            (onTurf(s, f, b, b.id) ? TURF_BONUS : -TURF_BONUS),
         ),
       );
       if (chance(s, pr)) {

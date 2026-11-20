@@ -203,8 +203,23 @@ button {
   letter-spacing: 0.02em;
   display: block;
 }
+/* Turf note on a building's details: paper-coloured, so use dark accents. */
+.turf {
+  display: block;
+  margin-top: 4px;
+  font-weight: 600;
+}
+.turf.near {
+  color: #6b4a0e;
+}
+.turf.far {
+  color: #8a2f24;
+}
 
 /* The orders menu that opens when you click the map. */
+.pick[hidden] {
+  display: none;
+}
 .pick {
   position: absolute;
   z-index: 6;
