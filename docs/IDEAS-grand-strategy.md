@@ -56,3 +56,12 @@ truces, territory swaps, splitting a third family's turf. Blocks give diplomacy 
 ## Grilling notes
 
 *Answers from the design grilling go here, idea by idea.*
+
+### Idea 1: blocks (round 1)
+
+- **Not provinces.** A block isn't real territory; it's where a family's or lieutenant's **power base**
+  lies. Bonuses could depend on what's on the block (its shops, its fronts).
+- **Two dials, fear and goodwill,** kept separate so more play styles are possible.
+- **Settled turf isn't a wall** if there are jobs that work on goodwill and fear, ours or the enemy's, to
+  weaken a hold: charity, intimidation and so on.
+- **Heat is local** to blocks, but family-wide heat ends up on your **HQ**.
