@@ -12,6 +12,7 @@ import {
   hireHood,
   moveHood,
   moveJob,
+  OFF_TURF_DAYS,
   ordersFor,
   purchase,
   reach,
@@ -20,7 +21,20 @@ import {
 } from '../src/sim/engine';
 import { LESSONS } from '../src/sim/lessons';
 import type { GameState } from '../src/sim/types';
-import { BRANCHES, LT_CAP, PROMOTE_XP, bossOf, branchesOf, crewOf, crewSize, lieutenants, targets } from '../src/sim/util';
+import {
+  BRANCHES,
+  LT_CAP,
+  PROMOTE_XP,
+  bossOf,
+  branchesOf,
+  crewOf,
+  crewSize,
+  dist,
+  lieutenants,
+  onTurf,
+  targets,
+  turfAt,
+} from '../src/sim/util';
 
 /** Take Sal on (as the first lesson would) and promote him. */
 function salAsLieutenant(s: GameState) {
@@ -141,6 +155,34 @@ describe('orders from the map', () => {
     expect(buy.queued).toBeNull();
     const j = addJob(s, buy.runner, 'buy', free.id)!;
     expect(ordersFor(s, free.id).find((o) => o.kind === 'buy')!.queued).toEqual({ person: buy.runner, job: j.id });
+  });
+});
+
+describe('turf', () => {
+  it('starts at the boss’s door and grows with every shop held', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    expect(onTurf(s, 'player', { x: boss.homeX, y: boss.homeY })).toBe(true);
+    expect(turfAt(s, boss.homeX, boss.homeY)).toBe('player');
+    const far = s.buildings.filter((b) => !b.owner && !b.protectedBy).sort((a, b) => b.x - a.x)[0];
+    expect(onTurf(s, 'player', far, far.id)).toBe(false);
+    far.protectedBy = 'player';
+    const next = { x: far.x, y: far.y + (far.y % 3 === 1 ? 1 : -1) };
+    expect(onTurf(s, 'player', next)).toBe(true);
+  });
+  it('makes sign-ups off our turf take longer', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    const far = s.buildings.filter((b) => !b.owner && !b.protectedBy).sort((a, b) => b.x - a.x)[0];
+    boss.jobs = [];
+    addJob(s, boss.id, 'signup', far.id);
+    startMonth(s);
+    const offTurf = boss.jobs[0].days;
+    s.run = null;
+    far.protectedBy = null;
+    s.buildings.find((b) => b.id !== far.id && !b.owner && dist(b, far) <= 2)!.protectedBy = 'player';
+    startMonth(s);
+    expect(offTurf - boss.jobs[0].days).toBe(OFF_TURF_DAYS);
   });
 });
 

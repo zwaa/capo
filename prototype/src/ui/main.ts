@@ -39,6 +39,8 @@ import {
   has,
   hoodFirst,
   hoodLabel,
+  holder,
+  onTurf,
   squadNames,
   JOBS,
   LT_CAP,
@@ -100,7 +102,7 @@ app.innerHTML = `
       <div class="legend">
         <span><i style="background:#e3a23b"></i>Russo</span>
         <span><i style="background:#5f9fb8"></i>Calloway</span>
-        <span class="key">Click a building for orders · Filled: owned · Striped awning: pays protection · S speakeasy · G gambling · D still · ■ telephone</span>
+        <span class="key">Click a shop for orders · Tinted ground: turf · Border: owned · Flag: pays protection · Hatched: out of sight · S speakeasy · G gambling · D still · ■ telephone</span>
       </div>
     </div>
     <aside class="side" id="side"></aside>
@@ -968,7 +970,12 @@ function describe(b: Building | null, p: Person | null): string {
               : 'Independent';
     html += `${html ? '<hr style="border:0;border-top:1px solid #bbb;margin:6px 0">' : ''}<b>${esc(b.name)}</b>${esc(streetOf(b))}<br>${who}<br>
       ${b.racket ? `Back room: ${b.racket}${b.raided ? ' (shut by a raid)' : ''}` : `Could hold a ${b.suits}`}<br>
-      ${b.owner ? '' : `Protection: ${money(b.protection)} a month<br>`}${!b.owner && b.protectedBy !== 'rival' ? `To buy: ${money(price(b, 'player'))}<br>` : ''}${b.telephone ? 'Telephone line' : ''}`;
+      ${b.owner ? '' : `Protection: ${money(b.protection)} a month<br>`}${!b.owner && b.protectedBy !== 'rival' ? `To buy: ${money(price(b, 'player'))}<br>` : ''}${b.telephone ? 'Telephone line<br>' : ''}`;
+    if (holder(b) !== 'player') {
+      html += onTurf(s, 'player', b, b.id)
+        ? '<span class="turf near">Next to our turf: easier to sign up</span>'
+        : '<span class="turf far">Off our turf: harder and slower to sign up</span>';
+    }
   }
   return html;
 }

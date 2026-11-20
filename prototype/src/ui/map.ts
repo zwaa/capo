@@ -1,28 +1,42 @@
 // The ward at night. Plain grid for the vertical slice (isometric comes later),
-// but it should already feel like a city after dark.
-//  - Owned buildings are filled in the family colour.
-//  - Shops that only pay protection get a coloured awning stripe.
-//  - Squads out on a job show as small dots; guards as dots on the door.
+// but it should already read like a city after dark:
+//  - Roads are dark asphalt with lane markings; blocks are pavement with kerbs.
+//  - Shops have a lit shopfront; every other lot on a block is a home (tenements, rowhouses).
+//  - Turf is tinted ground in the family colour, outlined at its edge.
+//    A solid border means the family owns the building; a flag means it pays them protection.
+//  - Who holds what is public knowledge. Fog of war (a light hatch) only hides people:
+//    rival lieutenants, crews out on jobs and guards.
 
 import { isLot } from '../sim/setup';
-import type { Building, GameState, Person } from '../sim/types';
-import { JOBS, building, person, seenTile, visible } from '../sim/util';
+import type { Building, FamilyId, GameState, Person } from '../sim/types';
+import { JOBS, building, holder, person, seenTile, turfAt, visible } from '../sim/util';
 
 const C = {
-  night: '#0f1318',
-  street: '#1a2029',
-  lot: '#20262f',
-  lotEdge: '#2c3440',
+  night: '#0b0e12',
+  road: '#101318',
+  roadLine: 'rgba(214, 200, 160, 0.28)',
+  pavement: '#2a2f37',
+  kerb: '#4a505a',
+  brick: '#3b2d29',
+  roof: '#251c19',
+  homeWindow: 'rgba(240, 200, 120, 0.45)',
+  shop: '#46505f',
+  shopSign: '#8b93a0',
+  glass: 'rgba(240, 200, 120, 0.55)',
   lamp: '#e3a23b',
-  ourFill: '#3a2a12',
+  ourFill: '#6a4a1a',
+  ourTurf: 'rgba(227, 162, 59, 0.16)',
   steel: '#5f9fb8',
-  theirFill: '#16303b',
-  free: '#2a313c',
+  theirFill: '#244d60',
+  theirTurf: 'rgba(95, 159, 184, 0.18)',
   ink: '#e6e1d6',
   dim: '#8d95a1',
   blood: '#c4473a',
-  fog: 'rgba(6, 8, 11, 0.62)',
+  fog: 'rgba(5, 7, 10, 0.3)',
+  hatch: 'rgba(160, 170, 185, 0.16)',
 };
+
+const famColour = (f: FamilyId) => (f === 'player' ? C.lamp : C.steel);
 
 interface Pos {
   x: number;
@@ -142,21 +156,75 @@ export class WardMap {
     g.fillRect(0, 0, r.width, r.height);
     if (!s) return;
     const T = this.tile;
+    const at = (x: number, y: number) => ({ X: this.ox + x * T, Y: this.oy + y * T });
+    const inMap = (x: number, y: number) => x >= 0 && y >= 0 && x < s.width && y < s.height;
+    const shops = new Map(s.buildings.map((b) => [`${b.x},${b.y}`, b]));
 
+    // Roads and pavements.
     for (let y = 0; y < s.height; y++) {
       for (let x = 0; x < s.width; x++) {
-        const X = this.ox + x * T;
-        const Y = this.oy + y * T;
-        g.fillStyle = isLot(x, y) ? C.lot : C.street;
-        if (isLot(x, y)) g.fillRect(X + 1, Y + 1, T - 2, T - 2);
-        else g.fillRect(X, Y, T, T);
+        const { X, Y } = at(x, y);
+        g.fillStyle = isLot(x, y) ? C.pavement : C.road;
+        g.fillRect(X, Y, T, T);
       }
     }
+    // Lane markings down the middle of each road, not across junctions.
+    g.save();
+    g.strokeStyle = C.roadLine;
+    g.lineWidth = Math.max(1, T * 0.035);
+    g.setLineDash([T * 0.22, T * 0.2]);
+    for (let y = 0; y < s.height; y++) {
+      for (let x = 0; x < s.width; x++) {
+        if (isLot(x, y)) continue;
+        const { X, Y } = at(x, y);
+        const rowRoad = y % 3 === 0;
+        const colRoad = x % 4 === 0;
+        if (rowRoad && !colRoad) {
+          g.beginPath();
+          g.moveTo(X, Y + T / 2);
+          g.lineTo(X + T, Y + T / 2);
+          g.stroke();
+        } else if (colRoad && !rowRoad) {
+          g.beginPath();
+          g.moveTo(X + T / 2, Y);
+          g.lineTo(X + T / 2, Y + T);
+          g.stroke();
+        }
+      }
+    }
+    g.restore();
+    // Kerbs where a block meets the road.
+    g.strokeStyle = C.kerb;
+    g.lineWidth = Math.max(1.5, T * 0.04);
+    for (let y = 0; y < s.height; y++) {
+      for (let x = 0; x < s.width; x++) {
+        if (!isLot(x, y)) continue;
+        const { X, Y } = at(x, y);
+        this.edges(x, y, (nx, ny) => inMap(nx, ny) && !isLot(nx, ny), X, Y, 0);
+      }
+    }
+
+    // Turf: tinted ground, outlined where it ends.
+    for (let y = 0; y < s.height; y++) {
+      for (let x = 0; x < s.width; x++) {
+        if (!isLot(x, y)) continue;
+        const f = turfAt(s, x, y);
+        if (!f) continue;
+        const { X, Y } = at(x, y);
+        g.fillStyle = f === 'player' ? C.ourTurf : C.theirTurf;
+        g.fillRect(X, Y, T, T);
+        g.strokeStyle = famColour(f);
+        g.lineWidth = Math.max(1.5, T * 0.04);
+        this.edges(x, y, (nx, ny) => !inMap(nx, ny) || !isLot(nx, ny) || turfAt(s, nx, ny) !== f, X, Y, g.lineWidth / 2);
+      }
+    }
+
+    // Streetlamps at the junctions.
     for (let y = 0; y < s.height; y += 3) {
       for (let x = 0; x < s.width; x += 4) {
         const c = this.px({ x, y });
         const glow = g.createRadialGradient(c.x, c.y, 0, c.x, c.y, T * 1.1);
-        glow.addColorStop(0, 'rgba(227,162,59,0.2)');
+        glow.addColorStop(0, 'rgba(227,162,59,0.16)');
         glow.addColorStop(1, 'rgba(227,162,59,0)');
         g.fillStyle = glow;
         g.fillRect(c.x - T * 1.1, c.y - T * 1.1, T * 2.2, T * 2.2);
@@ -167,19 +235,14 @@ export class WardMap {
       }
     }
 
-    // The boss's rented room.
+    // Homes on every lot that isn't a shop; then the shops.
     const boss = person(s, s.families.player.bossId);
-    if (boss) {
-      const X = this.ox + boss.homeX * T;
-      const Y = this.oy + boss.homeY * T;
-      const m = T * 0.28;
-      g.fillStyle = '#2b2418';
-      g.fillRect(X + m, Y + m, T - 2 * m, T - 2 * m);
-      g.fillStyle = 'rgba(240,200,120,0.85)';
-      g.fillRect(X + T / 2 - 2, Y + T / 2 - 2, 4, 4);
+    for (let y = 0; y < s.height; y++) {
+      for (let x = 0; x < s.width; x++) {
+        if (isLot(x, y) && !shops.has(`${x},${y}`)) this.drawHome(x, y, !!boss && boss.homeX === x && boss.homeY === y);
+      }
     }
-
-    for (const b of s.buildings) this.drawBuilding(b, now);
+    for (const b of s.buildings) this.drawShop(b, now);
 
     // Orders: dashed lines from each of our people to their one-off jobs.
     if (this.showOrders && !s.run) {
@@ -198,7 +261,7 @@ export class WardMap {
               ? C.blood
               : j.stalled
                 ? 'rgba(141,149,161,0.5)'
-                : 'rgba(227,162,59,0.75)';
+                : 'rgba(227,162,59,0.85)';
           g.beginPath();
           g.moveTo(a.x, a.y);
           g.lineTo(b.x, b.y);
@@ -208,7 +271,33 @@ export class WardMap {
       g.restore();
     }
 
-    // Squads out on jobs this month.
+    // Fog of war: a light hatch over what our people can't see. It hides people, not buildings.
+    g.save();
+    g.lineWidth = 1;
+    for (let y = 0; y < s.height; y++) {
+      for (let x = 0; x < s.width; x++) {
+        if (seenTile(s, x, y)) continue;
+        const { X, Y } = at(x, y);
+        g.fillStyle = C.fog;
+        g.fillRect(X, Y, T, T);
+        g.save();
+        g.beginPath();
+        g.rect(X, Y, T, T);
+        g.clip();
+        g.strokeStyle = C.hatch;
+        g.beginPath();
+        const step = Math.max(5, T / 6);
+        for (let d = -T; d < T; d += step) {
+          g.moveTo(X + d, Y + T);
+          g.lineTo(X + d + T, Y);
+        }
+        g.stroke();
+        g.restore();
+      }
+    }
+    g.restore();
+
+    // Crews out on jobs this month (Calloway's only where we can see them).
     if (s.run) {
       for (const p of s.people) {
         if (p.status !== 'active') continue;
@@ -216,28 +305,22 @@ export class WardMap {
           if (j.done || j.stalled || !j.hoods) continue;
           if (JOBS[j.kind].ongoing && j.kind !== 'guard') continue;
           if (p.family === 'rival' && !seenTile(s, j.x, j.y)) continue;
-          const at = this.px(this.glide(j.id, { x: j.x, y: j.y }, now));
-          g.fillStyle = p.family === 'player' ? C.lamp : C.steel;
+          const pos = this.px(this.glide(j.id, { x: j.x, y: j.y }, now));
+          g.fillStyle = famColour(p.family);
+          g.strokeStyle = C.night;
+          g.lineWidth = 1;
           const n = Math.min(4, j.hoods);
           for (let i = 0; i < n; i++) {
             g.beginPath();
-            g.arc(at.x - T * 0.28 + i * T * 0.13, at.y + T * 0.3, Math.max(1.6, T * 0.05), 0, Math.PI * 2);
+            g.arc(pos.x - T * 0.28 + i * T * 0.13, pos.y + T * 0.3, Math.max(2, T * 0.055), 0, Math.PI * 2);
             g.fill();
+            g.stroke();
           }
         }
       }
     }
 
-    // Fog.
-    for (let y = 0; y < s.height; y++) {
-      for (let x = 0; x < s.width; x++) {
-        if (seenTile(s, x, y)) continue;
-        g.fillStyle = C.fog;
-        g.fillRect(this.ox + x * T, this.oy + y * T, T, T);
-      }
-    }
-
-    // People (rivals only where our people can see them).
+    // People (Calloway's only where our people can see them).
     const placed = new Map<string, number>();
     for (const p of s.people) {
       if (p.status !== 'active' || !visible(s, p)) continue;
@@ -251,7 +334,7 @@ export class WardMap {
       const cx = c.x + Math.cos(ang) * off;
       const cy = c.y + Math.sin(ang) * off - T * 0.08;
       const rad = Math.max(6, T * (p.role === 'boss' ? 0.2 : 0.16));
-      g.fillStyle = p.family === 'player' ? C.lamp : C.steel;
+      g.fillStyle = famColour(p.family);
       g.strokeStyle = C.night;
       g.lineWidth = 2;
       g.beginPath();
@@ -259,7 +342,7 @@ export class WardMap {
       g.fill();
       g.stroke();
       if (p.role === 'boss') {
-        g.strokeStyle = p.family === 'player' ? C.lamp : C.steel;
+        g.strokeStyle = famColour(p.family);
         g.lineWidth = 1.5;
         g.beginPath();
         g.arc(cx, cy, rad + 3, 0, Math.PI * 2);
@@ -307,55 +390,124 @@ export class WardMap {
     }
   }
 
-  private drawBuilding(b: Building, now: number): void {
+  /** Stroke the sides of tile (x, y) whose neighbour matches `edge`, inset by `inset` pixels. */
+  private edges(x: number, y: number, edge: (nx: number, ny: number) => boolean, X: number, Y: number, inset: number): void {
+    const g = this.ctx;
+    const T = this.tile;
+    const i = inset;
+    g.beginPath();
+    if (edge(x, y - 1)) {
+      g.moveTo(X, Y + i);
+      g.lineTo(X + T, Y + i);
+    }
+    if (edge(x, y + 1)) {
+      g.moveTo(X, Y + T - i);
+      g.lineTo(X + T, Y + T - i);
+    }
+    if (edge(x - 1, y)) {
+      g.moveTo(X + i, Y);
+      g.lineTo(X + i, Y + T);
+    }
+    if (edge(x + 1, y)) {
+      g.moveTo(X + T - i, Y);
+      g.lineTo(X + T - i, Y + T);
+    }
+    g.stroke();
+  }
+
+  /** A home: brick tenement or rowhouse, a few windows lit. The boss's rented room has a light on. */
+  private drawHome(x: number, y: number, bossHome: boolean): void {
+    const g = this.ctx;
+    const T = this.tile;
+    const X = this.ox + x * T;
+    const Y = this.oy + y * T;
+    const seed = (x * 73856093) ^ (y * 19349663);
+    const rnd = (k: number) => (((seed * (k + 7) * 2654435761) >>> 0) % 1000) / 1000;
+    const m = T * (0.12 + rnd(1) * 0.06);
+    const w = T - 2 * m;
+    g.fillStyle = C.brick;
+    g.fillRect(X + m, Y + m, w, w);
+    g.fillStyle = C.roof;
+    g.fillRect(X + m, Y + m, w, w * 0.28);
+    // Windows: two rows of three, some lit.
+    const ws = Math.max(2, T * 0.07);
+    for (let i = 0; i < 6; i++) {
+      const lit = bossHome ? i === 4 || rnd(i + 3) < 0.35 : rnd(i + 3) < 0.3;
+      g.fillStyle = lit ? C.homeWindow : 'rgba(0,0,0,0.35)';
+      g.fillRect(X + m + w * (0.18 + (i % 3) * 0.28), Y + m + w * (0.42 + Math.floor(i / 3) * 0.26), ws, ws);
+    }
+    if (bossHome) {
+      g.strokeStyle = C.lamp;
+      g.lineWidth = 1.5;
+      g.strokeRect(X + m + 0.5, Y + m + 0.5, w - 1, w - 1);
+    }
+  }
+
+  /** A shop: a lit shopfront and sign. Solid border = owned; flag = pays protection. */
+  private drawShop(b: Building, now: number): void {
     const g = this.ctx;
     const T = this.tile;
     const X = this.ox + b.x * T;
     const Y = this.oy + b.y * T;
     const m = Math.max(3, T * 0.1);
     const w = T - 2 * m;
-    g.fillStyle = b.owner === 'player' ? C.ourFill : b.owner === 'rival' ? C.theirFill : C.free;
+    const f = holder(b);
+    g.fillStyle = b.owner === 'player' ? C.ourFill : b.owner === 'rival' ? C.theirFill : C.shop;
     g.fillRect(X + m, Y + m, w, w);
+    // Sign board across the top, shop window across the bottom.
+    g.fillStyle = b.owner ? famColour(b.owner) : C.shopSign;
+    g.fillRect(X + m + w * 0.1, Y + m + w * 0.1, w * 0.8, Math.max(2, w * 0.12));
+    const seed = [...b.id].reduce((n, ch) => n * 31 + ch.charCodeAt(0), 7);
+    const flicker = b.racket && Math.sin(now / 700 + seed) > 0.96 ? 0.35 : 1;
+    const glassH = w * 0.32;
+    g.fillStyle = b.raided ? 'rgba(80,80,80,0.6)' : b.racket ? `rgba(240,200,120,${0.8 * flicker})` : C.glass;
+    g.fillRect(X + m + w * 0.1, Y + m + w * 0.58, w * 0.8, glassH);
+    g.fillStyle = 'rgba(0,0,0,0.45)';
+    g.fillRect(X + m + w * 0.47, Y + m + w * 0.58, Math.max(1, w * 0.06), glassH);
+
     if (b.owner) {
-      g.strokeStyle = b.owner === 'player' ? C.lamp : C.steel;
-      g.lineWidth = 2;
-      g.strokeRect(X + m + 0.5, Y + m + 0.5, w - 1, w - 1);
+      g.strokeStyle = famColour(b.owner);
+      g.lineWidth = Math.max(2, T * 0.05);
+      g.strokeRect(X + m, Y + m, w, w);
     } else {
-      g.strokeStyle = C.lotEdge;
+      g.strokeStyle = 'rgba(0,0,0,0.5)';
       g.lineWidth = 1;
       g.strokeRect(X + m + 0.5, Y + m + 0.5, w - 1, w - 1);
     }
-    // Protection: an awning stripe across the top in the family colour.
-    if (b.protectedBy && !b.owner) {
-      g.fillStyle = b.protectedBy === 'player' ? C.lamp : C.steel;
-      const stripes = 4;
-      const sw = w / (stripes * 2 - 1);
-      for (let i = 0; i < stripes; i++) g.fillRect(X + m + i * sw * 2, Y + m, sw, Math.max(3, T * 0.09));
-    }
-
-    const seed = [...b.id].reduce((n, ch) => n * 31 + ch.charCodeAt(0), 7);
-    const lit = b.racket ? 0.75 : b.owner ? 0.5 : b.protectedBy ? 0.35 : 0.2;
-    const ws = Math.max(2, T * 0.08);
-    for (let i = 0; i < 6; i++) {
-      const rr = ((seed * (i + 3) * 2654435761) >>> 0) / 4294967296;
-      if (rr > lit) continue;
-      const flicker = b.racket && Math.sin(now / 700 + i * 2 + seed) > 0.96 ? 0.3 : 1;
-      g.fillStyle = `rgba(240,200,120,${0.75 * flicker})`;
-      g.fillRect(X + m + T * 0.12 + (i % 3) * T * 0.22, Y + m + T * 0.18 + Math.floor(i / 3) * T * 0.22, ws, ws);
+    // A flag on the corner for whoever this shop pays (or belongs to).
+    if (f) {
+      const pole = X + T - m - Math.max(2, T * 0.04);
+      const top = Y + m - T * 0.06;
+      g.strokeStyle = C.ink;
+      g.lineWidth = 1;
+      g.beginPath();
+      g.moveTo(pole, top);
+      g.lineTo(pole, top + T * 0.3);
+      g.stroke();
+      g.fillStyle = famColour(f);
+      g.beginPath();
+      g.moveTo(pole, top);
+      g.lineTo(pole - T * 0.2, top + T * 0.07);
+      g.lineTo(pole, top + T * 0.14);
+      g.closePath();
+      g.fill();
     }
 
     const label = b.racket === 'speakeasy' ? 'S' : b.racket === 'gambling' ? 'G' : b.racket === 'still' ? 'D' : '';
     if (label) {
       g.fillStyle = b.raided ? C.dim : C.ink;
       g.font = `700 ${Math.round(T * 0.26)}px Oswald, 'Arial Narrow', sans-serif`;
-      g.textAlign = 'right';
-      g.textBaseline = 'bottom';
-      g.fillText(label, X + T - m - 3, Y + T - m - 2);
+      g.textAlign = 'left';
+      g.textBaseline = 'middle';
+      g.strokeStyle = C.night;
+      g.lineWidth = 3;
+      g.strokeText(label, X + m + w * 0.12, Y + m + w * 0.4);
+      g.fillText(label, X + m + w * 0.12, Y + m + w * 0.4);
     }
     if (b.telephone) {
-      g.fillStyle = b.owner === 'rival' ? C.steel : C.lamp;
-      const sz = Math.max(3, T * 0.09);
-      g.fillRect(X + m + 3, Y + T - m - sz - 3, sz, sz);
+      g.fillStyle = C.ink;
+      const sz = Math.max(3, T * 0.08);
+      g.fillRect(X + T - m - sz - w * 0.12, Y + m + w * 0.34, sz, sz);
     }
     if (b.raided) {
       g.strokeStyle = C.blood;

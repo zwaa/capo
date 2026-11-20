@@ -293,6 +293,41 @@ export function seenTile(s: GameState, x: number, y: number): boolean {
   return active(s, 'player').some((p) => dist(p, t) <= 2);
 }
 
+// ---------------------------------------------------------------- turf
+
+/** The family that holds a building, whether it owns it or just protects it. */
+export const holder = (b: Building): FamilyId | null => b.owner ?? b.protectedBy;
+
+/** How close (in lots) a building must be to count as next to someone's turf. */
+export const TURF_REACH = 2;
+
+/**
+ * Is this spot next to a family's turf: within reach of a building it owns or
+ * protects, or of the boss's own front door? Expanding off your turf is harder.
+ */
+export function onTurf(s: GameState, f: FamilyId, at: { x: number; y: number }, exceptId?: string): boolean {
+  if (s.buildings.some((b) => b.id !== exceptId && holder(b) === f && dist(b, at) <= TURF_REACH)) return true;
+  const boss = bossOf(s, f);
+  return dist({ x: boss.homeX, y: boss.homeY }, at) <= TURF_REACH;
+}
+
+/** Whose turf a map tile is on, for drawing: the family with the most buildings next to it (ties: nobody). */
+export function turfAt(s: GameState, x: number, y: number): FamilyId | null {
+  const here = s.buildings.find((b) => b.x === x && b.y === y);
+  if (here && holder(here)) return holder(here);
+  let us = 0;
+  let them = 0;
+  for (const b of s.buildings) {
+    if (dist(b, { x, y }) > 1) continue;
+    if (holder(b) === 'player') us++;
+    else if (holder(b) === 'rival') them++;
+  }
+  // The boss's own front door counts too, as it does for onTurf().
+  const boss = bossOf(s, 'player');
+  if (dist({ x: boss.homeX, y: boss.homeY }, { x, y }) <= 1) us++;
+  return us > them ? 'player' : them > us ? 'rival' : null;
+}
+
 /** Who runs a branch, and which branches a person runs. */
 export const runner = (s: GameState, f: FamilyId, b: Branch) => person(s, s.families[f].branches[b])!;
 export const branchesOf = (s: GameState, p: Person) =>
