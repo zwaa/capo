@@ -29,13 +29,14 @@ canvas. The published build is a single HTML file (`vite-plugin-singlefile`).
 ## Commands (run from `prototype/`, inside the dev container)
 
 - `npm run dev`: play at http://localhost:5173
-- `npm test`: simulation tests
-- `npx tsc --noEmit -p .`: type-check
+- `npm run check`: **everything that must pass**: type-check, lint, format check, tests. CI runs this too.
+- `npm test` / `npm run typecheck` / `npm run lint`: the parts on their own
+- `npm run lint:fix` and `npm run format`: fix what can be fixed automatically
 - `npm run sim -- 300`: autopilot plays 300 seeded games and prints win/draw/loss.
   `CAPO_RANDOM=1` answers cards at random; `CAPO_NOLESSONS=1` turns the tutorial off.
 - `npm run artifact`: build `dist/capo.html` for publishing
 
-**Before calling a change done:** type-check and `npm test` pass. If the change touches game rules or
+**Before calling a change done:** `npm run check` passes. If the change touches game rules or
 numbers, also run `npm run sim -- 300` and report the before and after results. If it touches the UI,
 look at it in the browser (desktop and phone width) or say that you didn't.
 
@@ -55,6 +56,9 @@ look at it in the browser (desktop and phone width) or say that you didn't.
 
 ## Conventions
 
+- Code style is Prettier's (`.prettierrc.json`: 140 columns, single quotes). Don't hand-format; run
+  `npm run format`. ESLint (`eslint.config.js`) enforces the architecture rules above for `src/sim/`:
+  don't silence them with disable comments, fix the code.
 - Names: camelCase functions and variables, PascalCase types, UPPER_SNAKE constants.
 - Tuning numbers (prices, incomes, thresholds) live in `src/sim/util.ts` or near the top of the file that
   uses them, as named constants. Don't scatter magic numbers.
@@ -82,19 +86,27 @@ look at it in the browser (desktop and phone width) or say that you didn't.
   its hands in `needFor()`, its effect in `complete()` or `settle()` in `engine.ts`, and teach `ai.ts` to use it.
 - **Design change:** edit `docs/DESIGN.md`, add a row to the decisions log, then change the prototype.
 
-## Git
+## Git (git-flow)
 
-- Work happens on `main` (tracking `origin/main`, the GitHub default). For a risky experiment, make a
-  branch named after it (e.g. `try/weekly-turns`) so it can be thrown away or merged back.
-- Commit when a change is finished and its checks pass: one logical change per commit. Don't commit
-  half-done work or broken tests.
-- Commit messages: a short imperative subject (e.g. "Prototype: named hoods with promotion"), a blank
-  line, then a body saying what changed and why. Mention any balance numbers that moved.
-- Push only when asked.
+- **`main`**: released versions only. Each release is a merge from a `release/*` or `hotfix/*` branch,
+  tagged `vX.Y.Z` (matching `version` in `prototype/package.json`). Never commit to it directly.
+- **`develop`**: the integration branch and GitHub's default. Finished features land here. Never commit
+  to it directly either.
+- **`feature/<short-name>`**: one per idea or change, branched from `develop`, merged back with
+  `git merge --no-ff` once `npm run check` passes. Throwaway experiments are features that get deleted
+  instead of merged.
+- **`release/X.Y.Z`**: from `develop` when a version is worth keeping (e.g. a playtest build): bump the
+  version, fix only, merge into `main` (tag it) and back into `develop`.
+- **`hotfix/X.Y.Z`**: from `main` for an urgent fix to a release; merge into `main` (tag) and `develop`.
+- The pre-commit hook (`.githooks/pre-commit`) refuses commits on `main`/`develop` and runs
+  `npm run check` when prototype files are staged. Don't bypass it with `--no-verify` unless asked.
+- Commit when a change is finished and its checks pass: one logical change per commit. Messages: a short
+  imperative subject (e.g. "Prototype: named hoods with promotion"), a blank line, then a body saying
+  what changed and why. Mention any balance numbers that moved.
+- Push only when asked. Delete feature branches (local and remote) after merging.
 - Never commit `node_modules/`, `dist/`, `.env` files, credentials, or `.claude/settings.local.json`.
 - Don't rewrite pushed history (no force-push, no amending pushed commits) without asking.
-- The repo is checked out on Windows; `.gitattributes` keeps `*.sh` and `Dockerfile` as LF. Keep new
-  shell scripts LF.
+- Line endings are LF everywhere (`.gitattributes`, `.editorconfig`), including on Windows.
 
 ## What not to do
 

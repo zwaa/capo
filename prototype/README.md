@@ -26,8 +26,11 @@ Not in the slice: City Hall and elections, laundering, the doctor, brewmaster, a
 ## Running it
 
 ```sh
-npm install
+npm install        # also turns on the repo's git hooks
 npm run dev        # play at http://localhost:5173
+npm run check      # typecheck, lint, format check and tests: must pass before a commit
+npm run lint:fix   # fix lint problems that can be fixed automatically
+npm run format     # format everything with Prettier
 npm test           # simulation tests
 npm run sim -- 300 # headless balance check: an AI plays the Russo side over 300 seeds
 npm run artifact   # single-file build for publishing (dist/capo.html)
@@ -46,9 +49,9 @@ npm run artifact   # single-file build for publishing (dist/capo.html)
 
 From `npm run sim -- 300`. The Russo side is played by a simple autopilot that takes on whoever the lessons offer, promotes its most capable hood, hands out branches and answers telegrams. It never really plans:
 
-| Russo player | Win | Draw | Loss |
-|---|---|---|---|
-| Autopilot, sensible answers | 2% | 22% | 76% |
-| Autopilot, random answers | 4% | 33% | 63% |
+| Russo player                | Win | Draw | Loss |
+| --------------------------- | --- | ---- | ---- |
+| Autopilot, sensible answers | 2%  | 22%  | 76%  |
+| Autopilot, random answers   | 4%  | 33%  | 63%  |
 
 The autopilot is weak, so these numbers say little about a human. The thresholds need tuning from real play.

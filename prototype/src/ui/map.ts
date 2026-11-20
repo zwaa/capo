@@ -184,7 +184,12 @@ export class WardMap {
           if (!t) continue;
           const a = this.px({ x: p.homeX, y: p.homeY });
           const b = this.px(t);
-          g.strokeStyle = j.kind === 'hit' || j.kind === 'takeover' || j.kind === 'wreck' ? C.blood : j.stalled ? 'rgba(141,149,161,0.5)' : 'rgba(227,162,59,0.75)';
+          g.strokeStyle =
+            j.kind === 'hit' || j.kind === 'takeover' || j.kind === 'wreck'
+              ? C.blood
+              : j.stalled
+                ? 'rgba(141,149,161,0.5)'
+                : 'rgba(227,162,59,0.75)';
           g.beginPath();
           g.moveTo(a.x, a.y);
           g.lineTo(b.x, b.y);

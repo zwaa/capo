@@ -6,7 +6,21 @@ import { planFamily } from './ai';
 import { advanceLessons } from './lessons';
 import { chance, int, pick, rand } from './rng';
 import { NICKS, POOL, blankJob, freshMarket, makeHood, makePerson, newGame, notableHood, streetOf } from './setup';
-import type { Branch, Building, Card, CardOption, FamilyId, GameState, Hood, Job, JobKind, Person, Posture, ScheduledEvent, SpecialistKind } from './types';
+import type {
+  Branch,
+  Building,
+  Card,
+  CardOption,
+  FamilyId,
+  GameState,
+  Hood,
+  Job,
+  JobKind,
+  Person,
+  Posture,
+  ScheduledEvent,
+  SpecialistKind,
+} from './types';
 import {
   BRANCHES,
   DAYS,
@@ -93,14 +107,16 @@ const runnerOf = (s: GameState, job: Job) => s.people.find((p) => p.jobs.include
 /** Anyone who can be on a job: a hood, or the runner themselves. */
 type Worker = { id: string; muscle: number; brains: number; nerve: number; charm: number };
 const statOf = (w: Worker, kind: JobKind) => w[JOBS[kind].stat];
-const workers = (s: GameState, ids: string[]): Worker[] => ids.map((id) => hood(s, id) ?? person(s, id)).filter((w): w is Hood | Person => !!w);
+const workers = (s: GameState, ids: string[]): Worker[] =>
+  ids.map((id) => hood(s, id) ?? person(s, id)).filter((w): w is Hood | Person => !!w);
 /** The squad's best man at this kind of work sets the pace. */
 function squadStat(s: GameState, j: Job, stat?: 'muscle' | 'brains' | 'nerve' | 'charm'): number {
   const ws = workers(s, j.squad);
   if (!ws.length) return 5;
   return Math.max(...ws.map((w) => (stat ? w[stat] : statOf(w, j.kind))));
 }
-const doormen = (n: number): Worker[] => Array.from({ length: n }, (_, i) => ({ id: `door${i}`, muscle: 5, brains: 5, nerve: 5, charm: 5 }));
+const doormen = (n: number): Worker[] =>
+  Array.from({ length: n }, (_, i) => ({ id: `door${i}`, muscle: 5, brains: 5, nerve: 5, charm: 5 }));
 
 function gunFactor(s: GameState, f: FamilyId): number {
   const armed = Math.min(1, s.families[f].guns / Math.max(1, totalHoods(s, f)));
@@ -311,8 +327,16 @@ export function bossAction(s: GameState, a: BossAction): string {
       const h = hood(s, a.hood)!;
       const boss = bossOf(s, 'player');
       // Everybody who gets made gets a name on the street.
-      const nick = h.nickname || pick(s, NICKS.filter((n) => !s.people.some((p) => p.nickname === n)));
-      const l = makePerson(`lt${s.nextId++}`, 'player', 'lt', h.name, nick, [h.muscle, h.brains, h.nerve, h.charm], [...h.traits], { x: boss.homeX, y: boss.homeY });
+      const nick =
+        h.nickname ||
+        pick(
+          s,
+          NICKS.filter((n) => !s.people.some((p) => p.nickname === n)),
+        );
+      const l = makePerson(`lt${s.nextId++}`, 'player', 'lt', h.name, nick, [h.muscle, h.brains, h.nerve, h.charm], [...h.traits], {
+        x: boss.homeX,
+        y: boss.homeY,
+      });
       l.loyalty = Math.min(100, h.loyalty + 5);
       l.ambition = 20 + (h.traits.includes('ambitious') ? 15 : 0);
       s.people.push(l);
@@ -426,7 +450,8 @@ export function allocate(s: GameState, f: FamilyId): void {
         continue;
       }
       if (j.need === 0) continue;
-      const cost = j.kind === 'buy' ? price(building(s, j.target)!, f) : j.kind === 'fitout' ? FITOUT_COST : j.kind === 'phone' ? PHONE_COST : 0;
+      const cost =
+        j.kind === 'buy' ? price(building(s, j.target)!, f) : j.kind === 'fitout' ? FITOUT_COST : j.kind === 'phone' ? PHONE_COST : 0;
       // Only jobs that cost money wait for it: collecting must never stall on debt.
       if (cost > 0 && cost > s.families[f].cash) {
         j.stalled = `Needs $${cost} (we have $${Math.max(0, Math.round(s.families[f].cash))})`;
@@ -507,13 +532,17 @@ function prepare(s: GameState, p: Person, j: Job): void {
 function schedule(s: GameState): void {
   const run = s.run!;
   const pf = s.families.player;
-  const add = (kind: ScheduledEvent['kind'], ref: string | null = null, from = 3, to = 27) => run.scheduled.push({ day: int(s, from, to), kind, ref });
+  const add = (kind: ScheduledEvent['kind'], ref: string | null = null, from = 3, to = 27) =>
+    run.scheduled.push({ day: int(s, from, to), kind, ref });
   if (pf.heat >= 15 && chance(s, 0.25 + pf.heat / 150)) add('cop');
-  const supply = members(s, 'player').flatMap((p) => p.jobs).find((j) => j.kind === 'supply' && j.hoods);
+  const supply = members(s, 'player')
+    .flatMap((p) => p.jobs)
+    .find((j) => j.kind === 'supply' && j.hoods);
   if (supply && chance(s, has(s, 'player', 'mechanic') ? 0.25 : 0.5)) add('tail');
   if (s.month > 0) {
     const n = int(s, 1, 2);
-    for (let i = 0; i < n; i++) add(pick(s, s.families.rival.notice ? (['offer', 'bail', 'snitch'] as const) : (['offer', 'bail'] as const)));
+    for (let i = 0; i < n; i++)
+      add(pick(s, s.families.rival.notice ? (['offer', 'bail', 'snitch'] as const) : (['offer', 'bail'] as const)));
   }
   for (const p of s.people) if (p.plotting && p.status === 'active') add('defect', p.id, 6, 22);
   // Informants: rival moves against us get tipped off a few days early.
@@ -521,7 +550,8 @@ function schedule(s: GameState): void {
     for (const j of r.jobs) {
       if (JOBS[j.kind].ongoing || j.stalled || !targetsPlayer(s, j)) continue;
       const eta = Math.ceil(dist(r, targetPos(s, j)) / (j.car ? 2 : 1)) + j.days;
-      if (eta > 3 && chance(s, 0.4 + (r.traits.includes('looselips') ? 0.3 : 0))) run.scheduled.push({ day: Math.max(1, eta - 3), kind: 'tip', ref: j.id });
+      if (eta > 3 && chance(s, 0.4 + (r.traits.includes('looselips') ? 0.3 : 0)))
+        run.scheduled.push({ day: Math.max(1, eta - 3), kind: 'tip', ref: j.id });
     }
   }
 }
@@ -592,7 +622,12 @@ export function stepDay(s: GameState): StepResult {
 function personality(s: GameState, p: Person, j: Job): void {
   if (j.checked) return;
   j.checked = true;
-  if (p.traits.includes('hothead') && j.posture !== 'loud' && ['signup', 'hit', 'wreck', 'takeover'].includes(j.kind) && chance(s, 0.6 - p.authority / 200)) {
+  if (
+    p.traits.includes('hothead') &&
+    j.posture !== 'loud' &&
+    ['signup', 'hit', 'wreck', 'takeover'].includes(j.kind) &&
+    chance(s, 0.6 - p.authority / 200)
+  ) {
     if (p.family === 'player') {
       card(s, {
         kind: 'hothead',
@@ -636,7 +671,13 @@ function raids(s: GameState): void {
     const there = active(s, b.owner).find((p) => p.x === b.x && p.y === b.y);
     if (there && chance(s, has(s, b.owner, 'lawyer') ? 0.2 : 0.4)) {
       arrest(s, there);
-      if (mine) emergency(s, `${first(there)} has been arrested`, `${label(there)} was picked up in the raid on ${b.name}. Their jobs stop until they're out.`, b);
+      if (mine)
+        emergency(
+          s,
+          `${first(there)} has been arrested`,
+          `${label(there)} was picked up in the raid on ${b.name}. Their jobs stop until they're out.`,
+          b,
+        );
       else rivalRespond(s);
     }
   }
@@ -655,7 +696,10 @@ function fire(s: GameState, ev: ScheduledEvent): void {
   const pf = s.families.player;
   switch (ev.kind) {
     case 'cop': {
-      const b = pick(s, s.buildings.filter((x) => x.owner === 'player' || x.protectedBy === 'player'));
+      const b = pick(
+        s,
+        s.buildings.filter((x) => x.owner === 'player' || x.protectedBy === 'player'),
+      );
       if (!b) return;
       card(s, {
         kind: 'cop',
@@ -689,7 +733,10 @@ function fire(s: GameState, ev: ScheduledEvent): void {
       return;
     }
     case 'offer': {
-      const b = pick(s, s.buildings.filter((x) => x.owner === null && x.protectedBy !== 'rival'));
+      const b = pick(
+        s,
+        s.buildings.filter((x) => x.owner === null && x.protectedBy !== 'rival'),
+      );
       if (!b) return;
       const cost = Math.round(price(b, 'player') * 0.6);
       card(s, {
@@ -706,7 +753,10 @@ function fire(s: GameState, ev: ScheduledEvent): void {
       return;
     }
     case 'bail': {
-      const h = pick(s, s.hoods.filter((x) => x.family === 'player' && x.status === 'active'));
+      const h = pick(
+        s,
+        s.hoods.filter((x) => x.family === 'player' && x.status === 'active'),
+      );
       const p = h && person(s, h.under);
       if (!h || !p) return;
       h.status = 'jailed';
@@ -717,7 +767,12 @@ function fire(s: GameState, ev: ScheduledEvent): void {
         title: `${hoodLabel(h)} is in the tank`,
         text: `${hoodFirst(h)}, from ${p.role === 'boss' ? 'your own' : `${first(p)}'s`} crew, broke a bottle over a sailor's head at a dance hall. ${hoodFirst(h)} is in a cell and scared, and scared people talk.`,
         options: [
-          { id: 'pay', label: 'Pay the bail ($150)', hint: `${hoodFirst(h)} is back on the job tomorrow, and remembers who looked after them`, disabled: pf.cash < 150 },
+          {
+            id: 'pay',
+            label: 'Pay the bail ($150)',
+            hint: `${hoodFirst(h)} is back on the job tomorrow, and remembers who looked after them`,
+            disabled: pf.cash < 150,
+          },
           { id: 'leave', label: 'Let them sit', hint: 'Out of action for the month. Loyalty down. They might say something: heat +5.' },
         ],
         ctx: { p: p.id, h: h.id },
@@ -745,7 +800,12 @@ function fire(s: GameState, ev: ScheduledEvent): void {
       const j = s.people.flatMap((p) => p.jobs).find((x) => x.id === ev.ref);
       const r = j && runnerOf(s, j);
       if (!j || !r || j.done || j.stalled || r.status !== 'active') return;
-      emergency(s, 'Word on the street', `A bartender on ${streetOf(r)} says ${label(r)} is ${jobTitle(s, j).toLowerCase()}, maybe in three days. [Likely]`, targetPos(s, j));
+      emergency(
+        s,
+        'Word on the street',
+        `A bartender on ${streetOf(r)} says ${label(r)} is ${jobTitle(s, j).toLowerCase()}, maybe in three days. [Likely]`,
+        targetPos(s, j),
+      );
       return;
     }
     case 'defect': {
@@ -794,10 +854,20 @@ function defect(s: GameState, p: Person): void {
   const men = crew.length === 1 ? `${hoodFirst(crew[0])}` : crew.length ? `${crew.length} of their crew` : 'nobody';
   const what = shops.length ? ` and ${shops.length} shops that used to pay us` : '';
   log(s, `${label(p)} has gone over to ${s.families[to].name}, taking ${men}${what}.`, from);
-  story(s, `${p.nickname.toUpperCase()} CHANGES TEAMS`, `Associates of ${p.name} say the ${p.nickname} "just wanted a fresh start." The fresh start includes ${crew.length} men${what}.`, 8);
+  story(
+    s,
+    `${p.nickname.toUpperCase()} CHANGES TEAMS`,
+    `Associates of ${p.name} say the ${p.nickname} "just wanted a fresh start." The fresh start includes ${crew.length} men${what}.`,
+    8,
+  );
   if (from === 'player') {
     const who = crew.map(hoodFirst);
-    emergency(s, `${first(p)} has betrayed you`, `${label(p)} walked out to the Calloway Outfit${who.length ? ` with ${who.join(', ')}` : ''}${what}. Their branches are back on your desk.`, p);
+    emergency(
+      s,
+      `${first(p)} has betrayed you`,
+      `${label(p)} walked out to the Calloway Outfit${who.length ? ` with ${who.join(', ')}` : ''}${what}. Their branches are back on your desk.`,
+      p,
+    );
     for (const m of lieutenants(s, 'player')) m.loyalty = Math.max(0, m.loyalty - 5);
   }
   allocate(s, from);
@@ -816,7 +886,16 @@ function complete(s: GameState, p: Person, j: Job): void {
     case 'signup': {
       if (!b || b.owner || b.protectedBy === f) return;
       if (b.protectedBy) return fightFor(s, p, j, b);
-      const pr = Math.max(0.15, Math.min(0.95, 0.4 + squadStat(s, j, 'charm') * 0.04 + squadStat(s, j, 'muscle') * 0.02 + (j.posture === 'quiet' ? -0.1 : j.posture === 'loud' ? 0.15 : 0)));
+      const pr = Math.max(
+        0.15,
+        Math.min(
+          0.95,
+          0.4 +
+            squadStat(s, j, 'charm') * 0.04 +
+            squadStat(s, j, 'muscle') * 0.02 +
+            (j.posture === 'quiet' ? -0.1 : j.posture === 'loud' ? 0.15 : 0),
+        ),
+      );
       if (chance(s, pr)) {
         seasoned(s, j, squadStat(s, j, 'charm') >= squadStat(s, j, 'muscle') ? 'charm' : 'muscle');
         return signUp(s, b, p, j.posture, j);
@@ -850,7 +929,13 @@ function complete(s: GameState, p: Person, j: Job): void {
       p.wins++;
       seasoned(s, j);
       log(s, `${name} bought ${b.name}.`, f);
-      if (f === 'player') story(s, `${b.name.toUpperCase()} CHANGES HANDS`, `${b.name} on ${streetOf(b)} has been sold to "a local businessman." The old owner is said to be delighted, and to be moving to Florida.`, 4);
+      if (f === 'player')
+        story(
+          s,
+          `${b.name.toUpperCase()} CHANGES HANDS`,
+          `${b.name} on ${streetOf(b)} has been sold to "a local businessman." The old owner is said to be delighted, and to be moving to Florida.`,
+          4,
+        );
       advanceLessons(s);
       return;
     }
@@ -862,7 +947,13 @@ function complete(s: GameState, p: Person, j: Job): void {
       p.wins++;
       seasoned(s, j);
       log(s, `${squadNames(s, j) || name} opened a ${b.racket} in the back of ${b.name}.`, f);
-      if (f === 'player') story(s, `${b.front.toUpperCase()} DOES BRISK LATE TRADE`, `${b.name} on ${streetOf(b)} reports unusual demand for its services after 10 p.m.`, 3);
+      if (f === 'player')
+        story(
+          s,
+          `${b.front.toUpperCase()} DOES BRISK LATE TRADE`,
+          `${b.name} on ${streetOf(b)} reports unusual demand for its services after 10 p.m.`,
+          3,
+        );
       allocate(s, f);
       advanceLessons(s);
       return;
@@ -925,7 +1016,9 @@ function fightFor(s: GameState, att: Person, j: Job, target: Building | Person):
     const g = guardsAt(s, target);
     defenders = g.map((x) => x.p);
     dsquad = g.flatMap((x) => onlyHoods(s, x.j.squad));
-    D = force(s, df, doormen(target.owner ? 3 : 1), null, 'firm') + g.reduce((n, x) => n + force(s, df, workers(s, x.j.squad), x.p, 'firm') * 1.2, 0);
+    D =
+      force(s, df, doormen(target.owner ? 3 : 1), null, 'firm') +
+      g.reduce((n, x) => n + force(s, df, workers(s, x.j.squad), x.p, 'firm') * 1.2, 0);
   } else {
     // A hit: whoever is with the target at the time, about half his crew.
     defenders = [target];
@@ -947,7 +1040,8 @@ function fightFor(s: GameState, att: Person, j: Job, target: Building | Person):
     kind: j.kind,
     hoods: j.hoods,
   };
-  const playerInvolved = af === 'player' || (isBuilding ? target.owner === 'player' || target.protectedBy === 'player' : target.family === 'player');
+  const playerInvolved =
+    af === 'player' || (isBuilding ? target.owner === 'player' || target.protectedBy === 'player' : target.family === 'player');
   if (playerInvolved && (defenders.length || af === 'player')) fightCard(s, ctx, target);
   else resolveFight(s, ctx, 0);
 }
@@ -962,7 +1056,10 @@ const names = (s: GameState, csv: string | number) =>
 function fightCard(s: GameState, ctx: FightCtx, where: { x: number; y: number }): void {
   const att = person(s, String(ctx.att))!;
   const attacking = att.family === 'player';
-  const defs = String(ctx.defs).split(',').filter(Boolean).map((id) => person(s, id)!);
+  const defs = String(ctx.defs)
+    .split(',')
+    .filter(Boolean)
+    .map((id) => person(s, id)!);
   const odds = Math.round((Number(ctx.a) / (Number(ctx.a) + Number(ctx.d))) * 100);
   const ours = attacking ? odds : 100 - odds;
   const b = building(s, String(ctx.target));
@@ -978,7 +1075,12 @@ function fightCard(s: GameState, ctx: FightCtx, where: { x: number; y: number })
     const helper = helperFor(s, where, defs);
     options = [
       { id: 'stand', label: 'Stand and fight', hint: `About ${ours}% in our favour, a little better dug in` },
-      { id: 'help', label: helper ? `Call ${first(helper)} by telephone` : 'Call for help', hint: helper ? `${first(helper)} is by a telephone and close enough to come` : 'Nobody close enough by a telephone', disabled: !helper },
+      {
+        id: 'help',
+        label: helper ? `Call ${first(helper)} by telephone` : 'Call for help',
+        hint: helper ? `${first(helper)} is by a telephone and close enough to come` : 'Nobody close enough by a telephone',
+        disabled: !helper,
+      },
       { id: 'give', label: b ? 'Give it up' : 'Scatter', hint: b ? 'Lose it, keep the men' : 'Run for it, lose some pride' },
     ];
     if (helper) ctx.helper = helper.id;
@@ -1033,7 +1135,11 @@ function resolveFight(s: GameState, ctx: FightCtx, mod: number): void {
   const job = att.jobs.find((x) => x.id === ctx.job);
   const b = building(s, String(ctx.target));
   const target = b ? null : person(s, String(ctx.target))!;
-  const defs = String(ctx.defs).split(',').filter(Boolean).map((id) => person(s, id)!).filter((d) => d.status === 'active');
+  const defs = String(ctx.defs)
+    .split(',')
+    .filter(Boolean)
+    .map((id) => person(s, id)!)
+    .filter((d) => d.status === 'active');
   const posture = String(ctx.posture) as Posture;
   const A = Number(ctx.a);
   const D = Number(ctx.d);
@@ -1083,7 +1189,10 @@ function resolveFight(s: GameState, ctx: FightCtx, mod: number): void {
     }
   }
   if (posture === 'loud' && chance(s, s.families[af].heat / 220)) {
-    const nab = pick(s, [att, ...defs].filter((p) => p.status === 'active'));
+    const nab = pick(
+      s,
+      [att, ...defs].filter((p) => p.status === 'active'),
+    );
     if (nab && !(has(s, nab.family, 'lawyer') && chance(s, 0.5))) {
       arrest(s, nab);
       hurt.push(nab);
@@ -1119,7 +1228,10 @@ function resolveFight(s: GameState, ctx: FightCtx, mod: number): void {
   }
 
   const told = [
-    ...hurt.map((l) => `${l.name} (${l.status === 'dead' ? 'found in the river' : l.status === 'jailed' ? 'arrested at the scene' : 'in hospital, "fell down some stairs"'})`),
+    ...hurt.map(
+      (l) =>
+        `${l.name} (${l.status === 'dead' ? 'found in the river' : l.status === 'jailed' ? 'arrested at the scene' : 'in hospital, "fell down some stairs"'})`,
+    ),
     ...fates.map((x) => x.text),
   ].join('; ');
   story(
@@ -1142,16 +1254,20 @@ function resolveFight(s: GameState, ctx: FightCtx, mod: number): void {
     const what = [
       lost ? `we lost ${b!.name}` : '',
       ...ours.map((l) => `${label(l)} is ${l.status === 'dead' ? 'dead' : l.status === 'jailed' ? 'in a cell' : 'in hospital'}`),
-      ...ourHoods.map((x) => `${hoodLabel(x.h)} is ${x.h.status === 'dead' ? 'dead' : x.h.status === 'jailed' ? 'in a cell' : 'in hospital'}`),
+      ...ourHoods.map(
+        (x) => `${hoodLabel(x.h)} is ${x.h.status === 'dead' ? 'dead' : x.h.status === 'jailed' ? 'in a cell' : 'in hospital'}`,
+      ),
     ]
       .filter(Boolean)
       .join('; ');
     emergency(s, 'Bad night', `${what[0].toUpperCase()}${what.slice(1)}.`, b ?? att);
   }
-  if (hurt.some((l) => l.family === 'player' && l.status === 'dead') || ourHoods.some((x) => x.h.status === 'dead')) s.families.player.grudge = true;
+  if (hurt.some((l) => l.family === 'player' && l.status === 'dead') || ourHoods.some((x) => x.h.status === 'dead'))
+    s.families.player.grudge = true;
   const theyBled = hurt.some((l) => l.family === 'rival') || fates.some((x) => x.h.family === 'rival');
   if (theyBled || (b && win && df === 'rival')) {
-    if (hurt.some((l) => l.family === 'rival' && l.status === 'dead') || fates.some((x) => x.h.family === 'rival' && x.h.status === 'dead')) s.families.rival.grudge = true;
+    if (hurt.some((l) => l.family === 'rival' && l.status === 'dead') || fates.some((x) => x.h.family === 'rival' && x.h.status === 'dead'))
+      s.families.rival.grudge = true;
     s.families.rival.notice = true;
     rivalRespond(s, b ?? undefined);
   }
@@ -1190,7 +1306,12 @@ function emergency(s: GameState, title: string, text: string, where: { x: number
     title,
     text,
     options: [
-      { id: 'replan', label: 'Change of Plans', hint: left > 0 ? `Re-rank or add jobs now (${left} left; costs a meeting next month)` : 'No more changes this month', disabled: left <= 0 },
+      {
+        id: 'replan',
+        label: 'Change of Plans',
+        hint: left > 0 ? `Re-rank or add jobs now (${left} left; costs a meeting next month)` : 'No more changes this month',
+        disabled: left <= 0,
+      },
       { id: 'carry', label: 'Carry on', hint: 'The plan stands' },
     ],
     ctx: {},
@@ -1232,7 +1353,8 @@ function applyJobs(s: GameState, p: Person, jobs: Job[], how: 'now' | 'phone' | 
     return fresh;
   });
   allocate(s, p.family);
-  if (p.role !== 'boss') log(s, `${first(p)} has new orders (${how === 'phone' ? 'by telephone' : how === 'runner' ? 'by runner' : 'in person'}).`, p.family);
+  if (p.role !== 'boss')
+    log(s, `${first(p)} has new orders (${how === 'phone' ? 'by telephone' : how === 'runner' ? 'by runner' : 'in person'}).`, p.family);
 }
 
 /** A blank job the UI can add to a draft list during a Change of Plans. */
@@ -1270,7 +1392,10 @@ function rivalRespond(s: GameState, b?: Building): void {
     .sort((a, b2) => a.r.days - b2.r.days || crewSize(s, b2.p) - crewSize(s, a.p));
   const c = cands[0];
   if (!c) return;
-  const tgt = b && (b.owner === 'player' || b.protectedBy === 'player') ? b : s.buildings.filter((x) => x.protectedBy === 'player' && !x.owner).sort((x, y) => dist(x, c.p) - dist(y, c.p))[0];
+  const tgt =
+    b && (b.owner === 'player' || b.protectedBy === 'player')
+      ? b
+      : s.buildings.filter((x) => x.protectedBy === 'player' && !x.owner).sort((x, y) => dist(x, c.p) - dist(y, c.p))[0];
   if (!tgt) return;
   run.rivalChangesLeft--;
   const kind: JobKind = tgt.owner === 'player' ? 'takeover' : 'signup';
@@ -1347,10 +1472,19 @@ export function answer(s: GameState, cardId: number, optionId: string): Card | n
         } else log(s, 'The driver lost the tail in the rail yards.', 'player');
       } else if (optionId === 'ambush') {
         addHeat(s, 'player', 15, 'Ambush in an alley');
-        const tail = pick(s, s.hoods.filter((x) => x.family === 'rival' && x.status === 'active'));
+        const tail = pick(
+          s,
+          s.hoods.filter((x) => x.family === 'rival' && x.status === 'active'),
+        );
         if (tail) tail.status = 'dead';
         const boss = tail && person(s, tail.under);
-        log(s, tail ? `The tail was ${tail.name}, one of ${boss ? first(boss) : 'Calloway'}'s men. Was.` : 'The tail will not be following anyone again.', 'player');
+        log(
+          s,
+          tail
+            ? `The tail was ${tail.name}, one of ${boss ? first(boss) : 'Calloway'}'s men. Was.`
+            : 'The tail will not be following anyone again.',
+          'player',
+        );
         story(s, 'CAR FOUND ABANDONED IN ALLEY', 'Police are looking for its owner. They expect to be looking for some time.', 5);
       } else fam.liquor = Math.max(0, fam.liquor - 20);
       break;
@@ -1388,7 +1522,12 @@ export function answer(s: GameState, cardId: number, optionId: string): Card | n
       if (optionId !== 'buy' || !p) break;
       spend(s, 'player', 150, 'A Calloway driver');
       const j = p.jobs.find((x) => !JOBS[x.kind].ongoing && !x.done && !x.stalled);
-      emergency(s, 'What the driver said', `${label(p)} is ${j ? jobTitle(s, j).toLowerCase() : 'sitting tight'}. [Confirmed]`, j ? targetPos(s, j) : p);
+      emergency(
+        s,
+        'What the driver said',
+        `${label(p)} is ${j ? jobTitle(s, j).toLowerCase() : 'sitting tight'}. [Confirmed]`,
+        j ? targetPos(s, j) : p,
+      );
       break;
     }
     case 'fight': {
@@ -1434,7 +1573,12 @@ export function answer(s: GameState, cardId: number, optionId: string): Card | n
       if (!p) break;
       if (optionId === 'accept') {
         defect(s, p);
-        story(s, 'CALLOWAY OUTFIT "UNAFFECTED" BY DEPARTURE', `Big Jim Calloway says ${p.name} "was never really one of us." He then broke a chair.`, 6);
+        story(
+          s,
+          'CALLOWAY OUTFIT "UNAFFECTED" BY DEPARTURE',
+          `Big Jim Calloway says ${p.name} "was never really one of us." He then broke a chair.`,
+          6,
+        );
       } else {
         p.plotting = false;
         log(s, `We sent ${first(p)} back.`, 'player');
@@ -1461,7 +1605,12 @@ export function endMonth(s: GameState): void {
       if (--h.recover <= 0) h.status = 'active';
     } else if (h.status === 'active' && worked.has(h.id)) {
       h.xp++;
-      if (h.xp === PROMOTE_XP && h.family === 'player') s.run!.news.push({ headline: `WHO IS ${h.name.toUpperCase()}?`, body: `Shopkeepers on the west side say a new face has been "very persuasive" this year. ${hoodFirst(h)} declined to comment, persuasively.`, weight: 2 });
+      if (h.xp === PROMOTE_XP && h.family === 'player')
+        s.run!.news.push({
+          headline: `WHO IS ${h.name.toUpperCase()}?`,
+          body: `Shopkeepers on the west side say a new face has been "very persuasive" this year. ${hoodFirst(h)} declined to comment, persuasively.`,
+          weight: 2,
+        });
     }
   }
   s.hoods = s.hoods.filter((h) => h.status !== 'dead');
@@ -1475,7 +1624,14 @@ export function endMonth(s: GameState): void {
   planFamily(s, 'rival');
   wire(s);
   s.news = [...run.news].sort((a, b) => b.weight - a.weight).slice(0, 6);
-  if (!s.news.length) s.news = [{ headline: 'QUIET MONTH IN THE WARD', body: 'Police report "nothing of note." Several shopkeepers report the same, a little too quickly.', weight: 1 }];
+  if (!s.news.length)
+    s.news = [
+      {
+        headline: 'QUIET MONTH IN THE WARD',
+        body: 'Police report "nothing of note." Several shopkeepers report the same, a little too quickly.',
+        weight: 1,
+      },
+    ];
   s.run = null;
   checkOver(s);
   s.month++;
@@ -1521,7 +1677,8 @@ function settle(s: GameState, f: FamilyId): void {
   });
   if (take) earn(s, f, take, `Protection from ${Math.min(reached, shops.length)} of ${shops.length} shops`);
   skim(s, f, col?.p, take, 'Protection');
-  if (shops.length > reached && shops.length) fam.ledger.push({ label: `${shops.length - Math.min(reached, shops.length)} shops not collected (short of hoods)`, amount: 0 });
+  if (shops.length > reached && shops.length)
+    fam.ledger.push({ label: `${shops.length - Math.min(reached, shops.length)} shops not collected (short of hoods)`, amount: 0 });
 
   // Stills, then bars, then the dens.
   const dist_ = jobOf(s, f, 'distill');
@@ -1572,7 +1729,8 @@ function settle(s: GameState, f: FamilyId): void {
   if (fam.captain && pay) spend(s, f, Math.max(150, 250 - pay.p.charm * 10), 'Captain Hollis');
   const crew = totalHoods(s, f);
   if (crew) spend(s, f, crew * WAGE, `Wages for ${crew} hoods`);
-  for (const l of lieutenants(s, f)) spend(s, f, l.status === 'jailed' ? 100 : l.cut, l.status === 'jailed' ? `Lawyer's fees for ${first(l)}` : `${first(l)}'s cut`);
+  for (const l of lieutenants(s, f))
+    spend(s, f, l.status === 'jailed' ? 100 : l.cut, l.status === 'jailed' ? `Lawyer's fees for ${first(l)}` : `${first(l)}'s cut`);
   for (const k of fam.specialists) spend(s, f, SPECIALISTS[k].retainer, `${SPECIALISTS[k].title}'s retainer`);
 
   // Heat.
@@ -1595,7 +1753,8 @@ function people(s: GameState): void {
     if (p.status === 'dead' || p.status === 'defected') continue;
     if (p.status === 'wounded' || p.status === 'jailed') {
       if (--p.recover <= 0) {
-        if (p.status === 'jailed') story(s, `${p.name.toUpperCase()} RELEASED`, 'Charges were dropped after the key witness "remembered nothing."', 3);
+        if (p.status === 'jailed')
+          story(s, `${p.name.toUpperCase()} RELEASED`, 'Charges were dropped after the key witness "remembered nothing."', 3);
         p.status = 'active';
       }
       continue;
@@ -1619,7 +1778,13 @@ function people(s: GameState): void {
     if (!p.demand && p.ambition >= 50 && chance(s, 0.5)) {
       const want = owned(s, p.family).find((b) => b.racket && !lieutenants(s, p.family).some((l) => l.ownBuilding === b.id));
       p.demand = want
-        ? { kind: 'building', amount: 0, buildingId: want.id, text: `wants ${want.name} as their own: they'd keep half of what it makes`, age: 0 }
+        ? {
+            kind: 'building',
+            amount: 0,
+            buildingId: want.id,
+            text: `wants ${want.name} as their own: they'd keep half of what it makes`,
+            age: 0,
+          }
         : { kind: 'raise', amount: 50, buildingId: null, text: 'wants a bigger cut: +$50 a month', age: 0 };
       if (p.family === 'player') s.stats.demandsSeen++;
     }
@@ -1642,9 +1807,12 @@ function wire(s: GameState): void {
   }
   for (const l of lieutenants(s, 'player')) {
     if (l.status !== 'active') continue;
-    if (l.plotting && chance(s, 0.75)) w.push({ confidence: 'Likely', text: `${first(l)} was seen having coffee with Calloway's people. Twice.` });
-    else if (l.loyalty < 45 && chance(s, 0.5)) w.push({ confidence: 'Rumour', text: `${first(l)} has been complaining about the boss to the crew.` });
-    if (l.traits.includes('greedy') && chance(s, 0.3)) w.push({ confidence: 'Rumour', text: `${first(l)} turned up in a new Packard. On what we pay?` });
+    if (l.plotting && chance(s, 0.75))
+      w.push({ confidence: 'Likely', text: `${first(l)} was seen having coffee with Calloway's people. Twice.` });
+    else if (l.loyalty < 45 && chance(s, 0.5))
+      w.push({ confidence: 'Rumour', text: `${first(l)} has been complaining about the boss to the crew.` });
+    if (l.traits.includes('greedy') && chance(s, 0.3))
+      w.push({ confidence: 'Rumour', text: `${first(l)} turned up in a new Packard. On what we pay?` });
   }
   const rp = active(s, 'rival').find((l) => l.plotting);
   if (rp && chance(s, 0.6)) w.push({ confidence: 'Rumour', text: `${first(rp)} isn't happy over at Calloway's.` });
@@ -1660,19 +1828,39 @@ function checkOver(s: GameState): void {
   const when = monthName(s.month);
   const rivalLeft = owned(s, 'rival').length + protectedBy(s, 'rival').length;
   if (rivalLeft === 0) {
-    s.over = { result: 'win', headline: 'CALLOWAY OUTFIT FINISHED', text: `By ${when} the Calloway Outfit had nothing left in the ward. Big Jim was last seen boarding a train to Florida. The ward belongs to ${bossOf(s, 'player').name}.` };
+    s.over = {
+      result: 'win',
+      headline: 'CALLOWAY OUTFIT FINISHED',
+      text: `By ${when} the Calloway Outfit had nothing left in the ward. Big Jim was last seen boarding a train to Florida. The ward belongs to ${bossOf(s, 'player').name}.`,
+    };
   } else if (p.cash < -1000) {
-    s.over = { result: 'loss', headline: 'RUSSO NEPHEW SKIPS TOWN', text: `By ${when} the debts were bigger than the family. ${bossOf(s, 'player').name} was last seen leaving town owing money to everyone.` };
+    s.over = {
+      result: 'loss',
+      headline: 'RUSSO NEPHEW SKIPS TOWN',
+      text: `By ${when} the debts were bigger than the family. ${bossOf(s, 'player').name} was last seen leaving town owing money to everyone.`,
+    };
   } else if (s.month >= s.lastMonth) {
     // Year one is about becoming a family: judged on what you built.
     const us = score(s, 'player');
     const tally = `${owned(s, 'player').length} buildings, ${rackets(s, 'player').length} rackets and ${protectedBy(s, 'player').length} shops paying protection (Calloway: ${owned(s, 'rival').length}, ${rackets(s, 'rival').length} and ${protectedBy(s, 'rival').length})`;
     s.over =
       us >= WIN_SCORE
-        ? { result: 'win', headline: 'RUSSO NAME RISES IN THE WARD', text: `A year ago the Nephew had $300 and two cousins. Now: ${tally}. Calloway has started locking his door at night.` }
+        ? {
+            result: 'win',
+            headline: 'RUSSO NAME RISES IN THE WARD',
+            text: `A year ago the Nephew had $300 and two cousins. Now: ${tally}. Calloway has started locking his door at night.`,
+          }
         : us >= DRAW_SCORE
-          ? { result: 'draw', headline: 'NEPHEW STILL STANDING', text: `A year ago the Nephew had $300 and two cousins. Now: ${tally}. A small outfit, but a real one.` }
-          : { result: 'loss', headline: "CALLOWAY'S WARD, STILL", text: `A year on: ${tally}. The Nephew is a nuisance, not a rival. Aldo will hear about this in Joliet.` };
+          ? {
+              result: 'draw',
+              headline: 'NEPHEW STILL STANDING',
+              text: `A year ago the Nephew had $300 and two cousins. Now: ${tally}. A small outfit, but a real one.`,
+            }
+          : {
+              result: 'loss',
+              headline: "CALLOWAY'S WARD, STILL",
+              text: `A year on: ${tally}. The Nephew is a nuisance, not a rival. Aldo will hear about this in Joliet.`,
+            };
   }
 }
 

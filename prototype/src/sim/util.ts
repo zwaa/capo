@@ -1,6 +1,19 @@
 import type { Branch, Building, FamilyId, GameState, Hood, Job, JobKind, Person, SpecialistKind } from './types';
 
-export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+export const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
 export const DAYS = 30;
 export const LT_CAP = 6;
 export const MAX_BRANCHES = 3;
@@ -17,7 +30,8 @@ export const person = (s: GameState, id: string | null) => (id ? s.people.find((
 export const bossOf = (s: GameState, f: FamilyId) => person(s, s.families[f].bossId)!;
 
 /** Everyone still in the family (including wounded and jailed). */
-export const members = (s: GameState, f: FamilyId) => s.people.filter((p) => p.family === f && p.status !== 'dead' && p.status !== 'defected');
+export const members = (s: GameState, f: FamilyId) =>
+  s.people.filter((p) => p.family === f && p.status !== 'dead' && p.status !== 'defected');
 export const active = (s: GameState, f: FamilyId) => s.people.filter((p) => p.family === f && p.status === 'active');
 export const lieutenants = (s: GameState, f: FamilyId) => members(s, f).filter((p) => p.role === 'lt');
 
@@ -61,20 +75,174 @@ export interface JobInfo {
 }
 
 export const JOBS: Record<JobKind, JobInfo> = {
-  collect: { branch: 'protection', label: 'Collect protection', verb: 'Collecting', target: 'none', ongoing: true, car: false, work: 0, risky: false, stat: 'muscle', hint: 'One pair of hands per five shops. Shops nobody collects from stop paying.' },
-  signup: { branch: 'protection', label: 'Sign up a shop', verb: 'Signing up', target: 'signup', ongoing: false, car: false, work: 4, risky: false, stat: 'charm', hint: 'One pair of hands (three if Calloway already protects it, and expect a fight).' },
-  guard: { branch: 'enforcement', label: 'Guard a place', verb: 'Guarding', target: 'guard', ongoing: true, car: false, work: 0, risky: false, stat: 'muscle', hint: 'Two hoods. Makes it much harder to take.' },
-  hit: { branch: 'enforcement', label: 'Hit a man', verb: 'Hitting', target: 'hit', ongoing: false, car: true, work: 2, risky: true, stat: 'nerve', hint: 'Three hoods and a car. Very loud.' },
-  wreck: { branch: 'enforcement', label: 'Wreck a racket', verb: 'Wrecking', target: 'wreck', ongoing: false, car: false, work: 2, risky: true, stat: 'muscle', hint: 'Three hoods. Smash a Calloway back room.' },
-  buy: { branch: 'acquisitions', label: 'Buy a building', verb: 'Buying', target: 'buy', ongoing: false, car: false, work: 3, risky: false, stat: 'brains', hint: 'One hood and the price. Cheaper if we already protect it.' },
-  takeover: { branch: 'acquisitions', label: 'Take over a building', verb: 'Taking over', target: 'takeover', ongoing: false, car: true, work: 3, risky: true, stat: 'muscle', hint: 'Four hoods and a car. Take a Calloway building by force.' },
-  fitout: { branch: 'fronts', label: 'Fit out a back room', verb: 'Fitting out', target: 'fitout', ongoing: false, car: false, work: 4, risky: false, stat: 'brains', hint: 'One pair of hands and $300. The front decides what kind.' },
-  phone: { branch: 'fronts', label: 'Put in a telephone', verb: 'Wiring', target: 'phone', ongoing: false, car: false, work: 2, risky: false, stat: 'brains', hint: 'One hood and $150. Whoever works from here gets orders at once.' },
-  runSpeak: { branch: 'speakeasies', label: 'Run the speakeasies', verb: 'Running bars', target: 'none', ongoing: true, car: false, work: 0, risky: false, stat: 'charm', hint: 'One hood per bar. Each bar pours 15 cases a month.' },
-  runGamble: { branch: 'gambling', label: 'Run the gambling', verb: 'Running dens', target: 'none', ongoing: true, car: false, work: 0, risky: false, stat: 'brains', hint: 'One hood per den.' },
-  distill: { branch: 'bootlegging', label: 'Run the stills', verb: 'Distilling', target: 'none', ongoing: true, car: false, work: 0, risky: false, stat: 'brains', hint: 'One hood per still. Each makes 25 cases a month.' },
-  supply: { branch: 'bootlegging', label: 'Supply run', verb: 'Supplying', target: 'none', ongoing: true, car: true, work: 0, risky: false, stat: 'nerve', hint: 'One hood and a truck. Without it, bars buy liquor on the open market.' },
-  payoff: { branch: 'police', label: 'Pay the captain', verb: 'Paying off', target: 'none', ongoing: true, car: false, work: 0, risky: false, stat: 'charm', hint: 'About $250 a month (less with Charm). Halves raids and cools heat.' },
+  collect: {
+    branch: 'protection',
+    label: 'Collect protection',
+    verb: 'Collecting',
+    target: 'none',
+    ongoing: true,
+    car: false,
+    work: 0,
+    risky: false,
+    stat: 'muscle',
+    hint: 'One pair of hands per five shops. Shops nobody collects from stop paying.',
+  },
+  signup: {
+    branch: 'protection',
+    label: 'Sign up a shop',
+    verb: 'Signing up',
+    target: 'signup',
+    ongoing: false,
+    car: false,
+    work: 4,
+    risky: false,
+    stat: 'charm',
+    hint: 'One pair of hands (three if Calloway already protects it, and expect a fight).',
+  },
+  guard: {
+    branch: 'enforcement',
+    label: 'Guard a place',
+    verb: 'Guarding',
+    target: 'guard',
+    ongoing: true,
+    car: false,
+    work: 0,
+    risky: false,
+    stat: 'muscle',
+    hint: 'Two hoods. Makes it much harder to take.',
+  },
+  hit: {
+    branch: 'enforcement',
+    label: 'Hit a man',
+    verb: 'Hitting',
+    target: 'hit',
+    ongoing: false,
+    car: true,
+    work: 2,
+    risky: true,
+    stat: 'nerve',
+    hint: 'Three hoods and a car. Very loud.',
+  },
+  wreck: {
+    branch: 'enforcement',
+    label: 'Wreck a racket',
+    verb: 'Wrecking',
+    target: 'wreck',
+    ongoing: false,
+    car: false,
+    work: 2,
+    risky: true,
+    stat: 'muscle',
+    hint: 'Three hoods. Smash a Calloway back room.',
+  },
+  buy: {
+    branch: 'acquisitions',
+    label: 'Buy a building',
+    verb: 'Buying',
+    target: 'buy',
+    ongoing: false,
+    car: false,
+    work: 3,
+    risky: false,
+    stat: 'brains',
+    hint: 'One hood and the price. Cheaper if we already protect it.',
+  },
+  takeover: {
+    branch: 'acquisitions',
+    label: 'Take over a building',
+    verb: 'Taking over',
+    target: 'takeover',
+    ongoing: false,
+    car: true,
+    work: 3,
+    risky: true,
+    stat: 'muscle',
+    hint: 'Four hoods and a car. Take a Calloway building by force.',
+  },
+  fitout: {
+    branch: 'fronts',
+    label: 'Fit out a back room',
+    verb: 'Fitting out',
+    target: 'fitout',
+    ongoing: false,
+    car: false,
+    work: 4,
+    risky: false,
+    stat: 'brains',
+    hint: 'One pair of hands and $300. The front decides what kind.',
+  },
+  phone: {
+    branch: 'fronts',
+    label: 'Put in a telephone',
+    verb: 'Wiring',
+    target: 'phone',
+    ongoing: false,
+    car: false,
+    work: 2,
+    risky: false,
+    stat: 'brains',
+    hint: 'One hood and $150. Whoever works from here gets orders at once.',
+  },
+  runSpeak: {
+    branch: 'speakeasies',
+    label: 'Run the speakeasies',
+    verb: 'Running bars',
+    target: 'none',
+    ongoing: true,
+    car: false,
+    work: 0,
+    risky: false,
+    stat: 'charm',
+    hint: 'One hood per bar. Each bar pours 15 cases a month.',
+  },
+  runGamble: {
+    branch: 'gambling',
+    label: 'Run the gambling',
+    verb: 'Running dens',
+    target: 'none',
+    ongoing: true,
+    car: false,
+    work: 0,
+    risky: false,
+    stat: 'brains',
+    hint: 'One hood per den.',
+  },
+  distill: {
+    branch: 'bootlegging',
+    label: 'Run the stills',
+    verb: 'Distilling',
+    target: 'none',
+    ongoing: true,
+    car: false,
+    work: 0,
+    risky: false,
+    stat: 'brains',
+    hint: 'One hood per still. Each makes 25 cases a month.',
+  },
+  supply: {
+    branch: 'bootlegging',
+    label: 'Supply run',
+    verb: 'Supplying',
+    target: 'none',
+    ongoing: true,
+    car: true,
+    work: 0,
+    risky: false,
+    stat: 'nerve',
+    hint: 'One hood and a truck. Without it, bars buy liquor on the open market.',
+  },
+  payoff: {
+    branch: 'police',
+    label: 'Pay the captain',
+    verb: 'Paying off',
+    target: 'none',
+    ongoing: true,
+    car: false,
+    work: 0,
+    risky: false,
+    stat: 'charm',
+    hint: 'About $250 a month (less with Charm). Halves raids and cools heat.',
+  },
 };
 
 export const jobsForBranch = (b: Branch) => (Object.keys(JOBS) as JobKind[]).filter((k) => JOBS[k].branch === b);
@@ -127,12 +295,18 @@ export function seenTile(s: GameState, x: number, y: number): boolean {
 
 /** Who runs a branch, and which branches a person runs. */
 export const runner = (s: GameState, f: FamilyId, b: Branch) => person(s, s.families[f].branches[b])!;
-export const branchesOf = (s: GameState, p: Person) => BRANCHES.filter((b) => s.families[p.family].branches[b.id] === p.id).map((b) => b.id);
+export const branchesOf = (s: GameState, p: Person) =>
+  BRANCHES.filter((b) => s.families[p.family].branches[b.id] === p.id).map((b) => b.id);
 
 // ---------------------------------------------------------------- prices
 
 export const SPECIALISTS: Record<SpecialistKind, { name: string; title: string; retainer: number; hint: string }> = {
-  recruiter: { name: 'Benny Albrecht', title: 'Recruiter', retainer: 120, hint: 'More, and better, hoods looking for work, at $60 instead of $100' },
+  recruiter: {
+    name: 'Benny Albrecht',
+    title: 'Recruiter',
+    retainer: 120,
+    hint: 'More, and better, hoods looking for work, at $60 instead of $100',
+  },
   armourer: { name: 'Ziggy Novak', title: 'Armourer', retainer: 150, hint: 'Guns cost $25 instead of $40; crews hit harder' },
   mechanic: { name: 'Lena Sorensen', title: 'Mechanic', retainer: 120, hint: 'Cars cost $180 instead of $300; faster, and half the tails' },
   lawyer: { name: 'J. Whitcombe Pruitt', title: 'Lawyer', retainer: 200, hint: 'Arrests stick half as often; time inside is shorter' },

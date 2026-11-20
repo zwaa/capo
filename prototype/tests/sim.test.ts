@@ -35,9 +35,20 @@ describe('determinism', () => {
     for (const seed of [1, 7, 42]) expect(JSON.stringify(autoplay(seed))).toBe(JSON.stringify(autoplay(seed)));
   });
   it('different seeds give different cities and different hoods for hire', () => {
-    const at = (n: number) => createGame(n).buildings.map((b) => `${b.x},${b.y}`).join();
+    const at = (n: number) =>
+      createGame(n)
+        .buildings.map((b) => `${b.x},${b.y}`)
+        .join();
     expect(at(1)).not.toBe(at(2));
-    expect(createGame(1).market.map((h) => h.name).join()).not.toBe(createGame(2).market.map((h) => h.name).join());
+    expect(
+      createGame(1)
+        .market.map((h) => h.name)
+        .join(),
+    ).not.toBe(
+      createGame(2)
+        .market.map((h) => h.name)
+        .join(),
+    );
   });
 });
 
@@ -162,7 +173,11 @@ describe('promotion and branches', () => {
       h.xp = PROMOTE_XP;
       s.families.player.actions = 5;
       bossAction(s, { kind: 'promote', hood: h.id });
-      s.market.push(...createGame(100 + i).market.slice(0, 1).map((m) => ({ ...m, id: `x${i}` })));
+      s.market.push(
+        ...createGame(100 + i)
+          .market.slice(0, 1)
+          .map((m) => ({ ...m, id: `x${i}` })),
+      );
     }
     expect(lieutenants(s, 'player').length).toBe(LT_CAP);
   });
