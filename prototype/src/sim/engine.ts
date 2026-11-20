@@ -145,6 +145,32 @@ function seasoned(s: GameState, j: Job, stat?: 'muscle' | 'brains' | 'nerve' | '
 
 // ---------------------------------------------------------------- orders API (between months)
 
+/** An order the player could give about one target (a building or a rival), e.g. from the map. */
+export interface TargetOrder {
+  kind: JobKind;
+  target: string;
+  /** Who would carry it out: whoever runs that job's branch. */
+  runner: string;
+  /** If it's already on someone's list: who, and which job. */
+  queued: { person: string; job: string } | null;
+}
+
+/** Every order that makes sense about this target right now, in job-table order. */
+export function ordersFor(s: GameState, targetId: string): TargetOrder[] {
+  const out: TargetOrder[] = [];
+  for (const kind of Object.keys(JOBS) as JobKind[]) {
+    if (JOBS[kind].target === 'none') continue;
+    if (!targets(s, 'player', kind).some((t) => t.id === targetId)) continue;
+    let queued: TargetOrder['queued'] = null;
+    for (const p of members(s, 'player')) {
+      const j = p.jobs.find((x) => x.kind === kind && x.target === targetId && !x.done);
+      if (j) queued = { person: p.id, job: j.id };
+    }
+    out.push({ kind, target: targetId, runner: s.families.player.branches[JOBS[kind].branch], queued });
+  }
+  return out;
+}
+
 export function addJob(s: GameState, personId: string, kind: JobKind, target: string | null, posture: Posture = 'firm'): Job | null {
   const p = person(s, personId);
   if (!p || p.family !== 'player') return null;

@@ -43,15 +43,23 @@ export class WardMap {
   showOrders = true;
   state: GameState | null = null;
   onHover: (b: Building | null, p: Person | null, px: number, py: number) => void = () => {};
+  /** A click or tap on the map (b and p are null for an empty spot). */
+  onPick: (b: Building | null, p: Person | null, px: number, py: number) => void = () => {};
+  /** The tile picked for orders, outlined on the map. */
+  selected: Pos | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
     new ResizeObserver(() => this.resize()).observe(canvas);
-    canvas.addEventListener('mousemove', (e) => this.hover(e));
+    canvas.addEventListener('mousemove', (e) => {
+      const h = this.hit(e);
+      if (h) this.onHover(h.b, h.p, h.px, h.py);
+    });
     canvas.addEventListener('mouseleave', () => this.onHover(null, null, 0, 0));
-    // Touch screens have no hover: a tap shows the same details.
-    canvas.addEventListener('pointerdown', (e) => {
-      if (e.pointerType !== 'mouse') this.hover(e);
+    // A click (or a tap, on touch screens) picks what's there.
+    canvas.addEventListener('click', (e) => {
+      const h = this.hit(e);
+      if (h) this.onPick(h.b, h.p, h.px, h.py);
     });
     this.loop = this.loop.bind(this);
     this.raf = requestAnimationFrame(this.loop);
@@ -96,9 +104,10 @@ export class WardMap {
     if (first) this.resize();
   }
 
-  private hover(e: MouseEvent): void {
+  /** What's under the pointer: a building and/or a visible person, in canvas pixels. */
+  private hit(e: MouseEvent): { b: Building | null; p: Person | null; px: number; py: number } | null {
     const s = this.state;
-    if (!s) return;
+    if (!s) return null;
     const r = this.canvas.getBoundingClientRect();
     const px = e.clientX - r.left;
     const py = e.clientY - r.top;
@@ -106,7 +115,7 @@ export class WardMap {
     const ty = Math.floor((py - this.oy) / this.tile);
     const b = s.buildings.find((b) => b.x === tx && b.y === ty) ?? null;
     const p = s.people.find((p) => p.status === 'active' && p.x === tx && p.y === ty && visible(s, p)) ?? null;
-    this.onHover(b, p, px, py);
+    return { b, p, px, py };
   }
 
   private loop(now: number): void {
@@ -261,6 +270,17 @@ export class WardMap {
       g.textAlign = 'center';
       g.textBaseline = 'middle';
       g.fillText(p.name[0], cx, cy + 0.5);
+    }
+
+    // The tile picked for orders: a dashed frame.
+    if (this.selected) {
+      g.save();
+      g.strokeStyle = C.ink;
+      g.lineWidth = 2;
+      g.setLineDash([5, 4]);
+      g.lineDashOffset = -(now / 60) % 9;
+      g.strokeRect(this.ox + this.selected.x * T + 1, this.oy + this.selected.y * T + 1, T - 2, T - 2);
+      g.restore();
     }
 
     if (this.pulse && now < this.pulse.until) {
