@@ -28,7 +28,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'street',
     title: 'Work the street',
-    body: 'You have your cousins Vito and Carlo, two pistols and $300. Start where everyone starts: protection. Your list already has **Collect protection** and one **Sign up a shop** job. Add more sign-ups for the shops near your room. Each job takes whoever suits it best: Carlo can talk, Vito can lean. Every shop that signs up pays each month, as long as someone goes round to collect.',
+    body: 'You have your cousins Vito and Carlo, two pistols and $300. Start where everyone starts: protection. Your list already has **Collect protection** and one **Sign up a shop** job. Add more sign-ups for the shops near your room: **click a shop on the map** and choose an order. Each job takes whoever suits it best: Carlo can talk, Vito can lean. Every shop that signs up pays each month, as long as someone goes round to collect.',
     goal: 'Get 4 shops paying protection',
     done: (s) => protectedBy(s, 'player').length >= 4,
     start: (s) => {

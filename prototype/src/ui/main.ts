@@ -4,6 +4,7 @@ import {
   WIN_SCORE,
   addJob,
   answer,
+  ordersFor,
   assignBranch,
   bossAction,
   canAct,
@@ -30,6 +31,7 @@ import { POOL, streetOf } from '../sim/setup';
 import type { Branch, Building, Card, GameState, Hood, Job, JobKind, Person, Posture, SpecialistKind } from '../sim/types';
 import {
   BRANCHES,
+  building,
   PROMOTE_XP,
   WAGE,
   crewOf,
@@ -94,10 +96,11 @@ app.innerHTML = `
     <div class="mapwrap">
       <canvas id="map" aria-label="Map of the ward"></canvas>
       <div class="tip" id="tip" hidden></div>
+      <div class="pick" id="pick" role="dialog" aria-label="Orders for this spot" hidden></div>
       <div class="legend">
         <span><i style="background:#e3a23b"></i>Russo</span>
         <span><i style="background:#5f9fb8"></i>Calloway</span>
-        <span class="key">Filled: owned · Striped awning: pays protection · S speakeasy · G gambling · D still · ■ telephone</span>
+        <span class="key">Click a building for orders · Filled: owned · Striped awning: pays protection · S speakeasy · G gambling · D still · ■ telephone</span>
       </div>
     </div>
     <aside class="side" id="side"></aside>
@@ -110,6 +113,9 @@ const bar = document.getElementById('bar')!;
 const side = document.getElementById('side')!;
 const overlay = document.getElementById('overlay')!;
 const tip = document.getElementById('tip')!;
+const pickEl = document.getElementById('pick')!;
+/** What's picked on the map (for the orders menu), and where the click was. */
+let picked: { b: Building | null; p: Person | null; px: number; py: number } | null = null;
 const map = new WardMap(document.getElementById('map') as HTMLCanvasElement);
 
 // ---------------------------------------------------------------- helpers
@@ -171,6 +177,7 @@ function load(): GameState | null {
 
 function newGame(lessons = true): void {
   stop();
+  closePick();
   s = createGame((Math.random() * 2 ** 31) | 0, undefined, lessons);
   phase = 'paper';
   note = '';
@@ -637,6 +644,9 @@ function render(): void {
   renderBar();
   side.innerHTML = phase === 'watch' || phase === 'plans' ? renderWatch() : renderOrders();
   renderOverlay();
+  // The map menu follows the game: refreshed between months, gone when paperwork covers the map.
+  if (picked && (phase === 'orders' || phase === 'watch')) renderPick();
+  else if (picked) closePick();
 }
 
 // ---------------------------------------------------------------- the clock
@@ -710,6 +720,22 @@ document.addEventListener('click', (e) => {
   if (!el || el.disabled) return;
   const d = el.dataset;
   const scope = d.scope ?? 'orders';
+
+  // Orders given from the map menu.
+  if (d.pickAdd) {
+    const [runner, kind, target] = d.pickAdd.split('|');
+    note = addJob(s, runner, kind as JobKind, target) ? '' : 'That order could not be given.';
+    advanceLessons(s);
+    save();
+    return render();
+  }
+  if (d.pickDel) {
+    const [who, job] = d.pickDel.split('|');
+    removeJob(s, who, job);
+    save();
+    return render();
+  }
+  if (d.act === 'pick-close') return closePick();
 
   if (d.jposture && d.p && d.j) {
     if (scope === 'plans') {
@@ -825,10 +851,13 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('pointerdown', (e) => {
-  if (!(e.target as HTMLElement).closest('canvas')) tip.hidden = true;
+  const t = e.target as HTMLElement;
+  if (!t.closest('canvas')) tip.hidden = true;
+  if (picked && !t.closest('canvas, #pick')) closePick();
 });
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && picked) return closePick();
   if (e.code !== 'Space' || phase !== 'watch' || s.run?.queue.length) return;
   if ((e.target as HTMLElement).closest('select, button, input')) return;
   e.preventDefault();
@@ -838,10 +867,89 @@ document.addEventListener('keydown', (e) => {
 });
 
 map.onHover = (b: Building | null, p: Person | null, px: number, py: number) => {
-  if (!b && !p) {
+  if ((!b && !p) || picked) {
     tip.hidden = true;
     return;
   }
+  tip.innerHTML = describe(b, p);
+  tip.hidden = false;
+  const wrap = tip.parentElement!.getBoundingClientRect();
+  tip.style.left = `${Math.max(4, Math.min(px + 14, wrap.width - 250))}px`;
+  tip.style.top = `${Math.max(4, Math.min(py + 14, wrap.height - 150))}px`;
+};
+
+// ---------------------------------------------------------------- orders from the map
+
+const ORDER_VERB: Partial<Record<JobKind, string>> = {
+  signup: 'Sign them up for protection',
+  guard: 'Guard it',
+  hit: 'Hit them',
+  wreck: 'Wreck the back room',
+  buy: 'Buy it',
+  takeover: 'Take it over',
+  fitout: 'Fit out a back room',
+  phone: 'Put in a telephone',
+};
+
+function closePick(): void {
+  picked = null;
+  map.selected = null;
+  pickEl.hidden = true;
+}
+
+/** Info about what was clicked, plus the orders that make sense there (between months only). */
+function renderPick(): void {
+  if (!picked) return;
+  const { b, p, px, py } = picked;
+  let html = `<button class="ic close" data-act="pick-close" aria-label="Close">✕</button><div class="pick-info">${describe(b, p)}</div>`;
+  if (phase === 'orders') {
+    const ids = [b?.id, p && p.family === 'rival' ? p.id : undefined].filter((x): x is string => !!x);
+    const orders = ids.flatMap((id) => ordersFor(s, id));
+    if (orders.length) {
+      html += `<div class="pick-orders">${orders
+        .map((o) => {
+          const runner = person(s, o.runner)!;
+          const who = runner.role === 'boss' ? 'you' : first(runner);
+          const branch = BRANCHES.find((x) => x.id === JOBS[o.kind].branch)!.label;
+          const target = building(s, o.target) ?? null;
+          const extra = o.kind === 'buy' && target ? ` (${money(price(target, 'player'))})` : '';
+          const title = ORDER_VERB[o.kind] ?? JOBS[o.kind].label;
+          if (o.queued) {
+            const q = person(s, o.queued.person)!;
+            const qj = q.jobs.find((j) => j.id === o.queued!.job);
+            return `<div class="po queued"><span><b>${esc(title)}</b><small>On ${esc(q.role === 'boss' ? 'your' : `${first(q)}'s`)} list${qj?.stalled ? `: ${esc(qj.stalled)}` : ''}</small></span>
+              <button class="small" data-pick-del="${q.id}|${o.queued.job}">Cancel</button></div>`;
+          }
+          return `<div class="po"><span><b>${esc(title)}${esc(extra)}</b><small>${esc(branch)}, by ${esc(who)}.<span class="po-hint"> ${esc(JOBS[o.kind].hint)}</span></small></span>
+            <button class="small" data-pick-add="${o.runner}|${o.kind}|${o.target}">Order</button></div>`;
+        })
+        .join('')}</div>`;
+    } else {
+      html += '<p class="hint">Nothing to order here right now.</p>';
+    }
+  } else if (phase === 'watch') {
+    html += '<p class="hint">Orders are given between months. Use a Change of Plans if something comes up.</p>';
+  }
+  pickEl.innerHTML = html;
+  pickEl.hidden = false;
+  // Keep it inside the map, next to the click.
+  const wrap = pickEl.parentElement!.getBoundingClientRect();
+  const w = pickEl.offsetWidth;
+  const h = pickEl.offsetHeight;
+  pickEl.style.left = `${Math.max(4, Math.min(px + 14, wrap.width - w - 4))}px`;
+  pickEl.style.top = `${Math.max(4, Math.min(py + 14, wrap.height - h - 4))}px`;
+}
+
+map.onPick = (b: Building | null, p: Person | null, px: number, py: number) => {
+  if (!b && !p) return closePick();
+  tip.hidden = true;
+  picked = { b, p, px, py };
+  map.selected = b ?? p;
+  renderPick();
+};
+
+/** The details shown on hover and at the top of the orders menu. */
+function describe(b: Building | null, p: Person | null): string {
   let html = '';
   if (p) {
     const top = p.jobs.find((j) => !j.done && !j.stalled && j.hoods);
@@ -862,12 +970,8 @@ map.onHover = (b: Building | null, p: Person | null, px: number, py: number) => 
       ${b.racket ? `Back room: ${b.racket}${b.raided ? ' (shut by a raid)' : ''}` : `Could hold a ${b.suits}`}<br>
       ${b.owner ? '' : `Protection: ${money(b.protection)} a month<br>`}${!b.owner && b.protectedBy !== 'rival' ? `To buy: ${money(price(b, 'player'))}<br>` : ''}${b.telephone ? 'Telephone line' : ''}`;
   }
-  tip.innerHTML = html;
-  tip.hidden = false;
-  const wrap = tip.parentElement!.getBoundingClientRect();
-  tip.style.left = `${Math.max(4, Math.min(px + 14, wrap.width - 250))}px`;
-  tip.style.top = `${Math.max(4, Math.min(py + 14, wrap.height - 150))}px`;
-};
+  return html;
+}
 
 // ---------------------------------------------------------------- boot
 

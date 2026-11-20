@@ -12,6 +12,7 @@ import {
   hireHood,
   moveHood,
   moveJob,
+  ordersFor,
   purchase,
   reach,
   startMonth,
@@ -118,6 +119,28 @@ describe('jobs and squads', () => {
     purchase(s, 'player', 'car');
     expect(j.stalled).toBeNull();
     expect(j.squad).toHaveLength(4);
+  });
+});
+
+describe('orders from the map', () => {
+  it('offers the orders that fit a target, to whoever runs the branch', () => {
+    const s = createGame(13);
+    const free = s.buildings.find((b) => !b.owner && !b.protectedBy)!;
+    const kinds = ordersFor(s, free.id).map((o) => o.kind);
+    expect(kinds).toContain('signup');
+    expect(kinds).toContain('buy');
+    expect(kinds).not.toContain('takeover');
+    for (const o of ordersFor(s, free.id)) expect(o.runner).toBe(bossOf(s, 'player').id);
+    const theirs = s.buildings.find((b) => b.owner === 'rival')!;
+    expect(ordersFor(s, theirs.id).map((o) => o.kind)).toContain('takeover');
+  });
+  it('shows an order as queued once it is on a list', () => {
+    const s = createGame(13);
+    const free = s.buildings.find((b) => !b.owner && !b.protectedBy && !bossOf(s, 'player').jobs.some((j) => j.target === b.id))!;
+    const buy = ordersFor(s, free.id).find((o) => o.kind === 'buy')!;
+    expect(buy.queued).toBeNull();
+    const j = addJob(s, buy.runner, 'buy', free.id)!;
+    expect(ordersFor(s, free.id).find((o) => o.kind === 'buy')!.queued).toEqual({ person: buy.runner, job: j.id });
   });
 });
 

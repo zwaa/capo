@@ -185,6 +185,7 @@ button {
   width: 100%;
   height: 100%;
   display: block;
+  cursor: pointer;
 }
 .tip {
   position: absolute;
@@ -201,6 +202,78 @@ button {
   font: 700 13px var(--head);
   letter-spacing: 0.02em;
   display: block;
+}
+
+/* The orders menu that opens when you click the map. */
+.pick {
+  position: absolute;
+  z-index: 6;
+  width: min(330px, calc(100% - 8px));
+  max-height: calc(100% - 8px);
+  overflow-y: auto;
+  background: var(--paper);
+  color: var(--paper-ink);
+  padding: 12px 12px 10px;
+  font: 12.5px/1.4 var(--body);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.55);
+  display: grid;
+  gap: 8px;
+}
+.pick .close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: transparent;
+  border-color: var(--paper-dim);
+  color: var(--paper-ink);
+}
+.pick-info {
+  padding-right: 28px;
+}
+.pick-info b {
+  font: 700 14px var(--head);
+  letter-spacing: 0.02em;
+  display: block;
+}
+.pick-orders {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid var(--paper-dim);
+  padding-top: 8px;
+}
+.po {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.po > span {
+  display: grid;
+  min-width: 0;
+}
+.po b {
+  font: 700 13.5px var(--head);
+  letter-spacing: 0.02em;
+}
+.po small {
+  color: var(--paper-dim);
+  font-size: 11.5px;
+}
+.po.queued b {
+  color: var(--paper-dim);
+}
+.pick .small {
+  background: transparent;
+  border-color: var(--paper-ink);
+  color: var(--paper-ink);
+  white-space: nowrap;
+}
+.pick .small:hover:not(:disabled) {
+  background: var(--paper-ink);
+  color: var(--paper);
+}
+.pick .hint {
+  color: var(--paper-dim);
 }
 .legend {
   position: absolute;
@@ -1150,6 +1223,10 @@ h4.sub {
 
 /* ---------------------------------------------------------------- narrow */
 @media (max-width: 860px) {
+  /* The map menu is small on a phone: who does it, not the full explanation. */
+  .po .po-hint {
+    display: none;
+  }
   /* Paperwork becomes part of the page: no inner scrolling, no fixed layer. */
   .overlay {
     position: static;
