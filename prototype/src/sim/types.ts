@@ -44,7 +44,10 @@ export interface Job {
   posture: Posture;
   // --- this month
   need: number;
+  /** Hands on the job this month (squad size). */
   hoods: number;
+  /** Who is on it: hood ids, plus the runner's own id if they went themselves. */
+  squad: string[];
   car: boolean;
   /** Why it isn't running, if it isn't. */
   stalled: string | null;
@@ -97,7 +100,6 @@ export interface Person {
   loyalty: number;
   ambition: number;
   authority: number;
-  crew: number;
   cut: number;
   status: Status;
   recover: number;
@@ -114,6 +116,29 @@ export interface Person {
   ownBuilding: string | null;
   plotting: boolean;
   wins: number;
+}
+
+/** A named hood. Works for one person (boss or lieutenant); can be promoted. */
+export interface Hood {
+  id: string;
+  name: string;
+  nickname: string;
+  family: FamilyId;
+  /** The person whose crew they're in. */
+  under: string;
+  muscle: number;
+  brains: number;
+  nerve: number;
+  charm: number;
+  /** None, one or two. Carried over if they're promoted. */
+  traits: Trait[];
+  loyalty: number;
+  /** Experience: a month's work or a job well done. Enough of it earns a promotion. */
+  xp: number;
+  status: 'active' | 'wounded' | 'jailed' | 'dead';
+  recover: number;
+  /** Short line about where they came from. */
+  bio: string;
 }
 
 export interface Line {
@@ -224,6 +249,9 @@ export interface GameState {
   height: number;
   buildings: Building[];
   people: Person[];
+  hoods: Hood[];
+  /** This month's hiring hall: hoods looking for work. */
+  market: Hood[];
   families: Record<FamilyId, Family>;
   news: NewsItem[];
   wire: WireItem[];

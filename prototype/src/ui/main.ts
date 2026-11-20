@@ -20,15 +20,24 @@ import {
   setPosture,
   startMonth,
   stepDay,
-  transferHoods,
+  hireHood,
+  hoodCost,
+  moveHood,
 } from '../sim/engine';
 import type { BossAction, Purchase } from '../sim/engine';
 import { LESSONS, advanceLessons, currentLesson } from '../sim/lessons';
 import { POOL, streetOf } from '../sim/setup';
-import type { Branch, Building, Card, GameState, Job, JobKind, Person, Posture, SpecialistKind } from '../sim/types';
+import type { Branch, Building, Card, GameState, Hood, Job, JobKind, Person, Posture, SpecialistKind } from '../sim/types';
 import {
   BRANCHES,
-  HIRE_COST,
+  PROMOTE_XP,
+  WAGE,
+  crewOf,
+  crewSize,
+  has,
+  hoodFirst,
+  hoodLabel,
+  squadNames,
   JOBS,
   LT_CAP,
   MAX_BRANCHES,
@@ -57,7 +66,7 @@ import { WardMap } from './map';
 // ---------------------------------------------------------------- state
 
 type Phase = 'paper' | 'orders' | 'watch' | 'plans' | 'over';
-const SAVE_KEY = 'capo-slice-v2';
+const SAVE_KEY = 'capo-slice-v3';
 const SPEEDS = [0, 1100, 550, 220];
 
 interface Hot {
@@ -185,8 +194,39 @@ function jobStatus(j: Job, scope: string): { text: string; cls: string } {
   if (j.stalled) return { text: j.stalled, cls: 'bad' };
   if (j.need === 0) return { text: JOBS[j.kind].ongoing ? 'Nothing to do yet' : 'Ready', cls: 'idle' };
   const car = j.car ? ' · car' : '';
-  if (j.hoods < j.need) return { text: `${j.hoods} of ${j.need} hands: only partly done${car}`, cls: 'warn' };
-  return { text: `${j.hoods} hand${j.hoods === 1 ? '' : 's'}${car}`, cls: 'ok' };
+  const who = squadNames(s, j);
+  if (j.hoods < j.need) return { text: `${who}: ${j.hoods} of ${j.need} hands, only partly done${car}`, cls: 'warn' };
+  return { text: `${who}${car}`, cls: 'ok' };
+}
+
+// ---------------------------------------------------------------- hoods
+
+function statLine(h: { muscle: number; brains: number; nerve: number; charm: number }): string {
+  const best = Math.max(h.muscle, h.brains, h.nerve, h.charm);
+  const one = (k: string, v: number) => `<span class="${v === best ? 'top' : ''}" title="${k}">${k[0]}${v}</span>`;
+  return `<span class="hstats">${one('Muscle', h.muscle)}${one('Brains', h.brains)}${one('Nerve', h.nerve)}${one('Charm', h.charm)}</span>`;
+}
+
+function xpPips(h: Hood): string {
+  if (h.xp >= PROMOTE_XP) return '<span class="chip ok">Lieutenant material</span>';
+  return `<span class="pips" title="Experience ${h.xp} of ${PROMOTE_XP} to be promoted">${'●'.repeat(h.xp)}${'○'.repeat(PROMOTE_XP - h.xp)}</span>`;
+}
+
+function hoodStatus(h: Hood): string {
+  return h.status === 'wounded' ? '<span class="chip warn">In hospital</span>' : h.status === 'jailed' ? '<span class="chip warn">In a cell</span>' : '';
+}
+
+/** One hood in a crew: stats, experience, whose crew, and a promotion when earned. */
+function hoodRow(h: Hood): string {
+  const people = members(s, 'player');
+  const opts = people.map((p) => `<option value="${p.id}" ${h.under === p.id ? 'selected' : ''}>${esc(p.role === 'boss' ? `${first(p)}'s crew (you)` : `${first(p)}'s crew`)}</option>`).join('');
+  const promote = h.xp >= PROMOTE_XP ? actButton({ kind: 'promote', hood: h.id }, 'Promote (1 meeting)') : '';
+  return `<div class="hood ${h.status === 'active' ? '' : 'out'}" title="${esc(h.bio)}">
+    <div class="hn"><b>${esc(hoodLabel(h))}</b>
+      <small>${statLine(h)}${h.traits.map((t) => ` · ${TRAIT[t]}`).join('')}</small></div>
+    <div class="hx">${hoodStatus(h)}${xpPips(h)}</div>
+    <div class="hc">${people.length > 1 ? `<select data-movehood="${h.id}" aria-label="Whose crew ${esc(hoodFirst(h))} is in">${opts}</select>` : ''}${promote}</div>
+  </div>`;
 }
 
 function jobList(p: Person, jobs: Job[], scope: 'orders' | 'plans'): string {
@@ -253,22 +293,20 @@ function personCard(p: Person): string {
   const demand = p.demand
     ? `<div class="demand"><span>${esc(first(p))} ${esc(p.demand.text)}.${p.demand.age ? ` Waiting ${p.demand.age} month${p.demand.age > 1 ? 's' : ''}.` : ''}</span>${actButton({ kind: 'grant', lt: p.id }, 'Grant it (1 meeting)')}</div>`
     : '';
-  const hoods =
-    p.role === 'boss'
-      ? `<span>Crew <b>${p.crew}</b> + ${esc(first(p))}</span><span class="hint">Buy hoods under Supplies</span>`
-      : `<span>Crew <b>${p.crew}</b> + ${esc(first(p))}</span>
-         <button class="ic" data-act="take" data-p="${p.id}" ${p.crew ? '' : 'disabled'} aria-label="Send a hood back to ${esc(first(boss))}" title="Send a hood back to ${esc(first(boss))}">−</button>
-         <button class="ic" data-act="give" data-p="${p.id}" ${boss.crew ? '' : 'disabled'} aria-label="Give one of ${esc(first(boss))}'s hoods" title="Give one of ${esc(first(boss))}'s hoods">+</button>`;
+  const crew = crewOf(s, p);
+  const hoods = `<div class="crew"><h4 class="sub">${esc(p.role === 'boss' ? 'Your crew' : `${first(p)}'s crew`)} (${crew.length})</h4>
+    ${crew.map(hoodRow).join('') || `<p class="hint">${p.role === 'boss' ? 'Nobody. Take someone on from the hiring hall below.' : `Nobody yet. Move hoods across from ${esc(first(boss))}'s crew.`}</p>`}
+  </div>`;
   return `<div class="lt ${p.status === 'active' ? '' : 'out'} ${p.role === 'boss' ? 'boss' : ''}">
     <div class="lt-head"><span class="lt-name">${esc(p.name.split(' ')[0])} <q>${esc(p.nickname)}</q> ${esc(p.name.split(' ').slice(1).join(' '))}</span>
       <span class="chip ${st ? 'warn' : m.cls}" ${p.role === 'lt' ? 'title="Loyalty is hidden. This is how they seem."' : ''}>${st || m.text}</span></div>
     ${p.traits.length ? `<div class="chips">${p.traits.map((t) => `<span class="chip">${TRAIT[t]}</span>`).join('')}</div>` : ''}
     <div class="stats"><span>Muscle <b>${p.muscle}</b></span><span>Brains <b>${p.brains}</b></span><span>Nerve <b>${p.nerve}</b></span><span>Charm <b>${p.charm}</b></span></div>
-    <div class="stats hoods">${hoods}</div>
     ${p.role === 'lt' ? `<div class="meter"><span>Ambition</span><div><i style="width:${p.ambition}%"></i></div></div>` : ''}
     <div class="chips">${branches || '<span class="hint">No branches yet</span>'}</div>
     ${demand}
     ${jobList(p, p.jobs, 'orders')}
+    ${hoods}
   </div>`;
 }
 
@@ -292,8 +330,8 @@ function candidates(): string {
       return `<div class="lt candidate"><div class="lt-head"><span class="lt-name">${esc(r.name.split(' ')[0])} <q>${esc(r.nickname)}</q> ${esc(r.name.split(' ').slice(1).join(' '))}</span></div>
         <div class="chips">${r.traits.map((t) => `<span class="chip">${TRAIT[t]}</span>`).join('')}</div>
         <div class="stats"><span>Muscle <b>${r.s[0]}</b></span><span>Brains <b>${r.s[1]}</b></span><span>Nerve <b>${r.s[2]}</b></span><span>Charm <b>${r.s[3]}</b></span></div>
-        <p class="hint">${esc(r.pitch)}</p>
-        ${actButton({ kind: 'hire', pool: i }, 'Take them on (free, no meeting)')}</div>`;
+        <p class="hint">${esc(r.pitch)} Experienced: ready to be promoted.</p>
+        ${actButton({ kind: 'enlist', pool: i }, 'Take them on (free)')}</div>`;
     })
     .join('')}</section>`;
 }
@@ -329,9 +367,23 @@ function supplies(): string {
   const hoods = totalHoods(s, 'player');
   const row = (what: Purchase, name: string, have: string) =>
     `<div class="supply"><span><b>${esc(name)}</b><small>${esc(have)}</small></span><button class="small" data-buy="${what}" ${fam.cash < priceOf(s, what) ? 'disabled title="Not enough cash"' : ''}>Buy (${money(priceOf(s, what))})</button></div>`;
+  const hall = s.market
+    .map((h) => {
+      const cost = hoodCost(s, h);
+      return `<div class="hood hire">
+        <div class="hn"><b>${esc(hoodLabel(h))}</b><small>${statLine(h)}${h.traits.map((t) => ` · ${TRAIT[t]}`).join('')}</small><small class="bio">${esc(h.bio)}</small></div>
+        <div class="hx">${xpPips(h)}</div>
+        <div class="hc"><button class="small" data-hire="${h.id}" ${fam.cash < cost ? 'disabled title="Not enough cash"' : ''}>Take on (${money(cost)})</button></div>
+      </div>`;
+    })
+    .join('');
   return `<section>
+    <h3>Looking for work</h3>
+    <p class="hint">New faces each month${has(s, 'player', 'recruiter') ? ', found by your recruiter' : ''}. They join your own crew; move them to a lieutenant's from their row. ${hoods} on the books, ${money(WAGE)} a month each.</p>
+    ${hall || '<p class="hint">Nobody this month.</p>'}
+  </section>
+  <section>
     <h3>Supplies</h3>
-    ${row('hood', 'Hoods', `${hoods} on the books. New hoods join your own crew; pass them on with the + buttons.`)}
     ${row('gun', 'Pistols', `${fam.guns} for ${hoods} hoods${fam.guns < hoods ? ': some go in bare-handed' : ': everyone is armed'}.`)}
     ${row('car', 'Cars', `${fam.cars} in the garage. Hits, takeovers and supply runs need one each.`)}
     <div class="supply"><span><b>Liquor</b><small>${fam.liquor} cases. Bars pour 15 a month each; stills make 25.</small></span></div>
@@ -341,20 +393,17 @@ function supplies(): string {
 function meetings(): string {
   const fam = s.families.player;
   const lts = lieutenants(s, 'player').filter((l) => l.status === 'active');
-  const free = POOL.map((r, i) => ({ r, i })).filter(({ r, i }) => !s.people.some((p) => p.name === r.name) && !s.candidates.includes(i));
   const spec = (k: SpecialistKind) => {
     const info = SPECIALISTS[k];
     const hired = fam.specialists.includes(k);
     return `<div class="meeting"><span><b>${esc(info.title)}</b>${hired ? ` · ${esc(info.name)}` : ''}<small>${esc(info.hint)}. ${money(info.retainer)} a month.</small></span>
       ${hired ? '<span class="chip ok">Hired</span>' : actButton({ kind: 'specialist', which: k }, 'Hire')}</div>`;
   };
-  const hire = free.length
-    ? `<select id="hire-pool" aria-label="Who to hire">${free.map(({ r, i }) => `<option value="${i}">${esc(r.name)} (${r.traits.map((t) => TRAIT[t]).join(', ')})</option>`).join('')}</select>${actButton({ kind: 'hire', pool: free[0].i }, 'Hire', 'data-pickhire="1"')}`
-    : '<span class="hint">Nobody else is looking</span>';
+  const ready = s.hoods.filter((h) => h.family === 'player' && h.xp >= PROMOTE_XP).length;
   return `<section>
     <h3>Meetings: ${fam.actions} left this month</h3>
     ${note ? `<p class="hint" style="color:var(--lamp)">${esc(note)}</p>` : ''}
-    <div class="meeting"><span><b>Hire a lieutenant</b><small>${lieutenants(s, 'player').length} of ${LT_CAP}. ${money(HIRE_COST)} to sign them on.</small></span>${hire}</div>
+    <div class="meeting"><span><b>Promote a lieutenant</b><small>${lieutenants(s, 'player').length} of ${LT_CAP}. Lieutenants come from your own hoods: anyone with ${PROMOTE_XP} experience can be promoted from their row in a crew. ${ready ? `${ready} ready now.` : 'Nobody is ready yet.'}</small></span></div>
     <h4 class="sub">Specialists</h4>
     ${(['recruiter', 'armourer', 'mechanic', 'lawyer'] as SpecialistKind[]).map(spec).join('')}
     ${lts.length ? `<div class="meeting"><span><b>An envelope</b><small>Loyalty up. ${money(REWARD_COST)}.</small></span><select id="reward-lt" aria-label="Who gets the envelope">${lts.map((l) => `<option value="${l.id}">${esc(first(l))}</option>`).join('')}</select>${actButton({ kind: 'reward', lt: lts[0].id }, 'Give', 'data-pickreward="1"')}</div>` : ''}
@@ -402,7 +451,7 @@ function renderWatch(): string {
             return `<div class="wjob ${j.stalled ? 'bad' : ''}"><span>${esc(jobTitle(s, j))}</span><small>${esc(st)}</small><div class="bar"><i style="width:${pct}%"></i></div></div>`;
           })
           .join('');
-        return `<div class="lt ${p.status === 'active' ? '' : 'out'}"><div class="lt-head"><span class="lt-name">${esc(first(p))}</span><span class="chip">${statusOf(p) || `crew ${p.crew} + 1`}</span></div>${p.pending ? `<span class="hint">Runner arrives day ${p.pending.arriveDay}</span>` : ''}${jobs || '<span class="hint">No jobs</span>'}</div>`;
+        return `<div class="lt ${p.status === 'active' ? '' : 'out'}"><div class="lt-head"><span class="lt-name">${esc(first(p))}</span><span class="chip">${statusOf(p) || `crew ${crewSize(s, p)} + 1`}</span></div>${p.pending ? `<span class="hint">Runner arrives day ${p.pending.arriveDay}</span>` : ''}${jobs || '<span class="hint">No jobs</span>'}</div>`;
       })
       .join('')}</section>
     <section><h3>The word</h3><div class="ticker">${
@@ -582,6 +631,11 @@ function onChange(e: Event): void {
     advanceLessons(s);
     return render();
   }
+  if (d.movehood) {
+    moveHood(s, d.movehood, el.value);
+    advanceLessons(s);
+    return render();
+  }
   if (d.add && d.key) {
     const a = (adding[d.key] ??= { kind: '', target: '' });
     if (d.add === 'kind') {
@@ -610,10 +664,14 @@ document.addEventListener('click', (e) => {
 
   if (d.boss) {
     let a = JSON.parse(d.boss) as BossAction;
-    if (d.pickhire) a = { kind: 'hire', pool: Number((document.getElementById('hire-pool') as HTMLSelectElement).value) };
     if (d.pickreward) a = { kind: 'reward', lt: (document.getElementById('reward-lt') as HTMLSelectElement).value };
     note = bossAction(s, a);
     save();
+    return render();
+  }
+
+  if (d.hire) {
+    note = hireHood(s, 'player', d.hire) ?? '';
     return render();
   }
 
@@ -668,12 +726,6 @@ document.addEventListener('click', (e) => {
       adding[key] = { kind: '', target: '' };
       return render();
     }
-    case 'give':
-      transferHoods(s, s.families.player.bossId, d.p!, 1);
-      return render();
-    case 'take':
-      transferHoods(s, d.p!, s.families.player.bossId, 1);
-      return render();
     case 'new':
       return newGame(true);
     case 'new-nolessons':
@@ -733,7 +785,7 @@ map.onHover = (b: Building | null, p: Person | null, px: number, py: number) => 
   let html = '';
   if (p) {
     const top = p.jobs.find((j) => !j.done && !j.stalled && j.hoods);
-    html += `<b>${esc(label(p))}</b>${p.family === 'rival' ? 'Calloway Outfit' : 'Russo family'} · crew ${p.crew}${top && p.family === 'player' ? `<br>${esc(jobTitle(s, top))}` : ''}`;
+    html += `<b>${esc(label(p))}</b>${p.family === 'rival' ? 'Calloway Outfit' : 'Russo family'} · crew ${p.family === 'player' ? crewSize(s, p) : 'unknown'}${top && p.family === 'player' ? `<br>${esc(jobTitle(s, top))}` : ''}`;
   }
   if (b) {
     const who = b.owner === 'player' ? 'Ours' : b.owner === 'rival' ? "Calloway's" : b.protectedBy === 'player' ? 'Pays us protection' : b.protectedBy === 'rival' ? 'Pays Calloway protection' : 'Independent';

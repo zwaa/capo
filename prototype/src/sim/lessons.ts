@@ -18,7 +18,8 @@ export interface Lesson {
 
 /** Offer a lieutenant from the pool, once. */
 function offer(s: GameState, i: number): void {
-  if (!s.candidates.includes(i) && !s.people.some((p) => p.name === POOL[i].name)) s.candidates.push(i);
+  const taken = s.people.some((p) => p.name === POOL[i].name) || s.hoods.some((h) => h.name === POOL[i].name);
+  if (!s.candidates.includes(i) && !taken) s.candidates.push(i);
 }
 
 const hasJob = (s: GameState, kind: string) => members(s, 'player').some((p) => p.jobs.some((j) => j.kind === kind));
@@ -28,7 +29,7 @@ export const LESSONS: Lesson[] = [
     id: 'street',
     title: 'Work the street',
     body:
-      'You have two cousins, two pistols and $300. Start where everyone starts: protection. Your list already has **Collect protection** and one **Sign up a shop** job. Add more sign-ups for the shops near your room. Every shop that signs up pays each month, as long as someone goes round to collect.',
+      'You have your cousins Vito and Carlo, two pistols and $300. Start where everyone starts: protection. Your list already has **Collect protection** and one **Sign up a shop** job. Add more sign-ups for the shops near your room. Each job takes whoever suits it best: Carlo can talk, Vito can lean. Every shop that signs up pays each month, as long as someone goes round to collect.',
     goal: 'Get 4 shops paying protection',
     done: (s) => protectedBy(s, 'player').length >= 4,
     start: (s) => {
@@ -44,8 +45,8 @@ export const LESSONS: Lesson[] = [
     id: 'delegate',
     title: 'Hand over the street',
     body:
-      'Sal Benedetto, who collected for your uncle, is asking for work. Hire him from **Meetings** (a lesson hire costs no meeting). Then give him **Protection** under **Who runs what**, and move a couple of hoods across to him. Your jobs go with the branch. Sal is a hothead: watch what he does with them.',
-    goal: 'Give Protection to a lieutenant',
+      "Sal Benedetto, who collected for your uncle, is asking for work: **take him on**. You can't run everything yourself, and lieutenants come from your own crew. A hood with enough experience can be **promoted** (one meeting). Sal already has it; your cousins will, after a few months' work. Promote someone, give them **Protection** under **Who runs what**, and move a hood or two into their crew. Your jobs go with the branch.",
+    goal: 'Promote a hood and give them Protection',
     done: (s) => s.families.player.branches.protection !== s.families.player.bossId,
   },
   {
@@ -69,7 +70,7 @@ export const LESSONS: Lesson[] = [
     id: 'trouble',
     title: 'Calloway notices',
     body:
-      "Rosa Marchetti, who knows every bar in the ward, wants in: she'd run Vice well. And Big Jim Calloway has noticed you. Expect his men on your shops. **Guard** what matters (Enforcement), put a **telephone** where your people work (Fronts), and when the clock stops for bad news, use a **Change of Plans**.",
+      "Rosa Marchetti, who knows every bar in the ward, wants in. Take her on; with her charm she'd run the speakeasies well once you promote her. And Big Jim Calloway has noticed you. Expect his men on your shops. **Guard** what matters (Enforcement), put a **telephone** where your people work (Fronts), and when the clock stops for bad news, use a **Change of Plans**.",
     goal: 'Survive a fight, or make a Change of Plans',
     done: (s) => s.stats.fights >= 1 || s.stats.changes >= 1,
     start: (s) => notice(s),
@@ -78,7 +79,7 @@ export const LESSONS: Lesson[] = [
     id: 'fixing',
     title: 'Fix the police',
     body:
-      'Heat brings raids, and raids shut rackets and catch people. Add **Pay the captain** under **The Police**. Mickey Doyle, an ex-precinct clerk who knows which captain takes what, is available to run it.',
+      'Heat brings raids, and raids shut rackets and catch people. Add **Pay the captain** under **The Police**. Mickey Doyle, an ex-precinct clerk who knows which captain takes what, wants in: take him on, and promote him if you want someone else to run it.',
     goal: 'Put the captain on the payroll',
     done: (s) => hasJob(s, 'payoff'),
     start: (s) => offer(s, 2),
@@ -122,7 +123,7 @@ export function currentLesson(s: GameState): Lesson | null {
 export function advanceLessons(s: GameState): void {
   if (!s.lessons.on) {
     const size = owned(s, 'player').length + protectedBy(s, 'player').length;
-    if (size >= 5 || s.month >= 3) notice(s);
+    if (size >= 6 || s.month >= 5) notice(s);
     return;
   }
   if (s.month >= 6) notice(s);

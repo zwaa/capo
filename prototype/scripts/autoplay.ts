@@ -4,9 +4,8 @@
 import { planFamily } from '../src/sim/ai';
 import { answer, assignBranch, bossAction, canAct, createGame, endMonth, startMonth, stepDay, transferHoods } from '../src/sim/engine';
 import { rand } from '../src/sim/rng';
-import { POOL } from '../src/sim/setup';
 import type { Branch, GameState } from '../src/sim/types';
-import { bossOf, lieutenants, owned, protectedBy, rackets } from '../src/sim/util';
+import { PROMOTE_XP, bossOf, crewSize, lieutenants, owned, protectedBy, rackets, totalHoods } from '../src/sim/util';
 
 const PLAN: Branch[][] = [
   ['protection', 'enforcement'],
@@ -16,10 +15,13 @@ const PLAN: Branch[][] = [
 
 function manage(s: GameState): void {
   const fam = s.families.player;
-  for (const c of [...s.candidates]) bossAction(s, { kind: 'hire', pool: c });
-  if (!s.lessons.on && fam.cash > 1500 && lieutenants(s, 'player').length < 3) {
-    const i = POOL.findIndex((p) => !s.people.some((x) => x.name === p.name));
-    if (i >= 0) bossAction(s, { kind: 'hire', pool: i });
+  for (const c of [...s.candidates]) bossAction(s, { kind: 'enlist', pool: c });
+  // Promote the most capable hood who has earned it, up to three lieutenants.
+  if (lieutenants(s, 'player').length < 3) {
+    const best = s.hoods
+      .filter((h) => h.family === 'player' && h.status === 'active' && h.xp >= PROMOTE_XP)
+      .sort((a, b) => b.muscle + b.brains + b.nerve + b.charm - (a.muscle + a.brains + a.nerve + a.charm))[0];
+    if (best && crewSize(s, bossOf(s, 'player')) >= 3) bossAction(s, { kind: 'promote', hood: best.id });
   }
   lieutenants(s, 'player').forEach((l, i) => {
     // Someone inside or laid up can't run anything: the boss covers.
@@ -35,8 +37,9 @@ function manage(s: GameState): void {
   // Spread the boss's hoods to lieutenants who need them.
   const boss = bossOf(s, 'player');
   for (const l of lieutenants(s, 'player').filter((x) => x.status === 'active')) {
-    const want = l.jobs.length * 2 - l.crew;
-    if (want > 0 && boss.crew > 1) transferHoods(s, boss.id, l.id, Math.min(want, boss.crew - 1));
+    const want = l.jobs.length * 2 - crewSize(s, l);
+    const spare = crewSize(s, boss) - 1;
+    if (want > 0 && spare > 0) transferHoods(s, boss.id, l.id, Math.min(want, spare));
   }
 }
 
@@ -62,7 +65,7 @@ export function autoplay(seed: number, verbose = false, random = false, lessons 
       const p = s.families.player;
       const r = s.families.rival;
       console.log(
-        `${String(s.month).padStart(2)} us $${p.cash} heat ${p.heat} own ${owned(s, 'player').length} prot ${protectedBy(s, 'player').length} rackets ${rackets(s, 'player').length} hoods ${s.people.filter((x) => x.family === 'player').reduce((n, x) => n + x.crew, 0)} lts ${lieutenants(s, 'player').length} lesson ${s.lessons.index} | them $${r.cash} own ${owned(s, 'rival').length} prot ${protectedBy(s, 'rival').length} notice ${r.notice}`,
+        `${String(s.month).padStart(2)} us $${p.cash} heat ${p.heat} own ${owned(s, 'player').length} prot ${protectedBy(s, 'player').length} rackets ${rackets(s, 'player').length} hoods ${totalHoods(s, 'player')} lts ${lieutenants(s, 'player').length} lesson ${s.lessons.index} | them $${r.cash} own ${owned(s, 'rival').length} prot ${protectedBy(s, 'rival').length} notice ${r.notice}`,
       );
       for (const n of s.news.slice(0, 2)) console.log('     *', n.headline);
     }

@@ -133,7 +133,7 @@ Loyalty, Ambition, Heat, Federal Attention and official relationships update, th
 ## 6. People
 
 ### 6.1 Lieutenants (0–6, hard cap 6)
-The core of the game. You start with none and hire them one at a time, usually to take an area of the business off the boss's hands (§5.2). Four areas plus territory splits keep the cap at six. Each one has:
+The core of the game. You start with none. **Lieutenants are promoted from your own hoods** (§6.2), never hired from outside, usually to take branches of the business off the boss's hands (§5.2). The hood keeps their name, stats and traits, and picks up a street nickname if they didn't have one. Four areas plus territory splits keep the cap at six. Each one has:
 - **Stats:** Muscle · Brains · Nerve · Charm
 - **2–3 traits:** e.g. *Hothead, Greedy, Old-world, Family Man, Loose Lips, Ambitious, Cautious, Ladies' Man, Teetotaller, Butcher*
 - **Loyalty** (hidden, but you can estimate it from signs and informants)
@@ -141,7 +141,13 @@ The core of the game. You start with none and hire them one at a time, usually t
 - **Authority:** how well their crew obeys them
 
 ### 6.2 Hoods
-Grouped into **crews** under a lieutenant. Each hood is named, has 2–3 stats and one trait, and can be wounded, arrested, killed, turned or **promoted**. You care about them through the lieutenant and can step in directly via §5.3.
+Every hood is a person: **a name** (often a nickname), **the same four stats** as a lieutenant, up to two traits, loyalty, a line of history, and **experience**. They work in **crews**, one per boss or lieutenant, and you move them between crews between months.
+- **Jobs pick their squad.** Each job takes the free hands best suited to it: the best talker on a sign-up, the toughest on a takeover, the steadiest nerve on a hit or a supply run. The squad's stats decide how fast and how well the job goes, and how a fight turns out.
+- **Hoods grow.** A month's work, or a job done well, is experience, and good work sometimes raises the stat that was used. With enough experience a hood is **lieutenant material** and can be promoted in a meeting.
+- **Hoods get hurt by name.** Fights wound, jail or kill specific people, and the newspaper names them. A hood in a cell can be bailed out, or left to sit (and maybe talk).
+- **The hiring hall:** each month a few named hoods are looking for work, with their stats and history on show. A recruiter (§6.4) brings more of them, and better. Now and then a notable turns up: someone with a reputation, already lieutenant material.
+
+You care about them through their lieutenant and can step in directly via §5.3.
 
 ### 6.3 Ambition and betrayal
 Power you give a lieutenant (turf, crew size, money, prestige) raises their **Ambition**. That's the trade-off: the most capable lieutenant is the most dangerous.
@@ -380,7 +386,7 @@ Every run, won or lost, ends with a **final front page**: an obituary, a trial v
 ## 16. Tutorial: learning the business
 **The first run, with lessons switched on: "The Nephew."** It's January 1927. Uncle Aldo has been sent to Joliet and the police seized his café. You have $300, two cousins who can handle themselves, and his old street. The run starts from nothing like every other run (§4), and each lesson starts when you reach it. Each one ends with the option to **hire a lieutenant to take that area over**:
 
-1. **Muscle.** The boss and the cousins sign up shops on one street and collect each month. *Teaches:* jobs, ranking priorities, posture, the watch phase, react cards. *Ends:* once five shops are paying, a candidate lieutenant comes asking for work. Hire them and hand over Protection (and Enforcement too, if you trust them). *Teaches:* delegation, branches and personality.
+1. **Muscle.** The boss and the cousins, Vito and Carlo, sign up shops on one street and collect each month. *Teaches:* jobs, squads, ranking priorities, posture, the watch phase, react cards. *Ends:* once four shops are paying, Sal Benedetto, an experienced hood, comes asking for work. Take him on, **promote** him (or a cousin, once they've earned it) and hand over Protection. *Teaches:* hoods, promotion, delegation, branches and personality.
 2. **Property.** With protection money coming in, buy your first building, maybe Aldo's old café back. Add a telephone. *Teaches:* property vs protection, and telephones (which matter in step 4).
 3. **Vice.** Fit out a back room and open a speakeasy, then set up a still to supply it. *Teaches:* rackets, the supply chain, raids. *Ends:* once you have two rackets, give the Vice branches to a lieutenant, either a new hire or one with room for another branch.
 4. **Trouble.** Calloway notices you. A hit on one of your shops triggers your first **Change of Plans**, and the telephone you bought decides how fast you can respond. *Teaches:* fights, Change of Plans, the Wire.
@@ -441,6 +447,7 @@ After that the lessons switch off, and the run carries on in the same city. Less
 | Tutorial | First run with lessons switched on ("The Nephew"): learn each area in turn, hiring a lieutenant for each |
 | Run start | Every run starts from the bottom: the boss, two or three hoods, no lieutenants. Origins change what you start with |
 | Orders | Four areas split into nine branches. Each branch is run by the boss or a lieutenant; a lieutenant takes 1–3 branches with one shared crew. Ranked standing jobs, optional targets, hoods as capacity |
+| Hoods and promotion | Every hood is named, with stats, traits, history and experience. Jobs pick the best-suited squad; hoods grow, get hurt by name, and the experienced can be promoted. Lieutenants only come from promotion; a monthly hiring hall supplies new hoods |
 | Specialists | One per resource: recruiter (hoods), armourer (guns), mechanic (cars), brewmaster (liquor), accountant (money), lawyer (legal cover), doctor (health), newsman (reputation). No crew, outside the lieutenant cap, and dangerous if they turn. Never required: without one you pay more or get worse |
 | Resources | Mixed: hoods, guns, cars, liquor and cash are counted stock; legal cover, health and reputation are levels |
 | Protection vs property | Separate: protection is shops that pay you; property is buildings you own, which can hold back rooms and telephones |

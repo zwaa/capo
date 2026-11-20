@@ -3,9 +3,9 @@
 // does, and only targets what its people could know about.
 
 import { chance } from './rng';
-import { blankJob } from './setup';
+import { blankJob, makeHood } from './setup';
 import type { FamilyId, GameState, JobKind, Person, Posture } from './types';
-import { JOBS, active, carPrice, dist, gunPrice, hoodPrice, members, other, owned, price, protectedBy, rackets, runner, targets, totalHoods } from './util';
+import { JOBS, active, carPrice, crewSize, dist, gunPrice, has, hoodPrice, members, other, owned, price, protectedBy, rackets, runner, targets, totalHoods } from './util';
 
 export function planFamily(s: GameState, f: FamilyId): void {
   const fam = s.families[f];
@@ -84,17 +84,32 @@ export function planFamily(s: GameState, f: FamilyId): void {
     const cost = what === 'hood' ? hoodPrice(s, f) : what === 'gun' ? gunPrice(s, f) : carPrice(s, f);
     fam.cash -= cost;
     fam.ledger.push({ label: what === 'hood' ? 'New hood' : what === 'gun' ? 'A pistol' : 'A car', amount: -cost });
-    if (what === 'hood') to!.crew++;
-    else if (what === 'gun') fam.guns++;
+    if (what === 'hood') {
+      // The player's side picks the best of the hiring hall; Calloway takes whoever walks in.
+      const pickd =
+        f === 'player'
+          ? [...s.market].sort((a, b) => b.muscle + b.brains + b.nerve + b.charm - (a.muscle + a.brains + a.nerve + a.charm))[0]
+          : makeHood(s, `h${s.nextId++}`, f, to!.id, has(s, f, 'recruiter') ? 1 : 0);
+      if (!pickd) {
+        fam.cash += cost;
+        fam.ledger.pop();
+        return;
+      }
+      pickd.family = f;
+      pickd.under = to!.id;
+      s.hoods.push(pickd);
+      s.market = s.market.filter((x) => x !== pickd);
+    } else if (what === 'gun') fam.guns++;
     else fam.cars++;
   };
   if (fam.cars < 1 && fam.cash > carPrice(s, f) + 600) buy('car');
   for (let i = 0; i < 6; i++) {
     const short = members(s, f)
       .filter((p) => p.status === 'active')
-      .map((p) => ({ p, gap: p.jobs.reduce((n, j) => n + (JOBS[j.kind].ongoing ? 1 : j.kind === 'takeover' ? 4 : 2), 0) - p.crew }))
+      .map((p) => ({ p, gap: p.jobs.reduce((n, j) => n + (JOBS[j.kind].ongoing ? 1 : j.kind === 'takeover' ? 4 : 2), 0) - crewSize(s, p) }))
       .sort((a, b) => b.gap - a.gap)[0];
     if (!short || short.gap <= 0 || fam.cash < hoodPrice(s, f) + 250) break;
+    if (f === 'player' && !s.market.length) break;
     buy('hood', short.p);
   }
   while (fam.guns < totalHoods(s, f) && fam.cash > gunPrice(s, f) + 300) buy('gun');

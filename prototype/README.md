@@ -8,13 +8,15 @@ tutorial should build the family up from scratch. v2 is rebuilt around that.
 
 ## What's in it
 
-- **Start from nothing.** The boss, two cousins, two pistols, $300 and a rented room. No lieutenants, no property.
+- **Start from nothing.** The boss, two cousins (Vito and Carlo), two pistols, $300 and a rented room. No lieutenants, no property.
+- **Named hoods.** Every hood has a name, often a nickname, four stats, up to two traits, a line of history and experience. Each job takes the free hands best suited to it (the best talker on a sign-up, the toughest on a takeover), and the squad's stats decide how it goes. Hoods grow with work, get wounded, jailed or killed by name, and the newspaper names them.
+- **Lieutenants are promoted, not hired.** A hood with enough experience is lieutenant material and can be promoted in a meeting. Each month a hiring hall offers a few named hoods, with stats and history on show.
 - **Branches and job lists.** Eight branches in four areas (Muscle, Property, Vice, Fixing). Each branch is run by the boss or a lieutenant, and a lieutenant can take up to three. Every person ranks the jobs across their branches in one list.
-- **Hands are the capacity.** Each job needs a number of hands (and sometimes a car or cash). The person running a list works too, so a crew of two is three hands. Hands go to the top of the list first; jobs that get nobody stall, and the orders screen says why.
+- **Hands are the capacity.** Each job needs a number of hands (and sometimes a car or cash). The person running a list works too, so a crew of two is three hands. Being in debt stalls only jobs that cost money. Hands go to the top of the list first; jobs that get nobody stall, and the orders screen says why.
 - **Protection and property are separate.** Shops pay protection (and stop if nobody collects). Owned buildings can hold a back room (speakeasy, gambling den or still) and a telephone.
 - **Inventory.** Hoods, pistols, cars and liquor are counted. Bars pour liquor; stills make it; without a supply run, you buy on the open market.
 - **Specialists:** recruiter, armourer, mechanic and lawyer. Nothing is locked without one; they make things cheaper, better or safer.
-- **Lessons** (switch off any time): work the street, hand it to Sal, buy a building, open a back room, Calloway notices, fix the police, hire a specialist, ambition. Lessons finish on progress, not on the calendar, and three of them bring a lieutenant asking for work.
+- **Lessons** (switch off any time): work the street, hand it to Sal, buy a building, open a back room, Calloway notices, fix the police, hire a specialist, ambition. Lessons finish on progress, not on the calendar, and three of them bring an experienced hood asking for work, ready to promote.
 - **Carried over from v1:** the watch phase with telegram decisions, Change of Plans (your own list changes at once; lieutenants hear by telephone or wait for a runner), heat with itemised causes, the Morning Edition and the Wire, fog of war, ambition, demands and betrayal, and a rival AI that uses the same job lists.
 
 **How the year is judged:** on what you built (buildings, rackets and paying shops, plus some of your cash), not on beating Calloway outright. A draw needs 2,500 points and a win 5,000. Driving Calloway out of the ward entirely wins at once.
@@ -42,11 +44,11 @@ npm run artifact   # single-file build for publishing (dist/capo.html)
 
 ## Balance snapshot
 
-From `npm run sim -- 300`. The Russo side is played by a simple autopilot that hires whoever the lessons offer, hands out branches and answers telegrams. It never really plans:
+From `npm run sim -- 300`. The Russo side is played by a simple autopilot that takes on whoever the lessons offer, promotes its most capable hood, hands out branches and answers telegrams. It never really plans:
 
 | Russo player | Win | Draw | Loss |
 |---|---|---|---|
-| Autopilot, sensible answers | 5% | 20% | 75% |
-| Autopilot, random answers | 7% | 31% | 62% |
+| Autopilot, sensible answers | 2% | 22% | 76% |
+| Autopilot, random answers | 4% | 33% | 63% |
 
 The autopilot is weak, so these numbers say little about a human. The thresholds need tuning from real play.
