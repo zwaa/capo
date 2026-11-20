@@ -1,21 +1,12 @@
 import { chance, int, pick, shuffle } from './rng';
 import type { RngHolder } from './rng';
 import type { Branch, Building, FamilyId, GameState, Hood, Job, JobKind, Person, Posture, Racket, Trait } from './types';
-import { BRANCHES } from './util';
+import { BRANCHES, STREET_NAMES, dist } from './util';
 
 export const WIDTH = 12;
 export const HEIGHT = 8;
 
-export const STREETS = [
-  'Kessler Street',
-  'Canal Street',
-  'Orchard Avenue',
-  'Foundry Row',
-  'Larkin Street',
-  'Mercer Avenue',
-  'Tallow Lane',
-  'Dock Road',
-];
+export const STREETS = STREET_NAMES;
 
 const FRONTS: { front: string; suits: Racket }[] = [
   { front: 'Café', suits: 'speakeasy' },
@@ -39,6 +30,8 @@ const FRONTS: { front: string; suits: Racket }[] = [
   { front: 'Diner', suits: 'speakeasy' },
   { front: 'Cooperage', suits: 'still' },
 ];
+
+const HOMES = ['Tenement', 'Rowhouses', 'Boarding House', 'Walk-up', 'Tenement'];
 
 const SURNAMES = [
   'Novak',
@@ -396,6 +389,7 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
 
   const buildings: Building[] = lots.slice(0, 20).map((p, i) => ({
     id: `b${i}`,
+    kind: 'shop' as const,
     name: `${names[i]}'s ${fronts[i].front}`,
     front: fronts[i].front,
     suits: fronts[i].suits,
@@ -408,6 +402,7 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
     telephone: false,
     raided: false,
     uncollected: 0,
+    refused: false,
   }));
 
   // The boss starts in a rented room in the west; Calloway owns the east.
@@ -421,6 +416,30 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
   const den = east.find((b) => b !== hq && b !== bar && b.suits === 'gambling') ?? east[2];
   Object.assign(den, { owner: 'rival', racket: 'gambling' });
   for (const b of east.filter((b) => !b.owner).slice(0, 4)) b.protectedBy = 'rival';
+
+  // Every other lot is a home: tenements and rowhouses. They pay a little protection each,
+  // and Calloway already collects from the ones on his doorstep.
+  const held = buildings.filter((b) => b.owner || b.protectedBy);
+  free.forEach((p, i) => {
+    const front = pick(h, HOMES);
+    buildings.push({
+      id: `r${i}`,
+      kind: 'home',
+      name: `${front} at ${int(h, 2, 60) * 2} ${STREETS[p.y % STREETS.length]}`,
+      front,
+      suits: 'speakeasy',
+      x: p.x,
+      y: p.y,
+      protection: int(h, 1, 3) * 10,
+      protectedBy: p !== home && held.some((b) => dist(b, p) <= 1) ? 'rival' : null,
+      owner: null,
+      racket: null,
+      telephone: false,
+      raided: false,
+      uncollected: 0,
+      refused: false,
+    });
+  });
 
   const boss = makePerson('boss', 'player', 'boss', bossName, 'the Nephew', [5, 5, 5, 5], [], home);
   const rboss = makePerson('calloway', 'rival', 'boss', 'Jim Calloway', 'Big Jim', [6, 6, 6, 5], ['oldworld'], hq);

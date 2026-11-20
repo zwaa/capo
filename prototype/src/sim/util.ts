@@ -22,6 +22,18 @@ export function monthName(m: number): string {
   return `${MONTHS[m % 12]} ${1927 + Math.floor(m / 12)}`;
 }
 
+/** Street names by map row (setup.ts uses the same list for addresses). */
+export const STREET_NAMES = [
+  'Kessler Street',
+  'Canal Street',
+  'Orchard Avenue',
+  'Foundry Row',
+  'Larkin Street',
+  'Mercer Avenue',
+  'Tallow Lane',
+  'Dock Road',
+];
+
 export const other = (f: FamilyId): FamilyId => (f === 'player' ? 'rival' : 'player');
 export const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 
@@ -38,7 +50,54 @@ export const lieutenants = (s: GameState, f: FamilyId) => members(s, f).filter((
 export const owned = (s: GameState, f: FamilyId) => s.buildings.filter((b) => b.owner === f);
 export const protectedBy = (s: GameState, f: FamilyId) => s.buildings.filter((b) => b.protectedBy === f && b.owner === null);
 export const rackets = (s: GameState, f: FamilyId, r?: string) => owned(s, f).filter((b) => b.racket && (!r || b.racket === r));
+export const isHome = (b: Building) => b.kind === 'home';
+/** Protected shops (not homes). */
+export const protectedShops = (s: GameState, f: FamilyId) => protectedBy(s, f).filter((b) => !isHome(b));
+export const protectedHomes = (s: GameState, f: FamilyId) => protectedBy(s, f).filter(isHome);
+/** A collector gets round five shops a month, or ten homes (they pay less and sit close together). */
+export const HOME_STOP = 0.5;
+export const stopsOf = (bs: Building[]) => bs.reduce((n, b) => n + (isHome(b) ? HOME_STOP : 1), 0);
 
+// ---------------------------------------------------------------- blocks
+
+// The ward is a grid of city blocks between the roads (roads run every 4 tiles
+// across and every 3 down). A block is a target in its own right: "sign up the
+// Canal Street block" sends a crew door to door.
+
+export const BLOCK_W = 4;
+export const BLOCK_H = 3;
+const BLOCK_SIDE = ['west', 'middle', 'east'];
+export const blockId = (at: { x: number; y: number }) => `blk${Math.floor(at.x / BLOCK_W)}-${Math.floor(at.y / BLOCK_H)}`;
+export const isBlockId = (id: string | null): id is string => !!id && /^blk\d+-\d+$/.test(id);
+export function blockXY(id: string): { bx: number; by: number } {
+  const [bx, by] = id.slice(3).split('-').map(Number);
+  return { bx, by };
+}
+/** Every building (shops and homes) on a block. */
+export const blockBuildings = (s: GameState, id: string) => s.buildings.filter((b) => blockId(b) === id);
+export function blockName(s: GameState, id: string): string {
+  const { bx, by } = blockXY(id);
+  const cols = Math.ceil(s.width / BLOCK_W);
+  const side = cols === 3 ? BLOCK_SIDE[bx] : `no. ${bx + 1}`;
+  return `the ${STREET_NAMES[(by * BLOCK_H + 1) % STREET_NAMES.length]} block (${side})`;
+}
+/** The middle of a block's lots, for drawing and travel. */
+export function blockCentre(s: GameState, id: string): { x: number; y: number } {
+  const bs = blockBuildings(s, id);
+  if (!bs.length) return { x: 0, y: 0 };
+  const xs = bs.map((b) => b.x);
+  const ys = bs.map((b) => b.y);
+  return { x: Math.round((Math.min(...xs) + Math.max(...xs)) / 2), y: Math.round((Math.min(...ys) + Math.max(...ys)) / 2) };
+}
+/** Buildings on a block that pay nobody. */
+export const blockFree = (s: GameState, id: string) => blockBuildings(s, id).filter((b) => !b.owner && !b.protectedBy);
+/** ...and that haven't turned us away this month: what a block sign-up works through. */
+export const blockOpen = (s: GameState, id: string) => blockFree(s, id).filter((b) => !b.refused);
+export function allBlocks(s: GameState): string[] {
+  return [...new Set(s.buildings.map((b) => blockId(b)))].sort();
+}
+
+export const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 export const first = (p: Person) => p.name.split(' ')[0];
 export const label = (p: Person) => `${first(p)} "${p.nickname}" ${p.name.split(' ').slice(1).join(' ')}`;
 
@@ -58,7 +117,7 @@ export const branchInfo = (b: Branch) => BRANCHES.find((x) => x.id === b)!;
 
 // ---------------------------------------------------------------- jobs
 
-export type TargetRule = 'none' | 'signup' | 'guard' | 'hit' | 'wreck' | 'buy' | 'takeover' | 'fitout' | 'phone';
+export type TargetRule = 'none' | 'signup' | 'block' | 'guard' | 'hit' | 'wreck' | 'buy' | 'takeover' | 'fitout' | 'phone';
 
 export interface JobInfo {
   branch: Branch;
@@ -98,6 +157,18 @@ export const JOBS: Record<JobKind, JobInfo> = {
     risky: false,
     stat: 'charm',
     hint: 'One pair of hands (three if Calloway already protects it, and expect a fight).',
+  },
+  block: {
+    branch: 'protection',
+    label: 'Sign up a block',
+    verb: 'Signing up',
+    target: 'block',
+    ongoing: false,
+    car: false,
+    work: 2,
+    risky: false,
+    stat: 'charm',
+    hint: 'Two pairs of hands go door to door: every home and shop on the block that pays nobody. Homes sign up fast and pay a little.',
   },
   guard: {
     branch: 'enforcement',
@@ -253,9 +324,16 @@ export function targets(s: GameState, f: FamilyId, kind: JobKind): { id: string;
   const bl = (b: Building, extra = '') => ({ id: b.id, label: `${b.name}${extra}` });
   switch (JOBS[kind].target) {
     case 'signup':
-      return s.buildings.filter((b) => b.owner === null && b.protectedBy !== f).map((b) => bl(b, b.protectedBy ? ' (Calloway pays)' : ''));
+      return s.buildings
+        .filter((b) => b.owner === null && b.protectedBy !== f)
+        .map((b) => bl(b, b.protectedBy ? ` (${b.protectedBy === 'rival' ? 'Calloway' : 'Russo'} pays)` : ''));
+    case 'block':
+      return allBlocks(s)
+        .map((id) => ({ id, free: blockFree(s, id) }))
+        .filter((x) => x.free.length)
+        .map((x) => ({ id: x.id, label: `${cap(blockName(s, x.id))} (${x.free.length} pay nobody)` }));
     case 'guard':
-      return s.buildings.filter((b) => b.owner === f || (b.protectedBy === f && b.owner === null)).map((b) => bl(b));
+      return s.buildings.filter((b) => !isHome(b) && (b.owner === f || (b.protectedBy === f && b.owner === null))).map((b) => bl(b));
     case 'hit':
       return active(s, foe)
         .filter((p) => f !== 'player' || visible(s, p))
@@ -263,7 +341,7 @@ export function targets(s: GameState, f: FamilyId, kind: JobKind): { id: string;
     case 'wreck':
       return s.buildings.filter((b) => b.owner === foe && b.racket).map((b) => bl(b, ` (the ${b.racket})`));
     case 'buy':
-      return s.buildings.filter((b) => b.owner === null && b.protectedBy !== foe).map((b) => bl(b, ` ($${price(b, f)})`));
+      return s.buildings.filter((b) => !isHome(b) && b.owner === null && b.protectedBy !== foe).map((b) => bl(b, ` ($${price(b, f)})`));
     case 'takeover':
       return s.buildings.filter((b) => b.owner === foe).map((b) => bl(b));
     case 'fitout':
@@ -395,6 +473,7 @@ export function squadNames(s: GameState, j: Job): string {
 export function jobTitle(s: GameState, j: Job): string {
   const info = JOBS[j.kind];
   if (!j.target) return info.label;
+  if (isBlockId(j.target)) return `${info.verb} ${blockName(s, j.target)}`;
   const t = building(s, j.target)?.name ?? (person(s, j.target) ? label(person(s, j.target)!) : '?');
   return `${info.verb} ${t}`;
 }

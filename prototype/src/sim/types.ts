@@ -10,6 +10,7 @@ export type Branch = 'protection' | 'enforcement' | 'acquisitions' | 'fronts' | 
 export type JobKind =
   | 'collect'
   | 'signup'
+  | 'block'
   | 'guard'
   | 'hit'
   | 'wreck'
@@ -54,6 +55,8 @@ export interface Job {
 
 export interface Building {
   id: string;
+  /** A shop can be bought and fitted out; a home (tenement, rowhouses) only pays protection. */
+  kind: 'shop' | 'home';
   name: string;
   front: string;
   suits: Racket;
@@ -68,6 +71,8 @@ export interface Building {
   raided: boolean;
   /** Months in a row nobody collected. Shops stop paying after a while. */
   uncollected: number;
+  /** Turned away a block sign-up this month (quietly): the crew moves on until next month. */
+  refused: boolean;
 }
 
 export interface Demand {

@@ -209,6 +209,8 @@ Your family starts as a **blank slate**: no archetype, no fixed playstyle. Inste
 ### 7.1 Wards and businesses
 **Protection and property are different things.**
 - **Protection:** shops on your streets pay you every month to be left alone. You don't own them. Muscle signs them up and collects. Shops nobody collects from start to drift, and a rival can sign them up.
+- **Homes pay too.** Every lot that isn't a business is a home (tenements, rowhouses, boarding houses), and homes pay a little protection ($10–30 a month against a shop's $100–200). They can't be bought or fitted out. They sign up easily and quietly (little heat), and a collector gets round ten homes in the time it takes to do five shops. Homes are what make turf feel like turf: a block whose doors all fly your flag is yours.
+- **Blocks are targets.** The ward is laid out in city blocks between the roads. Click any building and the menu also offers **Sign up the whole block**: one job, two pairs of hands, going door to door through every home and shop on the block that pays nobody. A quiet crew takes no for an answer until next month; a firm or loud one leans (a little heat per door). Doors that already pay a rival still need a sign-up of their own, and a fight.
 - **Property:** buildings you own, bought or taken over. Only property can hold a back room (Vice), a telephone, or launder money (Fixing). Owned buildings don't pay protection, but they can turn a small legit profit.
 
 Each ward has 4–8 businesses. A building has a **front** (barber, laundry, cigar shop, garage, club) and a **back room** slot:
@@ -450,7 +452,8 @@ After that the lessons switch off, and the run carries on in the same city. Less
 | Hoods and promotion | Every hood is named, with stats, traits, history and experience. Jobs pick the best-suited squad; hoods grow, get hurt by name, and the experienced can be promoted. Lieutenants only come from promotion; a monthly hiring hall supplies new hoods |
 | Specialists | One per resource: recruiter (hoods), armourer (guns), mechanic (cars), brewmaster (liquor), accountant (money), lawyer (legal cover), doctor (health), newsman (reputation). No crew, outside the lieutenant cap, and dangerous if they turn. Never required: without one you pay more or get worse |
 | Resources | Mixed: hoods, guns, cars, liquor and cash are counted stock; legal cover, health and reputation are levels |
-| Protection vs property | Separate: protection is shops that pay you; property is buildings you own, which can hold back rooms and telephones |
+| Protection vs property | Separate: protection is shops (and homes) that pay you; property is buildings you own, which can hold back rooms and telephones |
+| Homes and blocks | Every non-business lot is a home that pays a little protection. Blocks are order targets: one job signs up a whole block door to door. Free-form region selection (dragging out an area) is left for later |
 | Next step | Vertical slice v2: rebuild the prototype around areas, jobs and starting from nothing (§17) |
 | Anti-snowball | Federal attention by share + internal ambition + rival coalitions |
 | Clock | Hard end at Repeal, Dec 1933 |

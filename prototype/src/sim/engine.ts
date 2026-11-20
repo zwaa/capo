@@ -66,9 +66,18 @@ import {
   person,
   price,
   protectedBy,
+  protectedHomes,
+  protectedShops,
   rackets,
   targets,
   totalHoods,
+  blockFree,
+  blockName,
+  blockOpen,
+  blockCentre,
+  isBlockId,
+  isHome,
+  stopsOf,
 } from './util';
 
 // ---------------------------------------------------------------- small helpers
@@ -77,6 +86,8 @@ const HEAT: Record<Posture, number> = { quiet: 1, firm: 4, loud: 9 };
 /** Sign-up odds next to (or away from) our turf, and the extra days a job takes off it. */
 export const TURF_BONUS = 0.15;
 export const OFF_TURF_DAYS = 2;
+/** Tenants say yes more easily than shopkeepers. */
+export const HOME_EASE = 0.15;
 const FORCE: Record<Posture, number> = { quiet: 0.8, firm: 1, loud: 1.3 };
 
 function log(s: GameState, text: string, family: FamilyId | null): void {
@@ -412,10 +423,13 @@ export function needFor(s: GameState, f: FamilyId, j: Job, p: Person): number {
   let n: number;
   switch (k) {
     case 'collect':
-      n = Math.ceil(protectedBy(s, f).length / 5);
+      n = Math.ceil(stopsOf(protectedBy(s, f)) / 5);
       break;
     case 'signup':
       n = building(s, j.target)?.protectedBy === other(f) ? 3 : 1;
+      break;
+    case 'block':
+      n = 2;
       break;
     case 'guard':
       n = 2;
@@ -519,7 +533,10 @@ export function allocate(s: GameState, f: FamilyId): void {
 
 export function startMonth(s: GameState): void {
   if (s.run || s.over) return;
-  for (const b of s.buildings) b.raided = false;
+  for (const b of s.buildings) {
+    b.raided = false;
+    b.refused = false;
+  }
   for (const f of ['player', 'rival'] as const) {
     s.families[f].ledger = [];
     s.families[f].heatLog = [];
@@ -553,6 +570,11 @@ function prepare(s: GameState, p: Person, j: Job): void {
       j.y = t.y;
     }
     j.days = 0;
+    return;
+  }
+  if (j.kind === 'block') {
+    const door = nextDoor(s, j);
+    j.days = door ? doorDays(s, p, j, door) : 1;
     return;
   }
   const adj = j.posture === 'quiet' ? 1 : j.posture === 'loud' ? -1 : 0;
@@ -599,7 +621,39 @@ function targetsPlayer(s: GameState, j: Job): boolean {
 }
 
 function targetPos(s: GameState, j: Job): { x: number; y: number } {
+  if (isBlockId(j.target)) return nextDoor(s, j) ?? blockCentre(s, j.target);
   return building(s, j.target) ?? person(s, j.target) ?? { x: j.x, y: j.y };
+}
+
+/** The nearest door on a block job's block still worth knocking on. */
+function nextDoor(s: GameState, j: Job): Building | null {
+  if (!isBlockId(j.target)) return null;
+  const at = { x: j.x, y: j.y };
+  return blockOpen(s, j.target).sort((a, b) => dist(a, at) - dist(b, at) || a.id.localeCompare(b.id))[0] ?? null;
+}
+
+/** Days at one door of a block job: a home is a quick chat, a shop takes longer. */
+function doorDays(s: GameState, p: Person, j: Job, b: Building): number {
+  const adj = j.posture === 'quiet' ? 1 : j.posture === 'loud' ? -1 : 0;
+  const away = onTurf(s, p.family, b, b.id) ? 0 : OFF_TURF_DAYS;
+  return Math.max(1, (isHome(b) ? 1 : 3) - Math.floor((squadStat(s, j) - 5) / 2) + adj + away);
+}
+
+/** The chance a shopkeeper (or a tenant) says yes. */
+function signupOdds(s: GameState, f: FamilyId, j: Job, b: Building): number {
+  return Math.max(
+    0.15,
+    Math.min(
+      0.95,
+      0.4 +
+        squadStat(s, j, 'charm') * 0.04 +
+        squadStat(s, j, 'muscle') * 0.02 +
+        (j.posture === 'quiet' ? -0.1 : j.posture === 'loud' ? 0.15 : 0) +
+        // Shopkeepers next to our turf have seen what happens to the ones who say no.
+        (onTurf(s, f, b, b.id) ? TURF_BONUS : -TURF_BONUS) +
+        (isHome(b) ? HOME_EASE : 0),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------- the day loop
@@ -734,7 +788,7 @@ function fire(s: GameState, ev: ScheduledEvent): void {
     case 'cop': {
       const b = pick(
         s,
-        s.buildings.filter((x) => x.owner === 'player' || x.protectedBy === 'player'),
+        s.buildings.filter((x) => !isHome(x) && (x.owner === 'player' || x.protectedBy === 'player')),
       );
       if (!b) return;
       card(s, {
@@ -771,7 +825,7 @@ function fire(s: GameState, ev: ScheduledEvent): void {
     case 'offer': {
       const b = pick(
         s,
-        s.buildings.filter((x) => x.owner === null && x.protectedBy !== 'rival'),
+        s.buildings.filter((x) => !isHome(x) && x.owner === null && x.protectedBy !== 'rival'),
       );
       if (!b) return;
       const cost = Math.round(price(b, 'player') * 0.6);
@@ -922,19 +976,7 @@ function complete(s: GameState, p: Person, j: Job): void {
     case 'signup': {
       if (!b || b.owner || b.protectedBy === f) return;
       if (b.protectedBy) return fightFor(s, p, j, b);
-      const pr = Math.max(
-        0.15,
-        Math.min(
-          0.95,
-          0.4 +
-            squadStat(s, j, 'charm') * 0.04 +
-            squadStat(s, j, 'muscle') * 0.02 +
-            (j.posture === 'quiet' ? -0.1 : j.posture === 'loud' ? 0.15 : 0) +
-            // Shopkeepers next to our turf have seen what happens to the ones who say no.
-            (onTurf(s, f, b, b.id) ? TURF_BONUS : -TURF_BONUS),
-        ),
-      );
-      if (chance(s, pr)) {
+      if (chance(s, signupOdds(s, f, j, b))) {
         seasoned(s, j, squadStat(s, j, 'charm') >= squadStat(s, j, 'muscle') ? 'charm' : 'muscle');
         return signUp(s, b, p, j.posture, j);
       }
@@ -942,7 +984,7 @@ function complete(s: GameState, p: Person, j: Job): void {
         card(s, {
           kind: 'shopkeeper',
           title: 'The shopkeeper says no',
-          text: `The owner of ${b.name} told ${squadNames(s, j) || name} he's "already got insurance, thank you." He says it with a shaking voice.`,
+          text: `The ${isHome(b) ? 'landlord' : 'owner'} of ${b.name} told ${squadNames(s, j) || name} he's "already got insurance, thank you." He says it with a shaking voice.`,
           options: [
             { id: 'lean', label: 'Lean on him', hint: 'He sees sense. Heat +8.' },
             { id: 'sweeten', label: 'Sweeten it ($100)', hint: 'He sees sense, quietly.', disabled: fam.cash < 100 },
@@ -957,6 +999,8 @@ function complete(s: GameState, p: Person, j: Job): void {
       }
       return;
     }
+    case 'block':
+      return knock(s, p, j);
     case 'buy': {
       if (!b || b.owner) return;
       const cost = price(b, f);
@@ -1018,12 +1062,49 @@ function complete(s: GameState, p: Person, j: Job): void {
   }
 }
 
+/**
+ * One door on a block job. Quiet crews take no for an answer (until next month);
+ * firm or loud ones lean. Then on to the next door, until the block pays.
+ */
+function knock(s: GameState, p: Person, j: Job): void {
+  const f = p.family;
+  const b = nextDoor(s, j);
+  const block = j.target!;
+  if (b) {
+    if (chance(s, signupOdds(s, f, j, b))) {
+      seasoned(s, j, squadStat(s, j, 'charm') >= squadStat(s, j, 'muscle') ? 'charm' : 'muscle');
+      signUp(s, b, p, j.posture, j);
+    } else if (j.posture === 'quiet') {
+      b.refused = true;
+      log(s, `${b.name} turned ${squadNames(s, j) || first(p)} away. They'll try again next month.`, f);
+    } else {
+      addHeat(s, f, isHome(b) ? 2 : 8, `${isHome(b) ? 'Tenants' : 'Shopkeeper'} leaned on at ${b.name}`);
+      signUp(s, b, p, 'quiet', j);
+    }
+  }
+  const next = nextDoor(s, j);
+  if (next) {
+    j.done = false;
+    j.progress = 0;
+    j.days = doorDays(s, p, j, next);
+  } else if (blockFree(s, block).length) {
+    j.done = false;
+    j.progress = 0;
+    j.stalled = 'The rest of the block said no this month';
+  } else {
+    log(s, `Every door on ${blockName(s, block)} that was anybody's to sign now pays someone.`, f);
+    advanceLessons(s);
+  }
+}
+
 function signUp(s: GameState, b: Building, p: Person, posture: Posture, j?: Job): void {
   const f = p.family;
   b.protectedBy = f;
   b.uncollected = 0;
   p.wins++;
-  addHeat(s, f, HEAT[posture], `${b.name} "persuaded" (${posture})`);
+  // Tenants don't make the papers the way a shopkeeper does.
+  const heat = isHome(b) ? Math.floor(HEAT[posture] / 4) : HEAT[posture];
+  if (heat) addHeat(s, f, heat, `${b.name} "persuaded" (${posture})`);
   log(s, `${(j && squadNames(s, j)) || first(p)} signed up ${b.name}. It pays $${b.protection} a month.`, f);
   allocate(s, f);
   advanceLessons(s);
@@ -1695,14 +1776,19 @@ function skim(s: GameState, f: FamilyId, p: Person | undefined, income: number, 
 function settle(s: GameState, f: FamilyId): void {
   const fam = s.families[f];
 
-  // Protection: the collectors get round as many shops as they can.
+  // Protection: the collectors get round as many doors as they can (five shops,
+  // or ten homes, a pair of hands), best payers first.
   const shops = protectedBy(s, f).sort((a, b) => b.protection - a.protection);
   const col = jobOf(s, f, 'collect');
-  const reached = col && !col.j.stalled ? col.j.hoods * 5 : 0;
+  let room = col && !col.j.stalled ? col.j.hoods * 5 : 0;
   let take = 0;
-  shops.forEach((b, i) => {
-    if (i < reached) {
+  let got = 0;
+  shops.forEach((b) => {
+    const cost = stopsOf([b]);
+    if (room >= cost) {
+      room -= cost;
       take += b.protection;
+      got++;
       b.uncollected = 0;
     } else {
       b.uncollected++;
@@ -1713,10 +1799,9 @@ function settle(s: GameState, f: FamilyId): void {
       }
     }
   });
-  if (take) earn(s, f, take, `Protection from ${Math.min(reached, shops.length)} of ${shops.length} shops`);
+  if (take) earn(s, f, take, `Protection from ${got} of ${shops.length} shops and homes`);
   skim(s, f, col?.p, take, 'Protection');
-  if (shops.length > reached && shops.length)
-    fam.ledger.push({ label: `${shops.length - Math.min(reached, shops.length)} shops not collected (short of hoods)`, amount: 0 });
+  if (shops.length > got) fam.ledger.push({ label: `${shops.length - got} not collected (short of hoods)`, amount: 0 });
 
   // Stills, then bars, then the dens.
   const dist_ = jobOf(s, f, 'distill');
@@ -1858,7 +1943,13 @@ function wire(s: GameState): void {
 }
 
 export function score(s: GameState, f: FamilyId): number {
-  return owned(s, f).length * 600 + rackets(s, f).length * 500 + protectedBy(s, f).length * 250 + Math.max(0, s.families[f].cash) / 2;
+  return (
+    owned(s, f).length * 600 +
+    rackets(s, f).length * 500 +
+    protectedShops(s, f).length * 250 +
+    protectedHomes(s, f).length * 60 +
+    Math.max(0, s.families[f].cash) / 2
+  );
 }
 
 function checkOver(s: GameState): void {
@@ -1880,7 +1971,7 @@ function checkOver(s: GameState): void {
   } else if (s.month >= s.lastMonth) {
     // Year one is about becoming a family: judged on what you built.
     const us = score(s, 'player');
-    const tally = `${owned(s, 'player').length} buildings, ${rackets(s, 'player').length} rackets and ${protectedBy(s, 'player').length} shops paying protection (Calloway: ${owned(s, 'rival').length}, ${rackets(s, 'rival').length} and ${protectedBy(s, 'rival').length})`;
+    const tally = `${owned(s, 'player').length} buildings, ${rackets(s, 'player').length} rackets and ${protectedShops(s, 'player').length} shops and ${protectedHomes(s, 'player').length} homes paying protection (Calloway: ${owned(s, 'rival').length}, ${rackets(s, 'rival').length}, ${protectedShops(s, 'rival').length} and ${protectedHomes(s, 'rival').length})`;
     s.over =
       us >= WIN_SCORE
         ? {
