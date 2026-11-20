@@ -84,8 +84,8 @@ look at it in the browser (desktop and phone width) or say that you didn't.
 
 ## Git
 
-- One branch for now (`ccr-d14eda03-7mt9dy`, tracking `origin`). For a risky experiment, make a branch
-  named after it (e.g. `try/weekly-turns`) so it can be thrown away.
+- Work happens on `main` (tracking `origin/main`, the GitHub default). For a risky experiment, make a
+  branch named after it (e.g. `try/weekly-turns`) so it can be thrown away or merged back.
 - Commit when a change is finished and its checks pass: one logical change per commit. Don't commit
   half-done work or broken tests.
 - Commit messages: a short imperative subject (e.g. "Prototype: named hoods with promotion"), a blank
