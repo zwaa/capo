@@ -1,0 +1,28 @@
+#!/bin/sh
+# Pre-commit hook (enabled by `npm run prepare`, or: git config core.hooksPath .githooks)
+#  1. Git-flow: no direct commits to main or develop. Work on feature/*, release/* or hotfix/*
+#     and merge in. Merges don't run this hook, so `git merge --no-ff` still works.
+#  2. If prototype files are staged, run the prototype's full check.
+# Bypass in an emergency with `git commit --no-verify` (CI still checks).
+
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+case "$branch" in
+  main|develop)
+    echo "pre-commit: don't commit directly to '$branch'." >&2
+    echo "  Start a branch:  git checkout -b feature/<name> develop" >&2
+    exit 1
+    ;;
+esac
+
+if git diff --cached --name-only | grep -q '^prototype/'; then
+  if command -v npm >/dev/null 2>&1; then
+    echo "pre-commit: running prototype checks (typecheck, lint, format, tests)..."
+    (cd prototype && npm run --silent check) || {
+      echo "pre-commit: checks failed. Fix them, or run 'npm run lint:fix' and 'npm run format' in prototype/." >&2
+      exit 1
+    }
+  else
+    echo "pre-commit: npm isn't available here, so prototype checks were skipped." >&2
+    echo "  Commit from the dev container to run them. CI will check the push." >&2
+  fi
+fi
