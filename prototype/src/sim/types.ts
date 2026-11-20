@@ -5,15 +5,7 @@ export type Trait = 'hothead' | 'greedy' | 'cautious' | 'ambitious' | 'oldworld'
 export type Status = 'active' | 'wounded' | 'jailed' | 'dead' | 'defected';
 
 /** The branches of the business in this slice (City Hall comes later). */
-export type Branch =
-  | 'protection'
-  | 'enforcement'
-  | 'acquisitions'
-  | 'fronts'
-  | 'speakeasies'
-  | 'gambling'
-  | 'bootlegging'
-  | 'police';
+export type Branch = 'protection' | 'enforcement' | 'acquisitions' | 'fronts' | 'speakeasies' | 'gambling' | 'bootlegging' | 'police';
 
 export type JobKind =
   | 'collect'
@@ -176,17 +168,7 @@ export interface CardOption {
   disabled?: boolean;
 }
 
-export type CardKind =
-  | 'hothead'
-  | 'shopkeeper'
-  | 'fight'
-  | 'cop'
-  | 'tail'
-  | 'emergency'
-  | 'betrayal'
-  | 'offer'
-  | 'bail'
-  | 'snitch';
+export type CardKind = 'hothead' | 'shopkeeper' | 'fight' | 'cop' | 'tail' | 'emergency' | 'betrayal' | 'offer' | 'bail' | 'snitch';
 
 export interface Card {
   id: number;

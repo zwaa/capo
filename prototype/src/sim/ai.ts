@@ -5,7 +5,25 @@
 import { chance } from './rng';
 import { blankJob, makeHood } from './setup';
 import type { FamilyId, GameState, JobKind, Person, Posture } from './types';
-import { JOBS, active, carPrice, crewSize, dist, gunPrice, has, hoodPrice, members, other, owned, price, protectedBy, rackets, runner, targets, totalHoods } from './util';
+import {
+  JOBS,
+  active,
+  carPrice,
+  crewSize,
+  dist,
+  gunPrice,
+  has,
+  hoodPrice,
+  members,
+  other,
+  owned,
+  price,
+  protectedBy,
+  rackets,
+  runner,
+  targets,
+  totalHoods,
+} from './util';
 
 export function planFamily(s: GameState, f: FamilyId): void {
   const fam = s.families[f];
@@ -13,7 +31,8 @@ export function planFamily(s: GameState, f: FamilyId): void {
   const aggressive = f === 'rival' ? fam.notice : s.families.rival.notice;
   const id = () => `j${s.nextId++}`;
 
-  for (const p of members(s, f)) p.jobs = p.jobs.filter((j) => !j.done && (!j.target || targets(s, f, j.kind).some((t) => t.id === j.target)));
+  for (const p of members(s, f))
+    p.jobs = p.jobs.filter((j) => !j.done && (!j.target || targets(s, f, j.kind).some((t) => t.id === j.target)));
 
   const ensure = (kind: JobKind, want: boolean) => {
     const r = runner(s, f, JOBS[kind].branch);
@@ -32,7 +51,8 @@ export function planFamily(s: GameState, f: FamilyId): void {
 
   const oneOff = (kind: JobKind, target: string | null, posture: Posture = 'firm', max = 1) => {
     const r = runner(s, f, JOBS[kind].branch);
-    if (r.jobs.filter((j) => j.kind === kind && !JOBS[kind].ongoing).length >= max || r.jobs.some((j) => j.target === target && target)) return;
+    if (r.jobs.filter((j) => j.kind === kind && !JOBS[kind].ongoing).length >= max || r.jobs.some((j) => j.target === target && target))
+      return;
     r.jobs.push(blankJob(id(), kind, target, posture));
   };
   const home = runner(s, f, 'protection');
@@ -72,7 +92,9 @@ export function planFamily(s: GameState, f: FamilyId): void {
 
   // Enforcement: guard the best place if the enemy is close; settle grudges.
   const enf = runner(s, f, 'enforcement');
-  const prized = owned(s, f).filter((b) => b.racket).sort((a, b) => Math.min(...active(s, foe).map((p) => dist(p, a)), 99) - Math.min(...active(s, foe).map((p) => dist(p, b)), 99))[0];
+  const prized = owned(s, f)
+    .filter((b) => b.racket)
+    .sort((a, b) => Math.min(...active(s, foe).map((p) => dist(p, a)), 99) - Math.min(...active(s, foe).map((p) => dist(p, b)), 99))[0];
   if (aggressive && prized && !enf.jobs.some((j) => j.kind === 'guard')) enf.jobs.push(blankJob(id(), 'guard', prized.id));
   if (fam.grudge) {
     const victim = targets(s, f, 'hit')[0];
