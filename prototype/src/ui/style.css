@@ -256,6 +256,16 @@ button {
   border-top: 1px solid var(--paper-dim);
   padding-top: 8px;
 }
+.pick-block {
+  display: grid;
+  gap: 6px;
+  border-top: 2px dashed var(--paper-dim);
+  padding-top: 8px;
+}
+.pick-block .pick-orders {
+  border-top: 0;
+  padding-top: 0;
+}
 .po {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -31,7 +31,12 @@ import { POOL, streetOf } from '../sim/setup';
 import type { Branch, Building, Card, GameState, Hood, Job, JobKind, Person, Posture, SpecialistKind } from '../sim/types';
 import {
   BRANCHES,
+  blockBuildings,
+  blockId,
+  blockName,
   building,
+  cap,
+  isHome,
   PROMOTE_XP,
   WAGE,
   crewOf,
@@ -70,7 +75,7 @@ import { WardMap } from './map';
 // ---------------------------------------------------------------- state
 
 type Phase = 'paper' | 'orders' | 'watch' | 'plans' | 'over';
-const SAVE_KEY = 'capo-slice-v3';
+const SAVE_KEY = 'capo-slice-v4';
 const SPEEDS = [0, 1100, 550, 220];
 
 interface Hot {
@@ -102,7 +107,7 @@ app.innerHTML = `
       <div class="legend">
         <span><i style="background:#e3a23b"></i>Russo</span>
         <span><i style="background:#5f9fb8"></i>Calloway</span>
-        <span class="key">Click a shop for orders · Tinted ground: turf · Border: owned · Flag: pays protection · Hatched: out of sight · S speakeasy · G gambling · D still · ■ telephone</span>
+        <span class="key">Click a shop or home for orders, for it or its whole block · Tinted ground: turf · Border: owned · Flag: pays protection · Hatched: out of sight · S speakeasy · G gambling · D still · ■ telephone</span>
       </div>
     </div>
     <aside class="side" id="side"></aside>
@@ -884,6 +889,7 @@ map.onHover = (b: Building | null, p: Person | null, px: number, py: number) => 
 
 const ORDER_VERB: Partial<Record<JobKind, string>> = {
   signup: 'Sign them up for protection',
+  block: 'Sign up the whole block',
   guard: 'Guard it',
   hit: 'Hit them',
   wreck: 'Wreck the back room',
@@ -896,6 +902,7 @@ const ORDER_VERB: Partial<Record<JobKind, string>> = {
 function closePick(): void {
   picked = null;
   map.selected = null;
+  map.selectedBlock = null;
   pickEl.hidden = true;
 }
 
@@ -904,33 +911,18 @@ function renderPick(): void {
   if (!picked) return;
   const { b, p, px, py } = picked;
   let html = `<button class="ic close" data-act="pick-close" aria-label="Close">✕</button><div class="pick-info">${describe(b, p)}</div>`;
+  const blk = b ? blockId(b) : null;
   if (phase === 'orders') {
     const ids = [b?.id, p && p.family === 'rival' ? p.id : undefined].filter((x): x is string => !!x);
     const orders = ids.flatMap((id) => ordersFor(s, id));
-    if (orders.length) {
-      html += `<div class="pick-orders">${orders
-        .map((o) => {
-          const runner = person(s, o.runner)!;
-          const who = runner.role === 'boss' ? 'you' : first(runner);
-          const branch = BRANCHES.find((x) => x.id === JOBS[o.kind].branch)!.label;
-          const target = building(s, o.target) ?? null;
-          const extra = o.kind === 'buy' && target ? ` (${money(price(target, 'player'))})` : '';
-          const title = ORDER_VERB[o.kind] ?? JOBS[o.kind].label;
-          if (o.queued) {
-            const q = person(s, o.queued.person)!;
-            const qj = q.jobs.find((j) => j.id === o.queued!.job);
-            return `<div class="po queued"><span><b>${esc(title)}</b><small>On ${esc(q.role === 'boss' ? 'your' : `${first(q)}'s`)} list${qj?.stalled ? `: ${esc(qj.stalled)}` : ''}</small></span>
-              <button class="small" data-pick-del="${q.id}|${o.queued.job}">Cancel</button></div>`;
-          }
-          return `<div class="po"><span><b>${esc(title)}${esc(extra)}</b><small>${esc(branch)}, by ${esc(who)}.<span class="po-hint"> ${esc(JOBS[o.kind].hint)}</span></small></span>
-            <button class="small" data-pick-add="${o.runner}|${o.kind}|${o.target}">Order</button></div>`;
-        })
-        .join('')}</div>`;
-    } else {
-      html += '<p class="hint">Nothing to order here right now.</p>';
-    }
+    html += orders.length ? orderRows(orders) : '<p class="hint">Nothing to order here right now.</p>';
   } else if (phase === 'watch') {
     html += '<p class="hint">Orders are given between months. Use a Change of Plans if something comes up.</p>';
+  }
+  // The block around it: who it pays, and (between months) the order to sign up the lot.
+  if (blk) {
+    const bo = phase === 'orders' ? ordersFor(s, blk) : [];
+    html += `<div class="pick-block"><div class="pick-info"><b>${esc(cap(blockName(s, blk)))}</b>${blockSummary(blk)}</div>${bo.length ? orderRows(bo) : ''}</div>`;
   }
   pickEl.innerHTML = html;
   pickEl.hidden = false;
@@ -942,11 +934,46 @@ function renderPick(): void {
   pickEl.style.top = `${Math.max(4, Math.min(py + 14, wrap.height - h - 4))}px`;
 }
 
+/** Who a block pays: "6 homes, 2 shops · 3 pay us, 1 pays Calloway, 4 pay nobody". */
+function blockSummary(id: string): string {
+  const bs = blockBuildings(s, id);
+  const homes = bs.filter(isHome).length;
+  const n = (f: 'player' | 'rival' | null) => bs.filter((b) => holder(b) === f).length;
+  const parts = [n('player') && `${n('player')} ours`, n('rival') && `${n('rival')} Calloway's`, n(null) && `${n(null)} pay nobody`].filter(
+    Boolean,
+  );
+  const free = bs.filter((b) => !holder(b)).reduce((t, b) => t + b.protection, 0);
+  return `${homes} homes, ${bs.length - homes} shops<br>${parts.join(' · ')}${free ? `<br>Up for grabs: ${money(free)} a month` : ''}`;
+}
+
+/** The order buttons in the map menu. */
+function orderRows(orders: ReturnType<typeof ordersFor>): string {
+  return `<div class="pick-orders">${orders
+    .map((o) => {
+      const runner = person(s, o.runner)!;
+      const who = runner.role === 'boss' ? 'you' : first(runner);
+      const branch = BRANCHES.find((x) => x.id === JOBS[o.kind].branch)!.label;
+      const target = building(s, o.target) ?? null;
+      const extra = o.kind === 'buy' && target ? ` (${money(price(target, 'player'))})` : '';
+      const title = ORDER_VERB[o.kind] ?? JOBS[o.kind].label;
+      if (o.queued) {
+        const q = person(s, o.queued.person)!;
+        const qj = q.jobs.find((j) => j.id === o.queued!.job);
+        return `<div class="po queued"><span><b>${esc(title)}</b><small>On ${esc(q.role === 'boss' ? 'your' : `${first(q)}'s`)} list${qj?.stalled ? `: ${esc(qj.stalled)}` : ''}</small></span>
+              <button class="small" data-pick-del="${q.id}|${o.queued.job}">Cancel</button></div>`;
+      }
+      return `<div class="po"><span><b>${esc(title)}${esc(extra)}</b><small>${esc(branch)}, by ${esc(who)}.<span class="po-hint"> ${esc(JOBS[o.kind].hint)}</span></small></span>
+            <button class="small" data-pick-add="${o.runner}|${o.kind}|${o.target}">Order</button></div>`;
+    })
+    .join('')}</div>`;
+}
+
 map.onPick = (b: Building | null, p: Person | null, px: number, py: number) => {
   if (!b && !p) return closePick();
   tip.hidden = true;
   picked = { b, p, px, py };
   map.selected = b ?? p;
+  map.selectedBlock = b ? blockId(b) : null;
   renderPick();
 };
 
@@ -957,7 +984,15 @@ function describe(b: Building | null, p: Person | null): string {
     const top = p.jobs.find((j) => !j.done && !j.stalled && j.hoods);
     html += `<b>${esc(label(p))}</b>${p.family === 'rival' ? 'Calloway Outfit' : 'Russo family'} · crew ${p.family === 'player' ? crewSize(s, p) : 'unknown'}${top && p.family === 'player' ? `<br>${esc(jobTitle(s, top))}` : ''}`;
   }
-  if (b) {
+  if (b && isHome(b)) {
+    const pays = b.protectedBy === 'player' ? 'Pays us protection' : b.protectedBy === 'rival' ? 'Pays Calloway protection' : 'Pays nobody';
+    html += `${html ? '<hr style="border:0;border-top:1px solid #bbb;margin:6px 0">' : ''}<b>${esc(b.name)}</b>${esc(b.front)}, ${esc(streetOf(b))}<br>${pays}<br>Protection: ${money(b.protection)} a month<br>`;
+    if (holder(b) !== 'player') {
+      html += onTurf(s, 'player', b, b.id)
+        ? '<span class="turf near">Next to our turf: easier to sign up</span>'
+        : '<span class="turf far">Off our turf: harder and slower to sign up</span>';
+    }
+  } else if (b) {
     const who =
       b.owner === 'player'
         ? 'Ours'

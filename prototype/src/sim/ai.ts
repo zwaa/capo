@@ -8,7 +8,11 @@ import type { FamilyId, GameState, JobKind, Person, Posture } from './types';
 import {
   JOBS,
   active,
+  allBlocks,
+  blockCentre,
+  blockFree,
   carPrice,
+  isHome,
   crewSize,
   dist,
   gunPrice,
@@ -61,8 +65,14 @@ export function planFamily(s: GameState, f: FamilyId): void {
   // Protection: sign up the nearest free shop; once at war, muscle in on theirs.
   // Before the war, Calloway keeps to the east end of the ward.
   const inReach = (b: { x: number }) => aggressive || f === 'player' || b.x >= s.width / 2;
-  const free = near(s.buildings.filter((b) => b.owner === null && b.protectedBy === null && inReach(b)));
+  const free = near(s.buildings.filter((b) => !isHome(b) && b.owner === null && b.protectedBy === null && inReach(b)));
   for (const b of free.slice(0, 2)) if (dist(b, home) <= 7) oneOff('signup', b.id, home.traits.includes('hothead') ? 'loud' : 'firm', 2);
+  // Homes come a block at a time: the nearest block with the most doors that pay nobody.
+  const blocks = allBlocks(s)
+    .map((id) => ({ id, at: blockCentre(s, id), n: blockFree(s, id).filter(isHome).length }))
+    .filter((x) => x.n >= 2 && inReach(x.at) && dist(x.at, home) <= 6)
+    .sort((a, b) => dist(a.at, home) - a.n - (dist(b.at, home) - b.n));
+  if (blocks[0] && crewSize(s, home) >= 2) oneOff('block', blocks[0].id, 'firm');
   if (aggressive && chance(s, 0.6)) {
     const theirs = near(protectedBy(s, foe));
     if (theirs[0]) {

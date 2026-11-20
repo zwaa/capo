@@ -12,6 +12,7 @@ import {
   hireHood,
   moveHood,
   moveJob,
+  needFor,
   OFF_TURF_DAYS,
   ordersFor,
   purchase,
@@ -20,11 +21,14 @@ import {
   stepDay,
 } from '../src/sim/engine';
 import { LESSONS } from '../src/sim/lessons';
+import { isLot } from '../src/sim/setup';
 import type { GameState } from '../src/sim/types';
 import {
   BRANCHES,
   LT_CAP,
   PROMOTE_XP,
+  blockBuildings,
+  blockId,
   bossOf,
   branchesOf,
   crewOf,
@@ -183,6 +187,51 @@ describe('turf', () => {
     s.buildings.find((b) => b.id !== far.id && !b.owner && dist(b, far) <= 2)!.protectedBy = 'player';
     startMonth(s);
     expect(offTurf - boss.jobs[0].days).toBe(OFF_TURF_DAYS);
+  });
+});
+
+describe('homes and blocks', () => {
+  it('fills every lot that is not a shop with a home, and homes are not for sale', () => {
+    const s = createGame(14);
+    let lots = 0;
+    for (let y = 0; y < s.height; y++) for (let x = 0; x < s.width; x++) if (isLot(x, y)) lots++;
+    expect(s.buildings.length).toBe(lots);
+    const homes = s.buildings.filter((b) => b.kind === 'home');
+    expect(homes.length).toBeGreaterThan(10);
+    expect(homes.every((b) => b.protection < 50)).toBe(true);
+    const buyable = new Set(targets(s, 'player', 'buy').map((t) => t.id));
+    expect(homes.some((b) => buyable.has(b.id))).toBe(false);
+    // Calloway already collects on his own doorstep.
+    expect(homes.some((b) => b.protectedBy === 'rival')).toBe(true);
+  });
+  it('a pair of hands collects from ten homes, or five shops', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const collect = addJob(s, boss.id, 'collect', null)!;
+    const free = s.buildings.filter((b) => !b.owner && !b.protectedBy);
+    for (const b of free.filter((b) => b.kind === 'home').slice(0, 10)) b.protectedBy = 'player';
+    expect(needFor(s, 'player', collect, boss)).toBe(1);
+    for (const b of free.filter((b) => b.kind === 'shop').slice(0, 5)) b.protectedBy = 'player';
+    expect(needFor(s, 'player', collect, boss)).toBe(2);
+  });
+  it('offers to sign up the block around any building', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    const blk = blockId({ x: boss.homeX, y: boss.homeY });
+    expect(ordersFor(s, blk).map((o) => o.kind)).toEqual(['block']);
+  });
+  it('a block sign-up goes door to door through the block', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    const blk = blockId({ x: boss.homeX, y: boss.homeY });
+    boss.jobs = [];
+    addJob(s, boss.id, 'block', blk, 'loud');
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    const ours = blockBuildings(s, blk).filter((b) => b.protectedBy === 'player');
+    expect(ours.length).toBeGreaterThanOrEqual(3);
   });
 });
 

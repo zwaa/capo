@@ -3,13 +3,15 @@
 //  - Roads are dark asphalt with lane markings; blocks are pavement with kerbs.
 //  - Shops have a lit shopfront; every other lot on a block is a home (tenements, rowhouses).
 //  - Turf is tinted ground in the family colour, outlined at its edge.
-//    A solid border means the family owns the building; a flag means it pays them protection.
+//    A solid border means the family owns the building; a flag means it pays them protection
+//    (homes pay too, and fly a smaller flag).
+//  - A block picked for orders, or with a block sign-up on it, is framed with a dashed line.
 //  - Who holds what is public knowledge. Fog of war (a light hatch) only hides people:
 //    rival lieutenants, crews out on jobs and guards.
 
 import { isLot } from '../sim/setup';
 import type { Building, FamilyId, GameState, Person } from '../sim/types';
-import { JOBS, building, holder, person, seenTile, turfAt, visible } from '../sim/util';
+import { BLOCK_H, BLOCK_W, JOBS, blockCentre, blockXY, building, holder, isBlockId, person, seenTile, turfAt, visible } from '../sim/util';
 
 const C = {
   night: '#0b0e12',
@@ -61,6 +63,8 @@ export class WardMap {
   onPick: (b: Building | null, p: Person | null, px: number, py: number) => void = () => {};
   /** The tile picked for orders, outlined on the map. */
   selected: Pos | null = null;
+  /** The block around it, framed. */
+  selectedBlock: string | null = null;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
@@ -237,12 +241,16 @@ export class WardMap {
 
     // Homes on every lot that isn't a shop; then the shops.
     const boss = person(s, s.families.player.bossId);
+    const bossAt = (x: number, y: number) => !!boss && boss.homeX === x && boss.homeY === y;
     for (let y = 0; y < s.height; y++) {
       for (let x = 0; x < s.width; x++) {
-        if (isLot(x, y) && !shops.has(`${x},${y}`)) this.drawHome(x, y, !!boss && boss.homeX === x && boss.homeY === y);
+        if (isLot(x, y) && !shops.has(`${x},${y}`)) this.drawHome(x, y, bossAt(x, y), null);
       }
     }
-    for (const b of s.buildings) this.drawShop(b, now);
+    for (const b of s.buildings) {
+      if (b.kind === 'home') this.drawHome(b.x, b.y, bossAt(b.x, b.y), b.protectedBy);
+      else this.drawShop(b, now);
+    }
 
     // Orders: dashed lines from each of our people to their one-off jobs.
     if (this.showOrders && !s.run) {
@@ -252,8 +260,9 @@ export class WardMap {
       for (const p of s.people.filter((p) => p.family === 'player' && p.status === 'active')) {
         for (const j of p.jobs) {
           if (JOBS[j.kind].ongoing && j.kind !== 'guard') continue;
-          const t = building(s, j.target) ?? person(s, j.target);
+          const t = isBlockId(j.target) ? blockCentre(s, j.target) : (building(s, j.target) ?? person(s, j.target));
           if (!t) continue;
+          if (isBlockId(j.target)) this.frameBlock(j.target, j.stalled ? 'rgba(141,149,161,0.5)' : 'rgba(227,162,59,0.6)', 0);
           const a = this.px({ x: p.homeX, y: p.homeY });
           const b = this.px(t);
           g.strokeStyle =
@@ -355,7 +364,8 @@ export class WardMap {
       g.fillText(p.name[0], cx, cy + 0.5);
     }
 
-    // The tile picked for orders: a dashed frame.
+    // The block picked for orders, then the tile: dashed frames.
+    if (this.selectedBlock) this.frameBlock(this.selectedBlock, 'rgba(230,225,214,0.55)', -(now / 90) % 9);
     if (this.selected) {
       g.save();
       g.strokeStyle = C.ink;
@@ -390,6 +400,47 @@ export class WardMap {
     }
   }
 
+  /** A dashed frame round a whole city block, just outside its kerbs. */
+  private frameBlock(id: string, colour: string, dashOffset: number): void {
+    const s = this.state!;
+    const g = this.ctx;
+    const T = this.tile;
+    const { bx, by } = blockXY(id);
+    const x0 = bx * BLOCK_W + 1;
+    const y0 = by * BLOCK_H + 1;
+    const x1 = Math.min(s.width, (bx + 1) * BLOCK_W);
+    const y1 = Math.min(s.height, (by + 1) * BLOCK_H);
+    const pad = Math.max(2, T * 0.12);
+    g.save();
+    g.strokeStyle = colour;
+    g.lineWidth = 2;
+    g.setLineDash([7, 5]);
+    g.lineDashOffset = dashOffset;
+    g.strokeRect(this.ox + x0 * T - pad, this.oy + y0 * T - pad, (x1 - x0) * T + pad * 2, (y1 - y0) * T + pad * 2);
+    g.restore();
+  }
+
+  /** A flag on a building's corner, in the colour of whoever it pays (smaller for homes). */
+  private drawFlag(X: number, Y: number, m: number, f: FamilyId, size: number): void {
+    const g = this.ctx;
+    const T = this.tile;
+    const pole = X + T - m - Math.max(2, T * 0.04);
+    const top = Y + m - T * 0.06;
+    g.strokeStyle = C.ink;
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(pole, top);
+    g.lineTo(pole, top + T * 0.3 * size);
+    g.stroke();
+    g.fillStyle = famColour(f);
+    g.beginPath();
+    g.moveTo(pole, top);
+    g.lineTo(pole - T * 0.2 * size, top + T * 0.07 * size);
+    g.lineTo(pole, top + T * 0.14 * size);
+    g.closePath();
+    g.fill();
+  }
+
   /** Stroke the sides of tile (x, y) whose neighbour matches `edge`, inset by `inset` pixels. */
   private edges(x: number, y: number, edge: (nx: number, ny: number) => boolean, X: number, Y: number, inset: number): void {
     const g = this.ctx;
@@ -416,7 +467,7 @@ export class WardMap {
   }
 
   /** A home: brick tenement or rowhouse, a few windows lit. The boss's rented room has a light on. */
-  private drawHome(x: number, y: number, bossHome: boolean): void {
+  private drawHome(x: number, y: number, bossHome: boolean, pays: FamilyId | null): void {
     const g = this.ctx;
     const T = this.tile;
     const X = this.ox + x * T;
@@ -441,6 +492,7 @@ export class WardMap {
       g.lineWidth = 1.5;
       g.strokeRect(X + m + 0.5, Y + m + 0.5, w - 1, w - 1);
     }
+    if (pays) this.drawFlag(X, Y, m, pays, 0.75);
   }
 
   /** A shop: a lit shopfront and sign. Solid border = owned; flag = pays protection. */
@@ -475,23 +527,7 @@ export class WardMap {
       g.strokeRect(X + m + 0.5, Y + m + 0.5, w - 1, w - 1);
     }
     // A flag on the corner for whoever this shop pays (or belongs to).
-    if (f) {
-      const pole = X + T - m - Math.max(2, T * 0.04);
-      const top = Y + m - T * 0.06;
-      g.strokeStyle = C.ink;
-      g.lineWidth = 1;
-      g.beginPath();
-      g.moveTo(pole, top);
-      g.lineTo(pole, top + T * 0.3);
-      g.stroke();
-      g.fillStyle = famColour(f);
-      g.beginPath();
-      g.moveTo(pole, top);
-      g.lineTo(pole - T * 0.2, top + T * 0.07);
-      g.lineTo(pole, top + T * 0.14);
-      g.closePath();
-      g.fill();
-    }
+    if (f) this.drawFlag(X, Y, m, f, 1);
 
     const label = b.racket === 'speakeasy' ? 'S' : b.racket === 'gambling' ? 'G' : b.racket === 'still' ? 'D' : '';
     if (label) {
