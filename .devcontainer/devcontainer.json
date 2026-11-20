@@ -1,0 +1,45 @@
+// Dev container for Capo. Open the repo in VS Code and choose
+// "Dev Containers: Reopen in Container". See .devcontainer/README.md.
+{
+  "name": "Capo",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "args": {
+      "TZ": "${localEnv:TZ:UTC}",
+      "CLAUDE_CODE_VERSION": "latest"
+    }
+  },
+  // The firewall needs these to manage iptables inside the container.
+  "runArgs": ["--cap-add=NET_ADMIN", "--cap-add=NET_RAW"],
+  "customizations": {
+    "vscode": {
+      "extensions": ["anthropic.claude-code", "dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "vitest.explorer"],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "files.eol": "\n"
+      }
+    }
+  },
+  "remoteUser": "node",
+  "mounts": [
+    "source=capo-history-${devcontainerId},target=/commandhistory,type=volume",
+    "source=capo-claude-${devcontainerId},target=/home/node/.claude,type=volume",
+    // Linux node_modules live in a volume, so they never mix with a Windows install.
+    "source=capo-node-modules-${devcontainerId},target=/workspace/prototype/node_modules,type=volume"
+  ],
+  "containerEnv": {
+    "CLAUDE_CONFIG_DIR": "/home/node/.claude",
+    "NODE_OPTIONS": "--max-old-space-size=4096"
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
+  "workspaceFolder": "/workspace",
+  "forwardPorts": [5173, 4173],
+  "portsAttributes": {
+    "5173": { "label": "Capo (dev)" },
+    "4173": { "label": "Capo (preview)" }
+  },
+  // The repo is checked out on Windows: trust the mount and read CRLF files as LF.
+  "postCreateCommand": "git config --global --add safe.directory /workspace && git config --global core.autocrlf input && sudo /usr/bin/chown node:node /workspace/prototype/node_modules && cd prototype && npm ci",
+  "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
+  "waitFor": "postStartCommand"
+}
