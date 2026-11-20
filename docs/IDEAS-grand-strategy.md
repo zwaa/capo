@@ -1,0 +1,58 @@
+# Ideas: a grand-strategy feel
+
+*Exploration notes, not decisions. Once homes and blocks gave the ward painted turf, the game started to
+feel like a Paradox grand strategy game. This file collects what to borrow from that feel and what to
+avoid. Anything we adopt moves into `DESIGN.md` with a row in the decisions log.*
+
+## What already feels that way
+
+- **The map is the scoreboard.** With homes, you hold ground rather than scattered shops.
+- **Characters over units.** Lieutenants with traits, loyalty and ambition (Pillar 1).
+- **Monthly ticks that tell stories.** The Morning Edition turns numbers into stories, the way event pop-ups do.
+
+## Ideas to borrow
+
+### 1. Blocks as provinces
+
+A block gets a few values of its own that change over time:
+
+- **Fear or goodwill:** do the residents back you or resent you? Leaning on people raises fear now and costs goodwill later.
+- **Settled:** a block held for months is truly yours and harder to peel off than one signed up last week
+  (Paradox "cores"). Rewards holding ground over grabbing it.
+- **Police presence:** local heat, so one block is hot while another is quiet.
+
+### 2. Lieutenants as vassals with fiefs
+
+A lieutenant can be given **blocks** instead of (or as well as) a branch. They collect there, keep a cut and
+build their own power base. Less for you to manage; more for them to take with them if they defect.
+Delegation becomes the core trade-off, and it answers the "no micromanagement" rule. The design already
+hints at it: "split Protection by territory" (§5.2).
+
+### 3. Map modes
+
+Toggle the map between turf, income per block, heat, who runs it (fiefs) and what we know about the rival.
+Cheap on the canvas; makes "every number explains itself" visible at a glance.
+
+### 4. Reasons to fight, and sit-downs
+
+Rivals hold grievances ("you took the Orchard Avenue block") and settle them by force or at a sit-down:
+truces, territory swaps, splitting a third family's turf. Blocks give diplomacy something concrete to trade.
+
+## Risks
+
+- **Spreadsheet creep.** Runs are 3–5 hours with a tutorial. Every new block value must show on the map or
+  in the paper, or it's a hidden spreadsheet.
+- **Pacing.** Keep the orders, then watch, then react loop. Don't switch to continuous pausable time.
+- **The late game drags.** Paradox games go flat once you're winning. Lean on the anti-snowball brakes (§9);
+  fiefs make internal threats a stronger one.
+- **Scale.** One ward of nine blocks is small. The feeling really needs the planned city → ward → street zoom.
+
+## Prototype order (cheapest first)
+
+1. **Map modes:** turf, income and heat per block. Mostly UI.
+2. **Settled blocks:** one counter per block; tests whether *holding* ground feels good.
+3. **A lieutenant's fief:** tests whether delegating territory feels like running a family.
+
+## Grilling notes
+
+*Answers from the design grilling go here, idea by idea.*
