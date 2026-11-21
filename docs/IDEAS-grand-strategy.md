@@ -87,3 +87,15 @@ truces, territory swaps, splitting a third family's turf. Blocks give diplomacy 
 - **You set each lieutenant's cut** of their blocks' take: higher keeps them loyal, lower keeps money in the family.
 - **When a lieutenant defects, it depends on goodwill:** blocks whose residents like you stay; feared or
   resentful ones go with the lieutenant.
+
+### Idea 2: lieutenants holding blocks (round 2)
+
+- **Residents feel the lieutenant's fear and goodwill,** not the family's: they know the man who comes round.
+  The longer a lieutenant holds a block, the more it's his.
+- **Asking for blocks:** both demands on the boss ("Sal wants the garage block") and swap proposals between
+  lieutenants that the boss approves.
+- **The boss can hold only a few blocks** properly; the rest drift unless granted. This pushes you to delegate.
+- **One cut rate per lieutenant**, across all their blocks.
+- **On defection, feared blocks go with him; liked ones stay.** Fear is portable, and love is the family's.
+  This refines round 1: **fear belongs to the man** who comes round, and **goodwill builds up in the family's
+  name.** A lieutenant who rules by fear is the one to watch.
