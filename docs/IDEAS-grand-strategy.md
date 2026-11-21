@@ -78,3 +78,12 @@ truces, territory swaps, splitting a third family's turf. Blocks give diplomacy 
 - **Heat on a block** raises raids on rackets there, slows jobs, erodes goodwill and gets hoods arrested.
 - **On screen:** full detail in map modes, with light hints on the normal map (dim streetlamps for heat,
   lit windows for goodwill).
+
+### Idea 2: lieutenants holding blocks (round 1)
+
+- **You grant blocks** (a boss action). Lieutenants also **ask for, or trade for,** blocks whose bonuses
+  help the jobs they've been given.
+- **Branches and blocks are separate:** branches say what a lieutenant does; blocks say where their power lies.
+- **You set each lieutenant's cut** of their blocks' take: higher keeps them loyal, lower keeps money in the family.
+- **When a lieutenant defects, it depends on goodwill:** blocks whose residents like you stay; feared or
+  resentful ones go with the lieutenant.
