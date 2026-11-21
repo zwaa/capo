@@ -111,3 +111,33 @@ truces, territory swaps, splitting a third family's turf. Blocks give diplomacy 
 - **Reasons to fight:** taken blocks, insults (hits, wrecked back rooms, beaten collectors) and broken deals.
 - **Looser than Paradox war rules.** The underworld's rules are guidelines. Breaking them costs some
   reputation, but if everyone goes after one person the hit is small: piling on the leader is easy to justify.
+
+### Scale: run length
+
+- **Variable length.** The dream is crime over a **century in one city**. For now, keep Prohibition at
+  the original length (3–5 hours), but design so it can scale up.
+- **What earns a long run:** rise and fall, succession (the family outlives the boss), history moving under
+  you, and people with long arcs.
+- **Drop the roguelite layer** (unlocks, Counts ladder). Replay comes from the procedural city and rivals.
+- **Turn length scales with size:** monthly while small, quarterly once you run the city, with lieutenants
+  handling the months in between.
+
+### Scale: multi-level delegation (round 1)
+
+- **Layers grow with you.** Promote a lieutenant to capo and his people become his lieutenants. There's no
+  fixed number of layers.
+- **The top layer gets the same ranked job lists,** just bigger jobs ("Hold the docks ward").
+- **Reports are honest.** You always see the true state; the challenge is acting on it.
+- **Reach down freely while small;** the cost of going over someone's head rises as the family grows.
+
+### Scale: multi-level delegation (round 2)
+
+- **The capo writes his lieutenants' job lists,** in his own style (a hothead adds hits). You can look;
+  editing them is going over his head.
+- **Succession: blood first.** Family members (a son, a cousin) have a claim, but a strong capo can push past them.
+- **Cards come up the chain** in quarterly turns: a capo asks how to handle something, or acts on his own
+  if you don't answer.
+- **Across eras, everything carries:** the family's name and history, turf and buildings, people who age
+  (their children can join), and a city that changes.
+- **Think in ages.** Each era changes the rules. Prohibition is the boom. After Repeal everything gets hard
+  and the family shrinks. Then the war brings new chances (the black market), and so on.
