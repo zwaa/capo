@@ -141,3 +141,14 @@ truces, territory swaps, splitting a third family's turf. Blocks give diplomacy 
   (their children can join), and a city that changes.
 - **Think in ages.** Each era changes the rules. Prohibition is the boom. After Repeal everything gets hard
   and the family shrinks. Then the war brings new chances (the black market), and so on.
+
+### Scale: the long game
+
+- **You are the family,** through boss after boss. A run ends only if the family is destroyed, or at the
+  century's end.
+- **Each age sets goals** (own city hall, go legit, control the docks). Meeting them shapes the next age.
+- **Start in any age** (1927, 1945, 1970...) with a fitting family, or play straight through.
+- **The shrink after Repeal is both a challenge and a choice:** it hits everyone, and getting out of
+  liquor early softens it, at a cost now.
+- **Scope note:** this is a big game. The prototype stays on Prohibition in one ward; ideas from here only
+  shape what we build there if they're cheap.
