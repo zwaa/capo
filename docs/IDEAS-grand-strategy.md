@@ -65,3 +65,16 @@ truces, territory swaps, splitting a third family's turf. Blocks give diplomacy 
 - **Settled turf isn't a wall** if there are jobs that work on goodwill and fear, ours or the enemy's, to
   weaken a hold: charity, intimidation and so on.
 - **Heat is local** to blocks, but family-wide heat ends up on your **HQ**.
+
+### Idea 1: blocks (round 2)
+
+- **Bonuses go to whoever holds the block.** A lieutenant's blocks make that lieutenant stronger, so you
+  specialise lieutenants by the territory they control (the garage blocks make a natural bootlegger).
+- **Respected (high fear and high goodwill) is the hardest corner** to reach and hold.
+- **Stances and jobs.** A stance on your own blocks (e.g. Generous, Firm, Iron fist) nudges the dials each
+  month; one-off jobs (charity, intimidation) strike at an enemy's blocks.
+- **HQ only moves by losing it** (raided or taken). It's a real blow, not a way to shed heat.
+- **Heat spreads a little** to neighbouring blocks each month.
+- **Heat on a block** raises raids on rackets there, slows jobs, erodes goodwill and gets hoods arrested.
+- **On screen:** full detail in map modes, with light hints on the normal map (dim streetlamps for heat,
+  lit windows for goodwill).
