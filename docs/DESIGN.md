@@ -422,6 +422,7 @@ After that the lessons switch off, and the run carries on in the same city. Less
 5. **Specialist roster.** Which specialists are in the full game, and can a specialist ever become a lieutenant (or the reverse)?
 6. **Boss attention.** Is a shared crew enough of a limit on the boss running everything, or does the boss also need limited attention per month?
 7. **Engine for the full game.** Godot or a web engine (e.g. PixiJS) for the isometric map. Decide after the vertical slice.
+8. **A grand-strategy feel?** Blocks as provinces, lieutenants holding blocks as fiefs, map modes, rival sit-downs. Exploration notes in [IDEAS-grand-strategy.md](IDEAS-grand-strategy.md).
 
 ---
 
