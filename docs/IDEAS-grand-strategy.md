@@ -99,3 +99,15 @@ truces, territory swaps, splitting a third family's turf. Blocks give diplomacy 
 - **On defection, feared blocks go with him; liked ones stay.** Fear is portable, and love is the family's.
   This refines round 1: **fear belongs to the man** who comes round, and **goodwill builds up in the family's
   name.** A lieutenant who rules by fear is the one to watch.
+
+### Idea 3: map modes
+
+- **All four modes:** fear and goodwill, heat, who holds what (by lieutenant, and Calloway's where known)
+  and income.
+
+### Idea 4: grievances and sit-downs
+
+- **Diplomacy waits** until there are two or three rival families to play off.
+- **Reasons to fight:** taken blocks, insults (hits, wrecked back rooms, beaten collectors) and broken deals.
+- **Looser than Paradox war rules.** The underworld's rules are guidelines. Breaking them costs some
+  reputation, but if everyone goes after one person the hit is small: piling on the leader is easy to justify.
