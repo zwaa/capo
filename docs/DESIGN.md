@@ -1,6 +1,6 @@
 # CAPO — Game Design Document
 
-*v0.1 · working draft · Prohibition-era crime management*
+*v0.2 · working draft · crime management in one city, age by age, starting with Prohibition*
 
 ---
 
@@ -10,7 +10,9 @@ It's 1927. Booze is illegal, everyone wants it, and the city is up for grabs.
 
 You run a crime family from the first speakeasy to Repeal in December 1933. Each turn you give orders to your **lieutenants** and meet the people who matter. Then you **watch the month play out** across the city and step in when something goes wrong, which it will, because your lieutenants have their own ideas.
 
-A run is **3–5 hours** in a **procedurally generated city** against **2–3 rival families**. You win by wiping out the opposition, by owning city hall, by getting out clean, or by surviving to Repeal with the strongest legacy.
+A run of **Prohibition** is **3–5 hours** in a **procedurally generated city** against **2–3 rival families**. You win the age by wiping out the opposition, by owning city hall, by getting out clean, or by surviving to Repeal with the strongest legacy.
+
+**The long game:** Prohibition is the first of several **ages** (§14). You play **the family**, not one boss, and a family can go on through the lean years after Repeal, the war and beyond: crime over a century in one city. Each age changes the rules and sets its own goals. A run can be one age or many.
 
 **Single-player.** **Inspiration:** the crime-management genre of the late 90s, with its orders phase followed by a watch phase. We keep that core and rebuild the parts that frustrated players: micromanagement, opaque systems, passive AI and a won game that still needs hours of cleanup.
 
@@ -38,14 +40,14 @@ When pillars conflict, the higher one wins.
 
 ## 4. Structure of a run
 
-- **Span:** January 1927 to December 1933 (Repeal). **Hard end.**
-- **Turn length:** **one month**, which gives about 84 turns at 2–4 minutes each, or roughly 3–5 hours. Unexpected events can interrupt the month for a **Change of Plans** (§5.5).
+- **Span:** the Prohibition age runs January 1927 to December 1933 (Repeal), a **hard end to the age**. The run can stop there or carry on into the next age (§14).
+- **Turn length:** **one month**, which gives about 84 turns at 2–4 minutes each, or roughly 3–5 hours. Unexpected events can interrupt the month for a **Change of Plans** (§5.5). **Turns lengthen as the family grows:** once you run the city, turns become quarterly, and the layers of command below you (§5.7) handle the months in between.
 - **Fixed historical events** give each run its shape. These are fictionalised and contain no real people:
   - **Oct 1929: the Crash.** Legit businesses lose value, desperate people make good recruits, and gambling and loansharking boom.
   - **1931: a federal tax case** against a big-name boss sets precedent, and unexplained wealth becomes a serious risk from then on.
   - **1932–33: Repeal approaches.** Booze margins slide each month. Families still relying on liquor in 1933 are in trouble.
 - **The city:** about 12–16 wards, procedurally generated each run. Each run gets a new layout, new businesses, new officials and new rival leaders.
-- **Every run starts from the bottom.** The boss, two or three hoods, a few hundred dollars and no lieutenants. The rival families are already established. Each run follows the same arc: a hustler working one street, then a small outfit, then a family, then a contender for the city. The boss's origin (§6.6) changes what you start with, not where you start.
+- **A Prohibition run starts from the bottom.** The boss, two or three hoods, a few hundred dollars and no lieutenants. The rival families are already established. It follows the same arc: a hustler working one street, then a small outfit, then a family, then a contender for the city. The boss's origin (§6.6) changes what you start with, not where you start. **You can also start in a later age** (§14) with a family that fits it.
 
 ## 5. The turn loop
 
@@ -86,6 +88,12 @@ The family's work is split into four **areas**, and each area into **branches**.
 
 **Handing a branch to a lieutenant** hands over its jobs and the hoods you give them, and frees the boss's crew for the rest. You gain capacity and lose control. You can run any branch yourself for as long as you like. Later, a busy branch can be **split between two lieutenants by territory**, e.g. Protection (west side) and Protection (docks).
 
+**Blocks: where a lieutenant's power lies.** Branches say what a lieutenant *does*; **blocks** (§7.1) say where their **power base** is. The two are separate: Sal can run Enforcement and hold the docks.
+- **You grant blocks** in a boss meeting. Lieutenants also **ask for** blocks (as a demand, §6.3) and **propose swaps** with each other for you to approve, usually for blocks whose bonuses suit their jobs.
+- **Bonuses go to whoever holds the block.** A block with a garage makes a natural bootlegger's base; one full of shops suits a collector. So you **specialise lieutenants by their territory**, and their territory makes them stronger, not you.
+- **You set each lieutenant's cut** of their blocks' take, one rate per lieutenant. Higher keeps them loyal; lower keeps money in the family.
+- **The boss can hold only a few blocks** properly. The rest drift unless granted, which pushes you to delegate.
+
 **Boss actions:** a limited number of meetings per month (more as the family grows):
 - Bribe or pay off an official · negotiate with a rival (truce, territory, a joint hit, a betrayal) · back an election candidate · promote, discipline or reward a lieutenant · hand branches to lieutenants · hire a lieutenant or a specialist
 
@@ -98,13 +106,15 @@ You can give a **direct order** to a single hood, for example "Vinnie, take out 
 
 Direct orders are a scalpel. Use them too often and your lieutenants start asking why they need you.
 
+**The cost grows with the family.** While the family is small you can reach down freely. Once there are layers of command (§5.7), reaching past a capo to his lieutenants, or further down, costs more the further you reach. Editing the job list a capo wrote for his own people counts as going over his head.
+
 ### 5.4 The Month (watch phase, about 60–90s)
 The city map plays out the month at speed: cars moving, deliveries, collections and flare-ups. The game **pauses on 2–5 react cards** per month, each a short decision about something going wrong:
 
 > *Your driver spots a tail on the Kessler Street run.*
 > **[Lose them]** risk crashing the truck · **[Lead them to the warehouse]** ambush, very loud · **[Dump the load]** lose $1,200, stay clean
 
-Card sources include lieutenant personality clashes, rival moves, police raids, informant tip-offs and random city events. The number of cards is capped so the phase stays snappy.
+Card sources include lieutenant personality clashes, rival moves, police raids, informant tip-offs and random city events. The number of cards is capped so the phase stays snappy. Once the family has layers of command (§5.7), most cards **come up the chain** from a capo.
 
 **Violence** resolves automatically from numbers, weapons, Muscle and Nerve, surprise and position. Big fights produce **one decisive react card** (*push / retreat / take a hostage / call in reinforcements*) before resolving. Results feed straight into casualties, arrests, heat and headlines.
 
@@ -127,6 +137,14 @@ The point: monthly turns give the game its pace, but the plan is never locked in
 
 ### 5.6 Fallout (automatic)
 Loyalty, Ambition, Heat, Federal Attention and official relationships update, the AI families commit their next orders, and the next newspaper is written.
+
+### 5.7 Scaling up: layers of command
+A street outfit and a city-wide family can't be run the same way, so **layers of command grow with you**:
+- **Promote a lieutenant to capo** and the lieutenants you give them become *their* lieutenants. There's no fixed number of layers.
+- **The top layer gets the same ranked job lists,** just with bigger jobs ("Hold the docks ward", "Run the gambling uptown").
+- **The capo writes the job lists for the people under him,** in his own style: a *Hothead* adds hits, a *Cautious* one plays it safe. You can look at them any time.
+- **Reports are honest.** You always see the true state of the family. The challenge is acting on it through people with their own ideas, not finding out what's going on.
+- **Cards come up the chain** (§5.4): in a quarterly turn, a capo asks how to handle something, and if you don't answer, he acts on his own.
 
 ---
 
@@ -151,9 +169,10 @@ You care about them through their lieutenant and can step in directly via §5.3.
 
 ### 6.3 Ambition and betrayal
 Power you give a lieutenant (turf, crew size, money, prestige) raises their **Ambition**. That's the trade-off: the most capable lieutenant is the most dangerous.
-- **Demands** come first: a bigger cut, a ward of their own, a promotion, a hit on a rival lieutenant.
+- **Demands** come first: a bigger cut, a block or a ward of their own, a promotion, a hit on a rival lieutenant.
 - If demands go unmet, Ambition turns into **plotting**: skimming, splitting off with their crew and turf, **flipping to the feds**, or a **coup** against you.
 - There are **warning signs** before every betrayal (new car, missed meetings, seen with rival people). Informants inside your own family can confirm them.
+- **A defector takes the blocks that fear him.** Residents feel the fear of the man who comes round, but goodwill builds up in the family's name (§7.1). When a lieutenant goes, his **feared** blocks go with him and his **liked** ones stay with you. The lieutenant who rules by fear is the one to watch.
 
 ### 6.4 Specialists
 Lieutenants run **activities** with crews of hoods. **Specialists** look after the family's **resources**: each one keeps one kind of thing supplied, cheap and in good condition for **the whole family**. They have no crew and no turf, and they **don't count toward the six-lieutenant cap**.
@@ -180,9 +199,10 @@ Driving isn't a specialism: every hood drives, and how well is part of their sta
 **The catch:** specialists know everything about their part of the business. A lawyer or an accountant who turns is the most dangerous witness there is; the 1931 tax case (§4) is built on exactly that. They have loyalty and a price like anyone else, rivals try to buy them, and the Task Force (§8.5) goes after them first.
 
 ### 6.5 The Boss and succession
-**You are a character on the map.** The boss can be shot, arrested, convicted or indicted for tax evasion.
-- When the boss falls, **succession** happens: the lieutenant with the strongest claim (Authority, Loyalty, crew size) takes over. **That may be the one who arranged it.**
+**The boss is a character on the map,** but **you play the family**, through boss after boss. The boss can be shot, arrested, convicted, indicted for tax evasion, or simply grow old.
+- When the boss falls, **succession** happens: **blood first.** Family members (a son, a nephew, a cousin) have a claim, but a strong capo or lieutenant with enough Authority, Loyalty and backing can push past them. **That may be the one who arranged it.**
 - The run continues with the new boss's traits, and loyalties reshuffle. Some lieutenants won't accept the new boss and leave.
+- **People age.** Over a long run lieutenants grow old, retire and die, and their children can join the family.
 - **Game over** only if no viable successor exists or the family collapses.
 
 ### 6.6 Creating your boss
@@ -211,6 +231,8 @@ Your family starts as a **blank slate**: no archetype, no fixed playstyle. Inste
 - **Protection:** shops on your streets pay you every month to be left alone. You don't own them. Muscle signs them up and collects. Shops nobody collects from start to drift, and a rival can sign them up.
 - **Homes pay too.** Every lot that isn't a business is a home (tenements, rowhouses, boarding houses), and homes pay a little protection ($10–30 a month against a shop's $100–200). They can't be bought or fitted out. They sign up easily and quietly (little heat), and a collector gets round ten homes in the time it takes to do five shops. Homes are what make turf feel like turf: a block whose doors all fly your flag is yours.
 - **Blocks are targets.** The ward is laid out in city blocks between the roads. Click any building and the menu also offers **Sign up the whole block**: one job, two pairs of hands, going door to door through every home and shop on the block that pays nobody. A quiet crew takes no for an answer until next month; a firm or loud one leans (a little heat per door). Doors that already pay a rival still need a sign-up of their own, and a fight.
+- **Blocks have two dials: fear and goodwill.** They're separate, so more play styles work: a feared, resented block (*iron fist*) pays reliably but tips off the police and rivals the moment you slip; a liked, unafraid one (*neighbourhood favourite*) hides your people, warns you of rival crews and sends recruits, but pays late. **Respected** (feared and liked) is the hardest to reach and hold. Fear belongs to the lieutenant who holds the block; goodwill builds up in the family's name (§6.3).
+- **Working the dials:** set a **stance** on your own blocks (e.g. *Generous*, *Firm*, *Iron fist*) that nudges them each month, and use one-off **jobs** (charity, intimidation) against a rival's blocks to loosen their hold. A block held for months is hard to crack, but never a wall.
 - **Property:** buildings you own, bought or taken over. Only property can hold a back room (Vice), a telephone, or launder money (Fixing). Owned buildings don't pay protection, but they can turn a small legit profit.
 
 Each ward has 4–8 businesses. A building has a **front** (barber, laundry, cigar shop, garage, club) and a **back room** slot:
@@ -236,14 +258,15 @@ Some resources are **counted**, because they move around and can be lost. Others
 - **Where it's kept matters.** Stock sits in owned buildings (§7.1), so a raid on the warehouse is a raid on the arsenal.
 
 ### 7.4 The Repeal curve
-Bootlegging margins stay high until 1931, then fall every month. Legit holdings and diversified rackets keep their value. The economy shifts under you, and families that don't diversify lose ground.
+Bootlegging margins stay high until 1931, then fall every month. Legit holdings and diversified rackets keep their value. The economy shifts under you, and families that don't diversify lose ground. **After Repeal every family shrinks.** It's both a challenge and a choice: it hits everyone, and getting out of liquor early softens it, at a cost while the money is still good.
 
 ---
 
 ## 8. Law and politics (medium depth)
 
 ### 8.1 Heat
-- **Ward Heat** (local): from violence, raids and witnesses. High heat brings patrols, raids and arrests.
+- **Block heat** (local): from violence, raids and witnesses on that block. It **spreads a little** to neighbouring blocks each month. A hot block gets **more raids** on its rackets, **slower jobs** (patrols), **more arrests** of hoods working it, and **less goodwill** (tenants don't want cops on the stairs).
+- **Family heat lands on the HQ.** Heat that's about the family rather than a block builds up at the boss's headquarters, so the big danger is a raid on HQ. **HQ only moves by losing it** (raided or taken): a real blow, not a way to shed heat.
 - **Federal Attention** (global): from your **share of the city** plus headline-making violence. See §9.
 
 ### 8.2 Officials
@@ -267,7 +290,7 @@ When one family pulls clearly ahead, an incorruptible federal agent and their sq
 
 ## 9. Anti-snowball brakes
 1. **Federal Attention scales with your share** of the city, not just your size. The leader always has it worst.
-2. **Internal ambition:** every ward you hand out makes a lieutenant stronger, and stronger lieutenants want more.
+2. **Internal ambition:** every block or ward you hand out makes a lieutenant stronger (its bonuses are theirs, §5.2), and stronger lieutenants want more. A feared lieutenant who defects takes his blocks with him (§6.3).
 3. **Rival coalitions:** AI families **team up against the leader**: truces with each other, joint hits, tip-offs to the cops about your operations.
 
 Together these should keep the last third of a run tense, not a cleanup.
@@ -287,6 +310,7 @@ Together these should keep the last third of a run tense, not a cleanup.
 
 - Rivals use the **same order system** as the player: same fog of war, same informants, and their own lieutenants with ambition. **A coup in a rival family is an opportunity for you.**
 - **Diplomacy:** truces, territory deals, joint hits, betrayals. Any rival can break a deal, and the archetype decides how likely they are to.
+- **Grievances** give a rival reason to come after you: **taken blocks**, **insults** (hits, wrecked back rooms, beaten collectors) and **broken deals**. The rules are looser than a grand strategy game's war rules: the underworld's code is a set of guidelines. Breaking it costs some reputation, but when everyone goes after one family the hit is small, so piling on the leader is easy to justify.
 
 ---
 
@@ -300,13 +324,15 @@ Together these should keep the last third of a run tense, not a cleanup.
 
 ## 12. Winning and losing
 
+**Each age sets its own goals** (§14), and meeting them shapes the next age. These are Prohibition's:
+
 | Outcome | Condition |
 |---|---|
 | **Elimination** | Every rival family destroyed or absorbed. |
 | **Own the City** | Hold the **Mayor + Police Chief + DA + a majority of aldermen** at the same time for 6 consecutive months. |
 | **Go Legit** | Reach a clean net-worth threshold with low Federal Attention, then **retire**. You can end the run early on your own terms with a bonus to your legacy score. |
 | **Repeal** (Dec 1933) | If nobody has won, the game ends and scores **Legacy**: clean wealth, territory, officials owned, family survival, and the boss alive and free. |
-| **Defeat** | The family collapses (no turf and no money), or the boss falls with no viable successor. |
+| **Defeat** | The family collapses (no turf and no money), or the boss falls with no viable successor. This ends the whole run, in any age. |
 
 ---
 
@@ -329,6 +355,7 @@ The violence and vice are **in the game**: people die, rackets include brothels 
   1. **City:** the whole map, coloured by family territory, with heat and Federal Attention overlays. Planning happens here.
   2. **Ward:** blocks, fronts, patrols and crews as small groups. The default view in the watch phase.
   3. **Street:** individual hoods, cars, doorways and people on the pavement. Scenes such as a collection, a tail, a raid or a meeting play out here, staged Hays Code style (§13.1).
+- **Map modes** switch the map between turf, **fear and goodwill**, **heat**, **who holds what** (by lieutenant, and the rival's where known) and **income** per block. The normal map carries light hints: dim streetlamps where it's hot, lit windows where you're liked.
 - **Fog of war applies at every zoom level.** At street level you see only what your people see. Zooming into a ward with no informants shows dark windows and empty streets. Seeing more of the city is something you earn, and the zoom makes that visible.
 - **Street-level details are clues.** A new car outside a lieutenant's house, a rival's truck making deliveries to "your" speakeasy, a stranger watching your front. The player who looks closely can spot betrayals before an informant reports them.
 - **Art cost warning:** street level is the biggest art expense in the game. Keep it **modular**: a kit of building fronts, interiors-through-windows, vehicles and character sprites recombined procedurally, plus a small set of animated, staged scenes. Don't plan bespoke art per location.
@@ -338,44 +365,22 @@ The violence and vice are **in the game**: people die, rackets include brothels 
 
 ---
 
-## 14. Between runs (roguelite meta-progression)
+## 14. Ages (the long game)
 
-**Principle: unlocks give you new options, not more power.** Nothing carried between runs makes you stronger. It makes the next run *different*. The anti-snowball brakes (§9) stay meaningful no matter how many hours someone has played.
+*This replaces the roguelite layer (deeds, legacy points, the Counts ladder), dropped on 2026-11-21. Replay comes from the procedural city, its rivals and the ages, not from unlocks.*
 
-### 14.1 Deeds unlock content
-Specific accomplishments unlock specific things, so playing in new ways is rewarded and players learn the systems as they go:
+**You play the family over the ages.** Prohibition is the first age. A family can carry on through the ages after it, with everything it has: its name and history, its turf and buildings, its people (who age, retire and have children who join) and a city that changes around it.
 
-| Deed | Unlocks |
-|---|---|
-| Win an election by stuffing ballot boxes | Trait: *Ward Heeler* |
-| Survive a coup attempt | Trait: *Sleeps With One Eye Open* |
-| Go Legit before 1931 | Origin: *Old Money*, a society heir slumming it |
-| Have a lieutenant turn informant and still win | Event pack: *The Rat* |
-| Own every official in the city at once | Rival archetype: *The Reformer*, a crusading family that fights through the law |
-| Run a ward with zero bodies for a year | Racket: *Insurance*, a legal front with an illegal model |
+- **Each age changes the rules.** Prohibition is the boom. After Repeal everything gets harder and the family shrinks (§7.4). Then the war brings new chances (the black market, rationing), and so on. New rackets appear as old ones die, and neighbourhoods rise and decline.
+- **Each age sets goals** (own city hall, go legit, control the docks). Meeting them shapes how the next age starts.
+- **Start in any age** (1927, 1945, 1970...) with a family that fits it, or play straight through.
+- **Variable length.** One age is a 3–5 hour run. A full campaign is much longer, so saving and resuming matter.
+- **Turns lengthen as you grow** (§4), and layers of command (§5.7) keep a city-wide family manageable.
 
-Deeds unlock **origins, traits, rival archetypes, rackets, city districts** (e.g. a racetrack or a port with an island) **and event packs**. A **Rogues' Gallery** shows locked deeds as rumours, with a hint of how to earn each one.
+### 14.1 Every age ends with a front page
+Every age, and every run, won or lost, ends with a **final front page**: an obituary, a trial verdict, a society-page retirement or a gangland "where are they now." The ending is something to remember (and screenshot).
 
-### 14.2 Legacy points buy cosmetics and convenience
-The end-of-run Legacy score (§12) gives **legacy points**, spent only on things that don't change balance:
-- Portrait styles, newspaper mastheads, map palettes, period music.
-- **Saved boss presets** and **city seed selection** (replay a city you liked).
-- **The Family Album:** a record of every past boss, lieutenant and front page.
-
-### 14.3 Counts (the difficulty ladder)
-Winning a run unlocks the next **Count**. Like charges stacking up on an indictment, each Count adds a modifier that stays for all higher Counts:
-
-- **Count I:** standard game.
-- **Count II:** officials' prices rise 25%.
-- **Count III:** the Task Force arrives earlier.
-- **Count IV:** a third rival family.
-- **Count V:** lieutenants start with higher Ambition.
-- …up to **Count X**, with a harsher Repeal curve, rivals forming coalitions sooner, and so on.
-
-Counts give experienced players a long climb without making the first run punishing.
-
-### 14.4 Every ending makes a good story
-Every run, won or lost, ends with a **final front page**: an obituary, a trial verdict, a society-page retirement or a gangland "where are they now." It lists what the run unlocked. Losing always moves something forward, and the ending is something to remember (and screenshot).
+**Scope:** the prototype stays on Prohibition in one ward. Ideas for later ages only shape what we build now if they're cheap.
 
 ---
 
@@ -415,18 +420,22 @@ After that the lessons switch off, and the run carries on in the same city. Less
 
 ## 18. Open questions
 
-1. **Deed list.** The full set of deeds and unlocks (§14.1). How many is enough at launch?
+1. **The ages after Prohibition.** Which ages, how long each one is, and what each one's goals are (§14).
 2. **Final origin and trait list** (§6.6).
 3. **Change of Plans tuning** (§5.5). Is 1–2 per month right? Which events trigger one?
 4. **Job lists.** How many jobs per area before it feels like micromanagement? Can hoods be lent between areas mid-month?
 5. **Specialist roster.** Which specialists are in the full game, and can a specialist ever become a lieutenant (or the reverse)?
 6. **Boss attention.** Is a shared crew enough of a limit on the boss running everything, or does the boss also need limited attention per month?
 7. **Engine for the full game.** Godot or a web engine (e.g. PixiJS) for the isometric map. Decide after the vertical slice.
-8. **A grand-strategy feel?** Blocks as provinces, lieutenants holding blocks as fiefs, map modes, rival sit-downs. Exploration notes in [IDEAS-grand-strategy.md](IDEAS-grand-strategy.md).
+8. **Lieutenant cap with layers of command.** Is the cap of six per boss, per capo, or for the whole family once there are capos (§5.7)?
+9. **Heat does a lot.** Block heat drives raids, job speed, arrests and goodwill (§8.1). Does that read clearly, or does it need trimming?
+10. **Capos acting alone.** When a card comes up the chain and you don't answer, what does each kind of capo do (§5.7)?
+
+The grilling notes behind §5.2, §5.7, §7.1, §8.1 and §14 are in [IDEAS-grand-strategy.md](IDEAS-grand-strategy.md).
 
 ---
 
-## Appendix A: decisions log (grilling session, 2026-11-19)
+## Appendix A: decisions log (grilling sessions, 2026-11-19 and 2026-11-21)
 
 | Topic | Decision |
 |---|---|
@@ -438,17 +447,17 @@ After that the lessons switch off, and the run carries on in the same city. Less
 | Content | Violence and vice stay in; shown Hays Code style (implied, off-screen, cutaways) |
 | Art | Isometric city, pulp-illustration portraits, period-paper UI |
 | Politics | Medium depth (elections, officials, trials), paid for by fewer rivals |
-| Run length | 3–5 hours, procedurally generated city |
+| Run length | Variable. One age (Prohibition) is 3–5 hours in a procedurally generated city; a campaign can run on through later ages, towards a century in one city |
 | Command model | Hybrid: lieutenants by default, costly direct orders |
 | Watch phase | Fast map simulation + 2–5 react cards per month |
-| Turn length | Monthly |
+| Turn length | Monthly while small; quarterly once you run the city |
 | Mid-month response | Change of Plans: big events pause the month for re-issuing orders; speed depends on telephones and runners |
 | Boss creation | One origin + two traits |
-| Meta-progression | New options, not power. Deeds unlock content, legacy points buy cosmetics and convenience, Counts I–X difficulty ladder, every ending a front page |
+| Meta-progression | Dropped (2026-11-21). No roguelite layer: replay comes from the city, rivals and ages. Every ending is still a front page |
 | Zoom | City → ward → street, with fog of war at every level |
 | Lieutenant cap | 6 |
 | Tutorial | First run with lessons switched on ("The Nephew"): learn each area in turn, hiring a lieutenant for each |
-| Run start | Every run starts from the bottom: the boss, two or three hoods, no lieutenants. Origins change what you start with |
+| Run start | A Prohibition run starts from the bottom: the boss, two or three hoods, no lieutenants. Origins change what you start with. You can also start in any later age with a family that fits it |
 | Orders | Four areas split into nine branches. Each branch is run by the boss or a lieutenant; a lieutenant takes 1–3 branches with one shared crew. Ranked standing jobs, optional targets, hoods as capacity |
 | Hoods and promotion | Every hood is named, with stats, traits, history and experience. Jobs pick the best-suited squad; hoods grow, get hurt by name, and the experienced can be promoted. Lieutenants only come from promotion; a monthly hiring hall supplies new hoods |
 | Specialists | One per resource: recruiter (hoods), armourer (guns), mechanic (cars), brewmaster (liquor), accountant (money), lawyer (legal cover), doctor (health), newsman (reputation). No crew, outside the lieutenant cap, and dangerous if they turn. Never required: without one you pay more or get worse |
@@ -457,11 +466,18 @@ After that the lessons switch off, and the run carries on in the same city. Less
 | Homes and blocks | Every non-business lot is a home that pays a little protection. Blocks are order targets: one job signs up a whole block door to door. Free-form region selection (dragging out an area) is left for later |
 | Next step | Vertical slice v2: rebuild the prototype around areas, jobs and starting from nothing (§17) |
 | Anti-snowball | Federal attention by share + internal ambition + rival coalitions |
-| Clock | Hard end at Repeal, Dec 1933 |
-| Boss | Character on the map + succession system |
+| Clock | Repeal (Dec 1933) is a hard end to the Prohibition age; the run can stop there or play on |
+| Boss | Character on the map + succession system. You play the family, not the boss: blood first, but a strong capo can push past. People age |
 | Tone | Pulpy and wry |
 | Intel | Fog of war + informants with confidence ratings + moles both ways |
 | Rivals | 2–3, archetype + random traits |
 | Violence | Auto-resolve + one decisive react card |
 | City | Procedural fictional city |
-| Win conditions | Elimination · Own the City · Go Legit · Legacy score at Repeal |
+| Win conditions | Each age sets goals that shape the next. Prohibition's: Elimination · Own the City · Go Legit · Legacy score at Repeal |
+| Ages | The family plays on through ages that change the rules: Prohibition's boom, the lean years after Repeal, the war's black market... Start in any age. Repeal's shrink is both a challenge and a choice |
+| Blocks as power bases | Blocks aren't provinces; they're where a lieutenant's power lies. Granted by the boss; lieutenants ask for and swap them. Block bonuses go to the holder, so lieutenants specialise by territory. One cut rate per lieutenant. The boss holds only a few |
+| Fear and goodwill | Two separate dials per block. Fear belongs to the lieutenant, goodwill to the family; a defector takes his feared blocks. Respected is the hardest corner. Stances on our blocks, jobs (charity, intimidation) against theirs |
+| Heat | Local to blocks and spreads a little: more raids, slower jobs, more arrests, less goodwill. Family heat lands on the HQ, which only moves by losing it |
+| Layers of command | Grow with the family: promoted capos get lieutenants of their own. Same job lists, bigger jobs; capos write their people's lists. Honest reports. Reach down freely while small, at a rising cost later. Cards come up the chain |
+| Map modes | Turf, fear and goodwill, heat, who holds what, income. Light hints on the normal map |
+| Rival grievances | Taken blocks, insults and broken deals. Looser than grand-strategy war rules: ganging up on one family costs little reputation |

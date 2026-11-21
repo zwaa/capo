@@ -1,8 +1,10 @@
 # Ideas: a grand-strategy feel
 
-*Exploration notes, not decisions. Once homes and blocks gave the ward painted turf, the game started to
-feel like a Paradox grand strategy game. This file collects what to borrow from that feel and what to
-avoid. Anything we adopt moves into `DESIGN.md` with a row in the decisions log.*
+*Exploration notes. Once homes and blocks gave the ward painted turf, the game started to feel like a
+Paradox grand strategy game. This file collects what to borrow from that feel and what to avoid.*
+
+*Adopted on 2026-11-21: the grilling answers below are now in `DESIGN.md` (§1, §4, §5.2, §5.3, §5.7, §6.3,
+§6.5, §7.1, §7.4, §8.1, §9, §10, §12, §13.2, §14 and the decisions log). This file keeps the reasoning.*
 
 ## What already feels that way
 
