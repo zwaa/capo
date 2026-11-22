@@ -9,6 +9,8 @@ import {
   changePlans,
   createGame,
   draftJob,
+  fireHood,
+  forecast,
   hireHood,
   moveHood,
   moveJob,
@@ -243,6 +245,54 @@ describe('homes and blocks', () => {
     while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
     const ours = blockBuildings(s, blk).filter((b) => b.protectedBy === 'player');
     expect(ours.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('managing the crew', () => {
+  it('a demoted lieutenant goes back to the street, and his branches and crew come home', () => {
+    const s = createGame(14);
+    const sal = salAsLieutenant(s);
+    assignBranch(s, 'player', 'protection', sal.id);
+    const cousin = crewOf(s, bossOf(s, 'player'))[0];
+    moveHood(s, cousin.id, sal.id);
+    s.families.player.actions = 2;
+    bossAction(s, { kind: 'demote', lt: sal.id });
+    expect(lieutenants(s, 'player')).toHaveLength(0);
+    const boss = bossOf(s, 'player');
+    expect(s.families.player.branches.protection).toBe(boss.id);
+    expect(boss.jobs.some((j) => j.kind === 'collect')).toBe(true);
+    const back = s.hoods.find((h) => h.name === 'Sal Benedetto')!;
+    expect(back.under).toBe(boss.id);
+    expect(back.xp).toBe(PROMOTE_XP);
+    expect(back.loyalty).toBeLessThan(sal.loyalty);
+    expect(cousin.under).toBe(boss.id);
+  });
+  it('lets a hood go; one with loose lips talks', () => {
+    const s = createGame(14);
+    const h = crewOf(s, bossOf(s, 'player'))[0];
+    h.traits = ['looselips'];
+    const heat = s.families.player.heat;
+    expect(fireHood(s, 'player', h.id)).toBeNull();
+    expect(s.hoods.includes(h)).toBe(false);
+    expect(s.families.player.heat).toBeGreaterThan(heat);
+  });
+  it('hands freed by a finished job pick up the next one waiting', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const near = s.buildings
+      .filter((b) => b.kind === 'home' && !b.owner && !b.protectedBy)
+      .sort((a, b) => dist(a, { x: boss.homeX, y: boss.homeY }) - dist(b, { x: boss.homeX, y: boss.homeY }));
+    // Three hands, four one-hand jobs: the last waits for someone to finish.
+    const jobs = near.slice(0, 4).map((b) => addJob(s, boss.id, 'signup', b.id, 'loud')!);
+    const last = jobs[3];
+    expect(last.stalled).toBeTruthy();
+    const plan = forecast(s, boss).jobs[last.id];
+    expect(plan.start).toBeGreaterThan(1);
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    expect(last.done || last.progress > 0).toBe(true);
   });
 });
 

@@ -600,6 +600,7 @@ h4.sub {
   gap: 4px;
 }
 .job {
+  position: relative;
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr) auto;
   gap: 8px;
@@ -607,6 +608,34 @@ h4.sub {
   padding: 6px 8px;
   background: var(--night);
   border-left: 3px solid var(--rule);
+}
+/* Which days of the month a job is planned to take, along the bottom of its row. */
+.job .when {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  background: var(--lamp);
+  opacity: 0.55;
+}
+.job.warn .when {
+  background: #b9852f;
+}
+.plan-sum {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+.plan-sum.idle {
+  color: #d9a95a;
+}
+.lt-acts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.small.danger {
+  border-color: var(--blood);
+  color: #e28a7f;
 }
 .job.ok {
   border-left-color: var(--lamp);

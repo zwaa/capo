@@ -8,6 +8,8 @@ import {
   assignBranch,
   bossAction,
   canAct,
+  fireHood,
+  forecast,
   changePlans,
   createGame,
   draftJob,
@@ -25,12 +27,13 @@ import {
   hoodCost,
   moveHood,
 } from '../sim/engine';
-import type { BossAction, Purchase } from '../sim/engine';
+import type { BossAction, JobPlan, Purchase } from '../sim/engine';
 import { LESSONS, advanceLessons, currentLesson } from '../sim/lessons';
 import { POOL, streetOf } from '../sim/setup';
 import type { Branch, Building, Card, GameState, Hood, Job, JobKind, Person, Posture, SpecialistKind } from '../sim/types';
 import {
   BRANCHES,
+  DAYS,
   blockBuildings,
   blockId,
   blockName,
@@ -93,6 +96,8 @@ let timer = 0;
 let note = '';
 /** Whose branches are open for changing (a person id), if anyone's. */
 let editing: string | null = null;
+/** A hood about to be let go: the button asks once more. */
+let firing: string | null = null;
 /** The job each person's "add a job" row is building. */
 const adding: Record<string, { kind: JobKind | ''; target: string }> = {};
 /** Draft job lists during a Change of Plans. */
@@ -230,14 +235,37 @@ function renderBar(): void {
 
 // ---------------------------------------------------------------- job lists
 
-function jobStatus(j: Job, scope: string): { text: string; cls: string } {
+function jobStatus(j: Job, scope: string, plan?: JobPlan): { text: string; cls: string } {
   if (scope === 'plans') return { text: JOBS[j.kind].ongoing ? 'Ongoing' : 'One-off', cls: '' };
+  // Waiting for hands: the plan says when someone frees up to take it.
+  if (j.stalled && plan?.start && !JOBS[j.kind].ongoing) return { text: `Waits for free hands: ${when(plan)}`, cls: 'warn' };
+  if (j.stalled && /hands|Nobody free/.test(j.stalled) && !JOBS[j.kind].ongoing)
+    return { text: `${j.stalled}: not this month`, cls: 'bad' };
   if (j.stalled) return { text: j.stalled, cls: 'bad' };
   if (j.need === 0) return { text: JOBS[j.kind].ongoing ? 'Nothing to do yet' : 'Ready', cls: 'idle' };
   const car = j.car ? ' · car' : '';
   const who = squadNames(s, j);
   if (j.hoods < j.need) return { text: `${who}: ${j.hoods} of ${j.need} hands, only partly done${car}`, cls: 'warn' };
-  return { text: `${who}${car}`, cls: 'ok' };
+  const days = plan?.start && !JOBS[j.kind].ongoing ? ` · ${when(plan)}` : JOBS[j.kind].ongoing ? ' · all month' : '';
+  return { text: `${who}${car}${days}`, cls: 'ok' };
+}
+
+/** "days 3-8", "about day 12 to 19", "starts day 25, runs into next month". */
+function when(plan: JobPlan): string {
+  const { start, end } = plan;
+  if (!start || !end) return '';
+  if (end > DAYS) return `starts about day ${start}, runs into next month`;
+  return start === 1 ? `about days 1-${end}` : `about days ${start}-${end}`;
+}
+
+/** A line under the list: how much of the month this crew's plan fills. */
+function planSummary(p: Person, freeFrom: number[]): string {
+  if (!freeFrom.length) return '';
+  const idle = freeFrom.filter((d) => d < DAYS - 2);
+  if (!idle.length) return '<p class="plan-sum">Every pair of hands is busy all month.</p>';
+  const from = Math.min(...idle);
+  const n = idle.length;
+  return `<p class="plan-sum idle">${n} of ${freeFrom.length} hands ${from ? `idle from about day ${from + 1}` : 'with nothing to do'}. Add jobs below${p.role === 'boss' ? '' : ', or move hoods to someone busier'}.</p>`;
 }
 
 // ---------------------------------------------------------------- hoods
@@ -271,20 +299,29 @@ function hoodRow(h: Hood): string {
     )
     .join('');
   const promote = h.xp >= PROMOTE_XP ? actButton({ kind: 'promote', hood: h.id }, 'Promote (1 meeting)') : '';
+  const fire = s.run
+    ? ''
+    : `<button class="small ${firing === h.id ? 'danger' : ''}" data-fire="${h.id}" title="They leave the family. A loose-lipped one talks.">${firing === h.id ? `Let ${esc(hoodFirst(h))} go?` : 'Let go'}</button>`;
   return `<div class="hood ${h.status === 'active' ? '' : 'out'}" title="${esc(h.bio)}">
     <div class="hn"><b>${esc(hoodLabel(h))}</b>
       <small>${statLine(h)}${h.traits.map((t) => ` · ${TRAIT[t]}`).join('')}</small></div>
     <div class="hx">${hoodStatus(h)}${xpPips(h)}</div>
-    <div class="hc">${people.length > 1 ? `<select data-movehood="${h.id}" aria-label="Whose crew ${esc(hoodFirst(h))} is in">${opts}</select>` : ''}${promote}</div>
+    <div class="hc">${people.length > 1 ? `<select data-movehood="${h.id}" aria-label="Whose crew ${esc(hoodFirst(h))} is in">${opts}</select>` : ''}${promote}${fire}</div>
   </div>`;
 }
 
 function jobList(p: Person, jobs: Job[], scope: 'orders' | 'plans'): string {
   const live = jobs.filter((j) => !j.done);
+  const fc = scope === 'orders' ? forecast(s, p) : null;
   const rows = live
     .map((j, i) => {
-      const st = jobStatus(j, scope);
-      return `<div class="job ${st.cls}">
+      const plan = fc?.jobs[j.id];
+      const st = jobStatus(j, scope, plan);
+      const bar =
+        plan?.start && plan.end
+          ? `<i class="when" style="left:${((plan.start - 1) / DAYS) * 100}%;width:${(Math.min(DAYS, plan.end) - plan.start + 1) * (100 / DAYS)}%" aria-hidden="true"></i>`
+          : '';
+      return `<div class="job ${st.cls}">${bar}
         <span class="rank">${i + 1}</span>
         <div class="jt"><b>${esc(jobTitle(s, j))}</b><small>${esc(st.text)}</small></div>
         <div class="jbtns">
@@ -296,7 +333,7 @@ function jobList(p: Person, jobs: Job[], scope: 'orders' | 'plans'): string {
       </div>`;
     })
     .join('');
-  return `<div class="jobs">${rows || '<p class="hint">No jobs. Add one below.</p>'}</div>${addRow(p, scope)}`;
+  return `<div class="jobs">${rows || '<p class="hint">No jobs. Add one below.</p>'}</div>${fc && live.length ? planSummary(p, fc.freeFrom) : ''}${addRow(p, scope)}`;
 }
 
 function addRow(p: Person, scope: string): string {
@@ -353,6 +390,7 @@ function personCard(p: Person): string {
     ${p.traits.length ? `<div class="chips">${p.traits.map((t) => `<span class="chip">${TRAIT[t]}</span>`).join('')}</div>` : ''}
     <div class="stats"><span>Muscle <b>${p.muscle}</b></span><span>Brains <b>${p.brains}</b></span><span>Nerve <b>${p.nerve}</b></span><span>Charm <b>${p.charm}</b></span></div>
     ${p.role === 'lt' ? `<div class="meter"><span>Ambition</span><div><i style="width:${p.ambition}%"></i></div></div>` : ''}
+    ${p.role === 'lt' ? `<div class="lt-acts">${actButton({ kind: 'demote', lt: p.id }, 'Demote (1 meeting)', `title="Back to the street: branches and crew come to you. He won't like it."`)}</div>` : ''}
     <button class="resp" data-act="branches" data-p="${p.id}" aria-expanded="${editing === p.id}">
       <span class="chips">${branches || '<span class="hint">No branches yet</span>'}</span>
       <span class="resp-edit">${editing === p.id ? 'Done' : 'Change'}</span>
@@ -775,6 +813,17 @@ document.addEventListener('click', (e) => {
     return render();
   }
   if (d.act === 'pick-close') return closePick();
+  if (d.fire) {
+    if (firing !== d.fire) {
+      firing = d.fire;
+      return render();
+    }
+    firing = null;
+    note = fireHood(s, 'player', d.fire) ?? '';
+    save();
+    return render();
+  }
+  if (firing && !d.fire) firing = null;
   if (d.act === 'branches' && d.p) {
     editing = editing === d.p ? null : d.p;
     note = '';

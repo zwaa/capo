@@ -74,7 +74,8 @@ The family's work is split into four **areas**, and each area into **branches**.
 
 **Jobs and priorities.** Each branch has a short list of **standing jobs**, and each runner (the boss or a lieutenant) ranks all the jobs across their branches in one list. For example, Sal running Protection and Enforcement: *1. Collect from our 6 shops · 2. Guard the café · 3. Sign up Novak's Bakery · 4. Lean on Calloway's newsstand.*
 - **Some jobs take a target** (a shop, a building, a rival, an official). **Some are ongoing** (collect, guard, run the speakeasies).
-- **Hoods are the capacity.** Each job says how many hoods it needs (and sometimes guns, cars or liquor; §7.3). The runner's crew is handed out from the top of the list down. Jobs at the bottom that get nobody stall, and the orders screen shows that before you commit ("Guard the café: nobody left").
+- **Hoods are the capacity.** Each job says how many hoods it needs (and sometimes guns, cars or liquor; §7.3). The runner's crew is handed out from the top of the list down. Jobs at the bottom that get nobody wait, and the orders screen shows that before you commit ("Guard the café: nobody left").
+- **Hands move on.** When a squad finishes a one-off job mid-month, its hands pick up the next job on the list that is still waiting, so a long list keeps a crew busy all month. The orders screen shows roughly which days each job takes and when hands will be idle.
 - **Posture** (*Quiet / Firm / Loud*) is set per branch, with an override per job. It sets how much violence and heat the job may cause.
 - **Jobs carry over.** Ongoing jobs keep running every month. One-off jobs (sign up X, buy Y, hit Z) drop off when they're done. A quiet month is a glance and "Begin the month".
 - **Personality reinterprets the list.** A *Hothead* running Muscle adds jobs you didn't ask for, like leaning on a Calloway shopkeeper. A *Greedy* one running Vice skims the take. A *Cautious* one sends fewer hoods to risky jobs. Stats matter too: Muscle helps the Muscle area, Brains helps Property and Fixing, and Charm helps Vice and Fixing.
@@ -151,7 +152,7 @@ A street outfit and a city-wide family can't be run the same way, so **layers of
 ## 6. People
 
 ### 6.1 Lieutenants (0–6, hard cap 6)
-The core of the game. You start with none. **Lieutenants are promoted from your own hoods** (§6.2), never hired from outside, usually to take branches of the business off the boss's hands (§5.2). The hood keeps their name, stats and traits, and picks up a street nickname if they didn't have one. Four areas plus territory splits keep the cap at six. Each one has:
+The core of the game. You start with none. **Lieutenants are promoted from your own hoods** (§6.2), never hired from outside, usually to take branches of the business off the boss's hands (§5.2). **They can be demoted** in a meeting: their branches and crew come back to the boss, and they go back to being a hood, with a long memory (a big loyalty hit). The hood keeps their name, stats and traits, and picks up a street nickname if they didn't have one. Four areas plus territory splits keep the cap at six. Each one has:
 - **Stats:** Muscle · Brains · Nerve · Charm
 - **2–3 traits:** e.g. *Hothead, Greedy, Old-world, Family Man, Loose Lips, Ambitious, Cautious, Ladies' Man, Teetotaller, Butcher*
 - **Loyalty** (hidden, but you can estimate it from signs and informants)
@@ -163,6 +164,7 @@ Every hood is a person: **a name** (often a nickname), **the same four stats** a
 - **Jobs pick their squad.** Each job takes the free hands best suited to it: the best talker on a sign-up, the toughest on a takeover, the steadiest nerve on a hit or a supply run. The squad's stats decide how fast and how well the job goes, and how a fight turns out.
 - **Hoods grow.** A month's work, or a job done well, is experience, and good work sometimes raises the stat that was used. With enough experience a hood is **lieutenant material** and can be promoted in a meeting.
 - **Hoods get hurt by name.** Fights wound, jail or kill specific people, and the newspaper names them. A hood in a cell can be bailed out, or left to sit (and maybe talk).
+- **Letting go:** a hood can be let go between months. One with loose lips talks on the way out.
 - **The hiring hall:** each month a few named hoods are looking for work, with their stats and history on show. A recruiter (§6.4) brings more of them, and better. Now and then a notable turns up: someone with a reputation, already lieutenant material.
 
 You care about them through their lieutenant and can step in directly via §5.3.
@@ -459,6 +461,7 @@ The grilling notes behind §5.2, §5.7, §7.1, §8.1 and §14 are in [IDEAS-gran
 | Tutorial | First run with lessons switched on ("The Nephew"): learn each area in turn, hiring a lieutenant for each |
 | Run start | A Prohibition run starts from the bottom: the boss, two or three hoods, no lieutenants. Origins change what you start with. You can also start in any later age with a family that fits it |
 | Orders | Four areas split into nine branches. Each branch is run by the boss or a lieutenant; a lieutenant takes 1–3 branches with one shared crew. Ranked standing jobs, optional targets, hoods as capacity |
+| Crew management | Lieutenants can be demoted (a meeting; big loyalty hit). Hoods can be let go between months. Hands freed mid-month pick up the next waiting job, and the orders screen shows each job's rough days (2026-11-22) |
 | Hoods and promotion | Every hood is named, with stats, traits, history and experience. Jobs pick the best-suited squad; hoods grow, get hurt by name, and the experienced can be promoted. Lieutenants only come from promotion; a monthly hiring hall supplies new hoods |
 | Specialists | One per resource: recruiter (hoods), armourer (guns), mechanic (cars), brewmaster (liquor), accountant (money), lawyer (legal cover), doctor (health), newsman (reputation). No crew, outside the lieutenant cap, and dangerous if they turn. Never required: without one you pay more or get worse |
 | Resources | Mixed: hoods, guns, cars, liquor and cash are counted stock; legal cover, health and reputation are levels |
