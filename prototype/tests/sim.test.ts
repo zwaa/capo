@@ -174,6 +174,15 @@ describe('turf', () => {
     const next = { x: far.x, y: far.y + (far.y % 3 === 1 ? 1 : -1) };
     expect(onTurf(s, 'player', next)).toBe(true);
   });
+  it('draws turf only on what a family holds, not the lots next to it', () => {
+    const s = createGame(14);
+    const free = s.buildings.filter((b) => !b.owner && !b.protectedBy && b.x > 4);
+    const ours = free[0];
+    ours.protectedBy = 'player';
+    expect(turfAt(s, ours.x, ours.y)).toBe('player');
+    const next = free.find((b) => dist(b, ours) === 1)!;
+    expect(turfAt(s, next.x, next.y)).toBeNull();
+  });
   it('makes sign-ups off our turf take longer', () => {
     const s = createGame(14);
     const boss = bossOf(s, 'player');

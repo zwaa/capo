@@ -90,6 +90,8 @@ let phase: Phase = 'paper';
 let speed = 2;
 let timer = 0;
 let note = '';
+/** Whose branches are open for changing (a person id), if anyone's. */
+let editing: string | null = null;
 /** The job each person's "add a job" row is building. */
 const adding: Record<string, { kind: JobKind | ''; target: string }> = {};
 /** Draft job lists during a Change of Plans. */
@@ -300,7 +302,7 @@ function addRow(p: Person, scope: string): string {
   const key = `${scope}:${p.id}`;
   const a = (adding[key] ??= { kind: '', target: '' });
   const mine = branchesOf(s, p);
-  if (!mine.length) return '<p class="hint">Give them a branch under Who runs what, and they can take jobs.</p>';
+  if (!mine.length) return '<p class="hint">Click their branches above to give them some, and they can take jobs.</p>';
   const kinds = mine
     .map((b) => {
       const info = BRANCHES.find((x) => x.id === b)!;
@@ -350,7 +352,11 @@ function personCard(p: Person): string {
     ${p.traits.length ? `<div class="chips">${p.traits.map((t) => `<span class="chip">${TRAIT[t]}</span>`).join('')}</div>` : ''}
     <div class="stats"><span>Muscle <b>${p.muscle}</b></span><span>Brains <b>${p.brains}</b></span><span>Nerve <b>${p.nerve}</b></span><span>Charm <b>${p.charm}</b></span></div>
     ${p.role === 'lt' ? `<div class="meter"><span>Ambition</span><div><i style="width:${p.ambition}%"></i></div></div>` : ''}
-    <div class="chips">${branches || '<span class="hint">No branches yet</span>'}</div>
+    <button class="resp" data-act="branches" data-p="${p.id}" aria-expanded="${editing === p.id}">
+      <span class="chips">${branches || '<span class="hint">No branches yet</span>'}</span>
+      <span class="resp-edit">${editing === p.id ? 'Done' : 'Change'}</span>
+    </button>
+    ${editing === p.id ? branchEditor(p) : ''}
     ${demand}
     ${jobList(p, p.jobs, 'orders')}
     ${hoods}
@@ -384,32 +390,52 @@ function candidates(): string {
     .join('')}</section>`;
 }
 
-function whoRunsWhat(): string {
+/**
+ * Who runs what, opened from a person's branches. On the boss's card every
+ * branch can go to anyone; on a lieutenant's, each branch is theirs or not.
+ */
+function branchEditor(p: Person): string {
   const fam = s.families.player;
   const people = members(s, 'player');
   const areas = [...new Set(BRANCHES.map((b) => b.area))];
-  return `<section>
-    <h3>Who runs what</h3>
-    <p class="hint">Each branch is run by you or a lieutenant (up to ${MAX_BRANCHES} each). Its jobs move with it. A lieutenant whose stats suit the branch works its jobs faster and safer.</p>
+  const mineCount = branchesOf(s, p).length;
+  const control = (b: (typeof BRANCHES)[number]): string => {
+    if (p.role === 'lt') {
+      const theirs = fam.branches[b.id] === p.id;
+      const full = !theirs && mineCount >= MAX_BRANCHES;
+      const now = person(s, fam.branches[b.id])!;
+      return `<button class="small" data-branch-give="${p.id}|${b.id}" ${full ? `disabled title="${esc(first(p))} already runs ${MAX_BRANCHES}"` : ''}>${
+        theirs ? 'Take it back' : `Give to ${esc(first(p))}${now.role === 'lt' ? ` (from ${esc(first(now))})` : ''}`
+      }</button>`;
+    }
+    const opts = people
+      .map((x) => {
+        const full = x.role === 'lt' && branchesOf(s, x).length >= MAX_BRANCHES && fam.branches[b.id] !== x.id;
+        const tag = x.role === 'boss' ? ' (you)' : full ? ' (full)' : x.status !== 'active' ? ` (${statusOf(x).toLowerCase()})` : '';
+        return `<option value="${x.id}" ${fam.branches[b.id] === x.id ? 'selected' : ''} ${full ? 'disabled' : ''}>${esc(first(x))}${tag}</option>`;
+      })
+      .join('');
+    return `<select data-branch="${b.id}" aria-label="Who runs ${esc(b.label)}">${opts}</select>`;
+  };
+  const runsIt = (b: (typeof BRANCHES)[number]) => fam.branches[b.id] === p.id;
+  return `<div class="resp-panel">
+    <p class="hint">${
+      p.role === 'boss'
+        ? 'Every branch is run by you or a lieutenant (up to ' + MAX_BRANCHES + ' each). Its jobs move with it.'
+        : `${esc(first(p))} can run up to ${MAX_BRANCHES} branches. Their jobs move with them, and stats that suit a branch work its jobs faster and safer.`
+    }</p>
+    ${note ? `<p class="hint" style="color:var(--lamp)">${esc(note)}</p>` : ''}
     <div class="branches">${areas
       .map(
         (area) =>
           `<div class="area"><h4>${esc(area)}</h4>${BRANCHES.filter((b) => b.area === area)
             .map((b) => {
-              const opts = people
-                .map((p) => {
-                  const full = p.role === 'lt' && branchesOf(s, p).length >= MAX_BRANCHES && fam.branches[b.id] !== p.id;
-                  const tag =
-                    p.role === 'boss' ? ' (you)' : full ? ' (full)' : p.status !== 'active' ? ` (${statusOf(p).toLowerCase()})` : '';
-                  return `<option value="${p.id}" ${fam.branches[b.id] === p.id ? 'selected' : ''} ${full ? 'disabled' : ''}>${esc(first(p))}${tag}</option>`;
-                })
-                .join('');
-              return `<label class="branch"><span><b>${esc(b.label)}</b><small>${esc(b.blurb)}. Suits ${b.stat}.</small></span><select data-branch="${b.id}" aria-label="Who runs ${esc(b.label)}">${opts}</select></label>`;
+              return `<div class="branch ${runsIt(b) ? 'mine' : ''}"><span><b>${esc(b.label)}</b><small>${esc(b.blurb)}. Suits ${b.stat}.</small></span>${control(b)}</div>`;
             })
             .join('')}</div>`,
       )
       .join('')}</div>
-  </section>`;
+  </div>`;
 }
 
 function supplies(): string {
@@ -468,7 +494,6 @@ function renderOrders(): string {
     <section><h2>Orders for ${esc(monthName(s.month))}</h2>
       <p class="hint">Each person works down their own list. Hands go to the jobs at the top first, and jobs that get nobody stall. Ongoing jobs carry over each month; one-off jobs drop off when they're done.</p></section>
     ${candidates()}
-    ${whoRunsWhat()}
     <section><h3>Your people</h3>${people.map(personCard).join('')}</section>
     ${supplies()}
     ${meetings()}
@@ -743,6 +768,19 @@ document.addEventListener('click', (e) => {
     return render();
   }
   if (d.act === 'pick-close') return closePick();
+  if (d.act === 'branches' && d.p) {
+    editing = editing === d.p ? null : d.p;
+    note = '';
+    return render();
+  }
+  if (d.branchGive) {
+    const [who, branch] = d.branchGive.split('|');
+    const theirs = s.families.player.branches[branch as Branch] === who;
+    note = assignBranch(s, 'player', branch as Branch, theirs ? s.families.player.bossId : who) ?? '';
+    advanceLessons(s);
+    save();
+    return render();
+  }
 
   if (d.jposture && d.p && d.j) {
     if (scope === 'plans') {

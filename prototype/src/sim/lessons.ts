@@ -43,7 +43,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'delegate',
     title: 'Hand over the street',
-    body: "Sal Benedetto, who collected for your uncle, is asking for work: **take him on**. You can't run everything yourself, and lieutenants come from your own crew. A hood with enough experience can be **promoted** (one meeting). Sal already has it; your cousins will, after a few months' work. Promote someone, give them **Protection** under **Who runs what**, and move a hood or two into their crew. Your jobs go with the branch.",
+    body: "Sal Benedetto, who collected for your uncle, is asking for work: **take him on**. You can't run everything yourself, and lieutenants come from your own crew. A hood with enough experience can be **promoted** (one meeting). Sal already has it; your cousins will, after a few months' work. Promote someone, give them **Protection** by clicking the branches on their card, and move a hood or two into their crew. Your jobs go with the branch.",
     goal: 'Promote a hood and give them Protection',
     done: (s) => s.families.player.branches.protection !== s.families.player.bossId,
   },

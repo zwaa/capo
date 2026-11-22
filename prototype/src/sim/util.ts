@@ -389,21 +389,16 @@ export function onTurf(s: GameState, f: FamilyId, at: { x: number; y: number }, 
   return dist({ x: boss.homeX, y: boss.homeY }, at) <= TURF_REACH;
 }
 
-/** Whose turf a map tile is on, for drawing: the family with the most buildings next to it (ties: nobody). */
+/**
+ * Whose turf a map tile is on, for drawing: whoever holds the building there.
+ * Every lot is a shop or a home now, so turf is exactly what pays or belongs to
+ * a family, plus the boss's own front door. (Reach for sign-ups is wider: onTurf.)
+ */
 export function turfAt(s: GameState, x: number, y: number): FamilyId | null {
   const here = s.buildings.find((b) => b.x === x && b.y === y);
   if (here && holder(here)) return holder(here);
-  let us = 0;
-  let them = 0;
-  for (const b of s.buildings) {
-    if (dist(b, { x, y }) > 1) continue;
-    if (holder(b) === 'player') us++;
-    else if (holder(b) === 'rival') them++;
-  }
-  // The boss's own front door counts too, as it does for onTurf().
   const boss = bossOf(s, 'player');
-  if (dist({ x: boss.homeX, y: boss.homeY }, { x, y }) <= 1) us++;
-  return us > them ? 'player' : them > us ? 'rival' : null;
+  return boss.homeX === x && boss.homeY === y ? 'player' : null;
 }
 
 /** Who runs a branch, and which branches a person runs. */
