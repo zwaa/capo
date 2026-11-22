@@ -34,6 +34,8 @@ import {
   crewOf,
   crewSize,
   dist,
+  gunHands,
+  totalHoods,
   lieutenants,
   onTurf,
   targets,
@@ -232,6 +234,18 @@ describe('homes and blocks', () => {
     while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
     const ours = blockBuildings(s, blk).filter((b) => b.protectedBy === 'player');
     expect(ours.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('guns', () => {
+  it('lieutenants need pistols too, not just their hoods', () => {
+    const s = createGame(14);
+    const before = gunHands(s, 'player');
+    expect(before).toBe(totalHoods(s, 'player'));
+    salAsLieutenant(s);
+    // Sal was a hood and is now a lieutenant: he still needs his pistol.
+    expect(gunHands(s, 'player')).toBe(before + 1);
+    expect(totalHoods(s, 'player')).toBe(before);
   });
 });
 

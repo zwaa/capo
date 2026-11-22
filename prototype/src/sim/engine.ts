@@ -71,6 +71,7 @@ import {
   rackets,
   targets,
   totalHoods,
+  gunHands,
   blockFree,
   blockName,
   blockOpen,
@@ -134,7 +135,7 @@ const doormen = (n: number): Worker[] =>
   Array.from({ length: n }, (_, i) => ({ id: `door${i}`, muscle: 5, brains: 5, nerve: 5, charm: 5 }));
 
 function gunFactor(s: GameState, f: FamilyId): number {
-  const armed = Math.min(1, s.families[f].guns / Math.max(1, totalHoods(s, f)));
+  const armed = Math.min(1, s.families[f].guns / Math.max(1, gunHands(s, f)));
   return (0.55 + 0.45 * armed) * (has(s, f, 'armourer') ? 1.15 : 1);
 }
 /** Fighting strength of a team: every man counts, by his own muscle. */

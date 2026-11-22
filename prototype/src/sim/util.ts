@@ -453,9 +453,17 @@ export const crewSize = (s: GameState, p: Person) => ready(s, p).length;
 export const hoodFirst = (h: Hood) => h.name.split(' ')[0];
 export const hoodLabel = (h: Hood) => (h.nickname ? `${hoodFirst(h)} "${h.nickname}" ${h.name.split(' ').slice(1).join(' ')}` : h.name);
 
-/** Hoods on the payroll (wages, and how far the pistols go round). */
+/** Hoods on the payroll (wages). */
 export function totalHoods(s: GameState, f: FamilyId): number {
   return s.hoods.filter((h) => h.family === f && h.status !== 'dead').length;
+}
+
+/**
+ * Everyone who needs a pistol: the hoods and the lieutenants, who go along on
+ * the jobs they run. (The boss carries his own.)
+ */
+export function gunHands(s: GameState, f: FamilyId): number {
+  return totalHoods(s, f) + lieutenants(s, f).length;
 }
 
 /** Who is on a job, by first name: "Vito, Carlo and Nico". */

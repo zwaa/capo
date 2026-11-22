@@ -26,7 +26,7 @@ import {
   rackets,
   runner,
   targets,
-  totalHoods,
+  gunHands,
 } from './util';
 
 export function planFamily(s: GameState, f: FamilyId): void {
@@ -144,7 +144,7 @@ export function planFamily(s: GameState, f: FamilyId): void {
     if (f === 'player' && !s.market.length) break;
     buy('hood', short.p);
   }
-  while (fam.guns < totalHoods(s, f) && fam.cash > gunPrice(s, f) + 300) buy('gun');
+  while (fam.guns < gunHands(s, f) && fam.cash > gunPrice(s, f) + 300) buy('gun');
 
   // Ongoing work first, then one-off jobs.
   for (const p of members(s, f)) p.jobs.sort((a, b) => Number(!JOBS[a.kind].ongoing) - Number(!JOBS[b.kind].ongoing));
