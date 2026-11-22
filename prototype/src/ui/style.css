@@ -725,6 +725,40 @@ h4.sub {
   color: var(--ink);
 }
 
+.resp {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: 1px dashed var(--rule);
+  border-radius: 2px;
+  padding: 6px 8px;
+  text-align: left;
+}
+.resp:hover,
+.resp[aria-expanded='true'] {
+  border-color: var(--lamp);
+}
+.resp-edit {
+  font-size: 11.5px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.resp:hover .resp-edit,
+.resp[aria-expanded='true'] .resp-edit {
+  color: var(--lamp);
+}
+.resp-panel {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  background: var(--night);
+}
+.branch.mine b {
+  color: var(--lamp);
+}
 .branches {
   display: grid;
   gap: 12px;
