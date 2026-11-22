@@ -320,7 +320,11 @@ export type BossAction =
   | { kind: 'enlist'; pool: number }
   | { kind: 'specialist'; which: SpecialistKind }
   | { kind: 'grant'; lt: string }
-  | { kind: 'reward'; lt: string };
+  | { kind: 'reward'; lt: string }
+  | { kind: 'demote'; lt: string };
+
+/** What a lieutenant thinks of being sent back to the street. */
+export const DEMOTE_LOYALTY = 25;
 
 export function canAct(s: GameState, a: BossAction): string | null {
   const fam = s.families.player;
@@ -348,6 +352,12 @@ export function canAct(s: GameState, a: BossAction): string | null {
     }
     case 'reward':
       return fam.cash >= REWARD_COST ? null : 'Not enough cash.';
+    case 'demote': {
+      const l = person(s, a.lt);
+      return l && l.family === 'player' && l.role === 'lt' && l.status !== 'dead' && l.status !== 'defected'
+        ? null
+        : 'Not one of our lieutenants.';
+    }
   }
 }
 
@@ -414,8 +424,58 @@ export function bossAction(s: GameState, a: BossAction): string {
       l.loyalty = Math.min(100, l.loyalty + 10);
       return `${first(l)} pockets the envelope with a nod.`;
     }
+    case 'demote': {
+      fam.actions--;
+      demote(s, person(s, a.lt)!);
+      advanceLessons(s);
+      return 'Done. Nobody at the table looks at him.';
+    }
   }
 }
+
+/**
+ * Send a lieutenant back to the street: his branches (and their jobs) and his
+ * crew come back to the boss, and he becomes a hood in the boss's crew, with
+ * the experience to be made again one day. He won't forget it.
+ */
+export function demote(s: GameState, l: Person): Hood {
+  const fam = s.families[l.family];
+  for (const b of branchesOf(s, l)) assignBranch(s, l.family, b, fam.bossId);
+  for (const h of crewOf(s, l)) h.under = fam.bossId;
+  const h: Hood = {
+    id: `h${s.nextId++}`,
+    name: l.name,
+    nickname: l.nickname,
+    family: l.family,
+    under: fam.bossId,
+    muscle: l.muscle,
+    brains: l.brains,
+    nerve: l.nerve,
+    charm: l.charm,
+    traits: [...l.traits],
+    loyalty: Math.max(0, l.loyalty - DEMOTE_LOYALTY),
+    xp: PROMOTE_XP,
+    status: l.status === 'wounded' || l.status === 'jailed' ? l.status : 'active',
+    recover: l.recover,
+    bio: `Ran ${l.nickname ? `things as "${l.nickname}"` : 'a crew'} until the boss took it back. Hasn't forgotten.`,
+  };
+  s.people = s.people.filter((p) => p !== l);
+  s.hoods.push(h);
+  allocate(s, l.family);
+  return h;
+}
+
+/** Let a hood go, between months. One with loose lips talks on the way out. */
+export function fireHood(s: GameState, f: FamilyId, id: string): string | null {
+  if (s.run) return 'Not in the middle of a month.';
+  const h = hood(s, id);
+  if (!h || h.family !== f) return 'Not one of ours.';
+  s.hoods = s.hoods.filter((x) => x !== h);
+  if (h.traits.includes('looselips')) addHeat(s, f, FIRED_TALK, `${h.name}, let go, is telling everyone why`);
+  allocate(s, f);
+  return null;
+}
+export const FIRED_TALK = 4;
 
 // ---------------------------------------------------------------- allocation
 
@@ -573,19 +633,97 @@ function prepare(s: GameState, p: Person, j: Job): void {
     j.days = 0;
     return;
   }
+  j.days = workDays(s, p, j);
+}
+
+/** Days a one-off job takes once its squad is there (for a block: at the next door). */
+function workDays(s: GameState, p: Person, j: Job): number {
+  const info = JOBS[j.kind];
   if (j.kind === 'block') {
     const door = nextDoor(s, j);
-    j.days = door ? doorDays(s, p, j, door) : 1;
-    return;
+    return door ? doorDays(s, p, j, door) : 1;
   }
   const adj = j.posture === 'quiet' ? 1 : j.posture === 'loud' ? -1 : 0;
   // Working off your own turf takes longer: nobody knows you there.
   const t = building(s, j.target);
   const away = (j.kind === 'signup' || j.kind === 'takeover') && t && !onTurf(s, p.family, t, t.id) ? OFF_TURF_DAYS : 0;
-  j.days = Math.max(
+  return Math.max(
     1,
     info.work - Math.floor((squadStat(s, j) - 5) / 2) + adj + away + (info.risky && p.traits.includes('cautious') ? 2 : 0),
   );
+}
+
+export interface JobPlan {
+  /** Day the squad sets out, or null if it won't this month. */
+  start: number | null;
+  /** Day it should be done (may run past the month). */
+  end: number | null;
+}
+
+/**
+ * A rough plan of a person's month, for the orders screen: hands go to jobs top
+ * down, and hands freed by a finished job pick up the next one waiting (as they
+ * do in the month itself). Ongoing jobs hold their hands all month. Travel and
+ * work days are estimates; cards and fights will change things.
+ */
+export function forecast(s: GameState, p: Person): { jobs: Record<string, JobPlan>; freeFrom: number[] } {
+  const hands = p.status === 'active' ? ready(s, p).length + 1 : 0;
+  const free: number[] = Array.from({ length: hands }, () => 0);
+  const jobs: Record<string, JobPlan> = {};
+  const speedOf = (j: Job) => (JOBS[j.kind].car ? (has(s, p.family, 'mechanic') ? 3 : 2) : 1);
+  for (const j of p.jobs) {
+    if (j.done) continue;
+    const none = { start: null, end: null };
+    // Stalls that more hands won't fix (money, a car, the target) stay stalled.
+    if (j.stalled && !/hands|Nobody free/.test(j.stalled)) {
+      jobs[j.id] = none;
+      continue;
+    }
+    if (JOBS[j.kind].ongoing) {
+      let n = j.need;
+      for (let i = 0; i < free.length && n > 0; i++) {
+        if (free[i] === 0) {
+          free[i] = DAYS + 1;
+          n--;
+        }
+      }
+      jobs[j.id] = j.need && n < j.need ? { start: 1, end: DAYS } : none;
+      continue;
+    }
+    if (!j.need || j.need > hands) {
+      jobs[j.id] = none;
+      continue;
+    }
+    const order = free.map((d, i) => ({ d, i })).sort((a, b) => a.d - b.d);
+    const crew = order.slice(0, j.need);
+    const begin = crew[crew.length - 1].d;
+    if (begin >= DAYS) {
+      jobs[j.id] = none;
+      continue;
+    }
+    let length: number;
+    const home = { x: p.homeX, y: p.homeY };
+    if (isBlockId(j.target)) {
+      // Door to door, nearest first.
+      let at = home;
+      length = 0;
+      const doors = blockOpen(s, j.target);
+      while (doors.length) {
+        doors.sort((a, b) => dist(a, at) - dist(b, at));
+        const d = doors.shift()!;
+        length += Math.ceil(dist(d, at) / speedOf(j)) + doorDays(s, p, j, d);
+        at = d;
+      }
+      length = Math.max(1, length);
+    } else {
+      const there = Math.ceil(dist(home, targetPos(s, j)) / speedOf(j));
+      length = Math.max(0, there - 1) + workDays(s, p, j);
+    }
+    const end = begin + length;
+    for (const c of crew) free[c.i] = end;
+    jobs[j.id] = { start: begin + 1, end };
+  }
+  return { jobs, freeFrom: free };
 }
 
 function schedule(s: GameState): void {
@@ -683,6 +821,8 @@ export function stepDay(s: GameState): StepResult {
     let lead: Job | null = null;
     for (const j of p.jobs) {
       if (j.done || j.stalled || JOBS[j.kind].ongoing || !j.hoods) continue;
+      // A job picked up mid-month is sized for the squad it actually got.
+      if (!j.checked && !j.progress) j.days = workDays(s, p, j);
       personality(s, p, j);
       const t = targetPos(s, j);
       const speed = j.car ? (has(s, p.family, 'mechanic') ? 3 : 2) : 1;
@@ -693,7 +833,11 @@ export function stepDay(s: GameState): StepResult {
       if (!lead) lead = j;
       if (j.x === t.x && j.y === t.y) {
         j.progress++;
-        if (j.progress >= j.days) complete(s, p, j);
+        if (j.progress >= j.days) {
+          complete(s, p, j);
+          // The squad is free: hand them on to whatever on the list is still waiting.
+          if (j.done) allocate(s, p.family);
+        }
       }
       if (run.queue.length) break;
     }
