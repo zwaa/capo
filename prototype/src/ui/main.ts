@@ -68,6 +68,7 @@ import {
   rackets,
   targets,
   totalHoods,
+  gunHands,
   visible,
 } from '../sim/util';
 import { WardMap } from './map';
@@ -460,10 +461,16 @@ function supplies(): string {
   </section>
   <section>
     <h3>Supplies</h3>
-    ${row('gun', 'Pistols', `${fam.guns} for ${hoods} hoods${fam.guns < hoods ? ': some go in bare-handed' : ': everyone is armed'}.`)}
+    ${row('gun', 'Pistols', `${fam.guns} for ${armedOf(hoods)}${fam.guns < gunHands(s, 'player') ? ': some go in bare-handed' : ': everyone is armed'}.`)}
     ${row('car', 'Cars', `${fam.cars} in the garage. Hits, takeovers and supply runs need one each.`)}
     <div class="supply"><span><b>Liquor</b><small>${fam.liquor} cases. Bars pour 15 a month each; stills make 25.</small></span></div>
   </section>`;
+}
+
+/** "5 hoods and 2 lieutenants": who the pistols have to go round. */
+function armedOf(hoods: number): string {
+  const lts = lieutenants(s, 'player').length;
+  return `${hoods} hood${hoods === 1 ? '' : 's'}${lts ? ` and ${lts} lieutenant${lts === 1 ? '' : 's'}` : ''}`;
 }
 
 function meetings(): string {
