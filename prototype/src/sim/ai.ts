@@ -9,6 +9,7 @@ import {
   JOBS,
   active,
   allBlocks,
+  branchesOf,
   blockCentre,
   blockFree,
   carPrice,
@@ -145,6 +146,9 @@ export function planFamily(s: GameState, f: FamilyId): void {
     buy('hood', short.p);
   }
   while (fam.guns < gunHands(s, f) && fam.cash > gunPrice(s, f) + 300) buy('gun');
+
+  // Standing orders for idle hoods: whoever runs Protection drums up business; everyone else watches the turf.
+  for (const p of members(s, f)) p.idle = branchesOf(s, p).includes('protection') ? 'canvass' : 'patrol';
 
   // Ongoing work first, then one-off jobs.
   for (const p of members(s, f)) p.jobs.sort((a, b) => Number(!JOBS[a.kind].ongoing) - Number(!JOBS[b.kind].ongoing));

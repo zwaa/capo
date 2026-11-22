@@ -11,7 +11,23 @@
 
 import { isLot } from '../sim/setup';
 import type { Building, FamilyId, GameState, Person } from '../sim/types';
-import { BLOCK_H, BLOCK_W, JOBS, blockCentre, blockXY, building, holder, isBlockId, person, seenTile, turfAt, visible } from '../sim/util';
+import {
+  BLOCK_H,
+  BLOCK_W,
+  JOBS,
+  PATROL_REACH,
+  blockCentre,
+  blockXY,
+  building,
+  dist,
+  holder,
+  idleHoods,
+  isBlockId,
+  person,
+  seenTile,
+  turfAt,
+  visible,
+} from '../sim/util';
 
 const C = {
   night: '#0b0e12',
@@ -326,6 +342,27 @@ export class WardMap {
             g.stroke();
           }
         }
+      }
+    }
+
+    // Idle hoods walking the beat: a ring each, moving between what we hold nearby day by day.
+    if (s.run) {
+      for (const p of s.people) {
+        if (p.status !== 'active' || p.idle !== 'patrol') continue;
+        const beat = s.buildings
+          .filter((b) => holder(b) === p.family && dist(b, { x: p.homeX, y: p.homeY }) <= PATROL_REACH)
+          .sort((a, b) => a.id.localeCompare(b.id));
+        if (!beat.length) continue;
+        idleHoods(s, p).forEach((h, i) => {
+          const at = beat[(s.run!.day + i * 3) % beat.length];
+          if (p.family === 'rival' && !seenTile(s, at.x, at.y)) return;
+          const c = this.px(at);
+          g.strokeStyle = famColour(p.family);
+          g.lineWidth = 1.5;
+          g.beginPath();
+          g.arc(c.x + T * 0.28 - i * T * 0.12, c.y - T * 0.3, Math.max(2, T * 0.05), 0, Math.PI * 2);
+          g.stroke();
+        });
       }
     }
 

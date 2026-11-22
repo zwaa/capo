@@ -356,6 +356,7 @@ export function makePerson(
     pending: null,
     demand: null,
     ownBuilding: null,
+    idle: 'rest',
     plotting: false,
     wins: 0,
   };

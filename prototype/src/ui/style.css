@@ -628,6 +628,34 @@ h4.sub {
 .plan-sum.idle {
   color: #d9a95a;
 }
+.idle-order {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+.seg {
+  display: inline-flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--rule);
+}
+.seg button {
+  background: none;
+  border: 0;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+.seg button + button {
+  border-left: 1px solid var(--rule);
+}
+.seg button[aria-pressed='true'] {
+  background: var(--lamp);
+  color: var(--paper-ink);
+  font-weight: 600;
+}
 .lt-acts {
   display: flex;
   gap: 6px;
