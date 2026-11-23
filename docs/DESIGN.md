@@ -118,6 +118,10 @@ The city map plays out the month at speed: cars moving, deliveries, collections 
 
 Card sources include lieutenant personality clashes, rival moves, police raids, informant tip-offs and random city events. The number of cards is capped so the phase stays snappy. Once the family has layers of command (§5.7), most cards **come up the chain** from a capo.
 
+**Disputes over protection are pressure, not shooting.** Muscling in on a door that pays another family means leaning on the owner, who weighs your crew against how well the other family holds the place (their turf, whether they collect). If their guards or patrolling hoods are about, it comes to fists first: bruises and a few days in hospital, a little heat, nobody dies. Guns come out over property, back rooms and people: takeovers, wrecks and hits.
+
+**Rivals escalate slowly.** Once a rival notices you, they lean on your doors now and then. Each door you take from them adds to their anger, and real violence against their people or property makes them furious; only an angry rival reaches for takeovers and counter-attacks. Anger fades over quiet months.
+
 **Violence** resolves automatically from numbers, weapons, Muscle and Nerve, surprise and position. Big fights produce **one decisive react card** (*push / retreat / take a hostage / call in reinforcements*) before resolving. Results feed straight into casualties, arrests, heat and headlines.
 
 ### 5.5 Change of Plans (mid-month re-planning)
@@ -462,6 +466,7 @@ The grilling notes behind §5.2, §5.7, §7.1, §8.1 and §14 are in [IDEAS-gran
 | Tutorial | First run with lessons switched on ("The Nephew"): learn each area in turn, hiring a lieutenant for each |
 | Run start | A Prohibition run starts from the bottom: the boss, two or three hoods, no lieutenants. Origins change what you start with. You can also start in any later age with a family that fits it |
 | Orders | Four areas split into nine branches. Each branch is run by the boss or a lieutenant; a lieutenant takes 1–3 branches with one shared crew. Ranked standing jobs, optional targets, hoods as capacity |
+| Protection disputes | Pressure, not shooting: leaning on another family's door is a contest of nerve with the owner, with fists if their men are about. Guns only over property, back rooms and people. Rivals escalate slowly: anger builds as you take their doors or hurt their people, and only an angry rival attempts takeovers (2026-11-23) |
 | Idle orders | Each runner gives idle hoods a standing order: rest, watch our turf (defend nearby holdings at 80% of a guard) or drum up business (quiet sign-ups of nearby homes only). Same for rivals (2026-11-22) |
 | Crew management | Lieutenants can be demoted (a meeting; big loyalty hit). Hoods can be let go between months. Hands freed mid-month pick up the next waiting job, and the orders screen shows each job's rough days (2026-11-22) |
 | Hoods and promotion | Every hood is named, with stats, traits, history and experience. Jobs pick the best-suited squad; hoods grow, get hurt by name, and the experienced can be promoted. Lieutenants only come from promotion; a monthly hiring hall supplies new hoods |

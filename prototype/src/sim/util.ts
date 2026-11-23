@@ -181,7 +181,7 @@ export const JOBS: Record<JobKind, JobInfo> = {
     work: 4,
     risky: false,
     stat: 'charm',
-    hint: 'One pair of hands (three if Calloway already protects it, and expect a fight).',
+    hint: 'One pair of hands (two if Calloway already protects it: then it is a matter of pressure, and fists if his men are about).',
   },
   block: {
     branch: 'protection',

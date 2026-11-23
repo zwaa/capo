@@ -65,7 +65,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'trouble',
     title: 'Calloway notices',
-    body: "Rosa Marchetti, who knows every bar in the ward, wants in. Take her on; with her charm she'd run the speakeasies well once you promote her. And Big Jim Calloway has noticed you. Expect his men on your shops. **Guard** what matters (Enforcement), put a **telephone** where your people work (Fronts), and when the clock stops for bad news, use a **Change of Plans**.",
+    body: "Rosa Marchetti, who knows every bar in the ward, wants in. Take her on; with her charm she'd run the speakeasies well once you promote her. And Big Jim Calloway has noticed you. Expect his men leaning on your shops, and fists if yours are about. Hurt his people or take his property and it turns to guns. **Guard** what matters (Enforcement), put a **telephone** where your people work (Fronts), and when the clock stops for bad news, use a **Change of Plans**.",
     goal: 'Survive a fight, or make a Change of Plans',
     done: (s) => s.stats.fights >= 1 || s.stats.changes >= 1,
     start: (s) => notice(s),

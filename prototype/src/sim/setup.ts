@@ -540,6 +540,7 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
         specialists: [],
         captain: false,
         grudge: false,
+        provoked: 0,
         notice: false,
       },
       rival: {
@@ -559,6 +560,7 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
         specialists: ['armourer'],
         captain: false,
         grudge: false,
+        provoked: 0,
         notice: false,
       },
     },
