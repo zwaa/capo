@@ -81,7 +81,7 @@ import { WardMap } from './map';
 // ---------------------------------------------------------------- state
 
 type Phase = 'paper' | 'orders' | 'watch' | 'plans' | 'over';
-const SAVE_KEY = 'capo-slice-v5';
+const SAVE_KEY = 'capo-slice-v6';
 const SPEEDS = [0, 1100, 550, 220];
 
 interface Hot {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { autoplay } from '../scripts/autoplay';
+import { planFamily } from '../src/sim/ai';
 import {
   addJob,
   allocate,
@@ -298,7 +299,7 @@ describe('managing the crew', () => {
 });
 
 describe('standing orders for idle hoods', () => {
-  it('idle hoods on patrol pile in when something nearby is hit', () => {
+  it('idle hoods on patrol pile in when someone leans on a door nearby: fists, nobody dies', () => {
     const s = createGame(14);
     const boss = bossOf(s, 'player');
     boss.jobs = [];
@@ -311,20 +312,16 @@ describe('standing orders for idle hoods', () => {
     s.families.rival.notice = true;
     allocate(s, 'rival');
     startMonth(s);
-    let fight = null;
-    for (let n = 0; n < 40 && !fight; n++) {
-      const r = stepDay(s);
-      fight = s.run!.queue.find((c) => c.kind === 'fight') ?? null;
-      if (!fight) s.run!.queue = [];
-      if (r === 'done') break;
+    let fightCards = 0;
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) {
+      fightCards += s.run!.queue.filter((c) => c.kind === 'fight').length;
+      s.run!.queue = [];
     }
-    expect(fight).not.toBeNull();
-    const cousins = crewOf(s, boss).map((h) => h.id);
-    expect(
-      String(fight!.ctx.dsquad)
-        .split(',')
-        .some((id) => cousins.includes(id)),
-    ).toBe(true);
+    expect(s.run!.log.some((l) => /scuffle|saw off/.test(l.text) && l.text.includes(shop.name))).toBe(true);
+    expect(fightCards).toBe(0);
+    expect(s.hoods.filter((h) => h.status === 'dead')).toHaveLength(0);
+    expect(s.people.filter((p) => p.status === 'dead')).toHaveLength(0);
   });
   it('drumming up business signs up homes next to our turf, and leaves nothing on the list', () => {
     const s = createGame(14);
@@ -339,6 +336,29 @@ describe('standing orders for idle hoods', () => {
     expect(ours.every((b) => b.kind === 'home')).toBe(true);
     endMonth(s);
     expect(boss.jobs.some((j) => j.auto)).toBe(false);
+  });
+});
+
+describe('a slow burn', () => {
+  it('Calloway only reaches for takeovers after real violence against him', () => {
+    const s = createGame(14);
+    const ours = s.buildings.find((b) => !b.owner && !b.protectedBy && b.kind === 'shop')!;
+    ours.owner = 'player';
+    s.families.rival.notice = true;
+    s.families.rival.cash = 9000;
+    s.month = 8;
+    const takeovers = () =>
+      s.people
+        .filter((p) => p.family === 'rival')
+        .flatMap((p) => p.jobs)
+        .filter((j) => j.kind === 'takeover').length;
+    for (let i = 0; i < 20; i++) planFamily(s, 'rival');
+    expect(takeovers()).toBe(0);
+    for (let i = 0; i < 20 && !takeovers(); i++) {
+      s.families.rival.provoked = 3;
+      planFamily(s, 'rival');
+    }
+    expect(takeovers()).toBeGreaterThan(0);
   });
 });
 

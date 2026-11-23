@@ -169,6 +169,8 @@ export interface Family {
   /** Captain paid this month (a staffed payoff job). */
   captain: boolean;
   grudge: boolean;
+  /** Months left of real anger: after we hurt their people or took or wrecked their property. Only then do they reach for takeovers. */
+  provoked: number;
   /** Rival only: has Calloway noticed you yet? */
   notice: boolean;
 }

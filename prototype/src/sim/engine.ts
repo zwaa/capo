@@ -72,6 +72,8 @@ import {
   targets,
   totalHoods,
   gunHands,
+  holder,
+  TURF_REACH,
   idleHoods,
   PATROL_FORCE,
   PATROL_REACH,
@@ -490,7 +492,7 @@ export function needFor(s: GameState, f: FamilyId, j: Job, p: Person): number {
       n = Math.ceil(stopsOf(protectedBy(s, f)) / 5);
       break;
     case 'signup':
-      n = building(s, j.target)?.protectedBy === other(f) ? 3 : 1;
+      n = building(s, j.target)?.protectedBy === other(f) ? 2 : 1;
       break;
     case 'block':
       n = 2;
@@ -1151,7 +1153,7 @@ function complete(s: GameState, p: Person, j: Job): void {
   switch (j.kind) {
     case 'signup': {
       if (!b || b.owner || b.protectedBy === f) return;
-      if (b.protectedBy) return fightFor(s, p, j, b);
+      if (b.protectedBy) return lean(s, p, j, b);
       if (chance(s, signupOdds(s, f, j, b))) {
         seasoned(s, j, squadStat(s, j, 'charm') >= squadStat(s, j, 'muscle') ? 'charm' : 'muscle');
         return signUp(s, b, p, j.posture, j);
@@ -1580,8 +1582,94 @@ function resolveFight(s: GameState, ctx: FightCtx, mod: number): void {
     if (hurt.some((l) => l.family === 'rival' && l.status === 'dead') || fates.some((x) => x.h.family === 'rival' && x.h.status === 'dead'))
       s.families.rival.grudge = true;
     s.families.rival.notice = true;
+    s.families.rival.provoked = Math.max(s.families.rival.provoked, PROVOKED_MONTHS);
     rivalRespond(s, b ?? undefined);
   }
+}
+
+// ---------------------------------------------------------------- leaning on someone else's door
+
+/** How many months a family stays angry enough for takeovers after real violence against it. */
+export const PROVOKED_MONTHS = 3;
+/** Anger caps here, so it fades within a few quiet months. */
+export const PROVOKED_MAX = 4;
+/** How much harder a door is to lean on when its family collects from it, and holds the doors around it. */
+const HELD_BONUS = 0.05;
+/** Heat from leaning on a door that pays someone else, by posture. Nobody gets shot. */
+const LEAN_HEAT: Record<Posture, number> = { quiet: 1, firm: 3, loud: 6 };
+
+/** Fists, not guns: what a team brings to a scuffle. */
+const brawn = (team: Worker[]) => team.reduce((n, w) => n + 1 + w.muscle / 10, 0);
+
+/** Put a couple of the losing side in hospital for a few days. Nobody dies over a door. */
+function bruise(s: GameState, team: Hood[], n: number): string[] {
+  return shuffleCopy(s, team)
+    .slice(0, n)
+    .map((h) => {
+      h.status = 'wounded';
+      h.recover = 1;
+      return hoodFirst(h);
+    });
+}
+
+/**
+ * Muscling in on a door that already pays the other family. It's pressure,
+ * not a shooting war: the crew leans on the owner, who weighs them against the
+ * family he pays now (is it their turf, have they been collecting?). If that
+ * family's guards or patrolling hoods are about, it comes to fists first.
+ */
+function lean(s: GameState, p: Person, j: Job, b: Building): void {
+  const f = p.family;
+  const df = b.protectedBy!;
+  const who = squadNames(s, j) || first(p);
+  const ours = workers(s, j.squad);
+  const theirHoods = [
+    ...guardsAt(s, b).flatMap((g) => g.j.squad.map((id) => hood(s, id)).filter((h): h is Hood => !!h)),
+    ...patrolsNear(s, b).flatMap((w) => w.hoods),
+  ];
+  addHeat(s, f, LEAN_HEAT[j.posture], `Leaning on ${b.name} (${j.posture})`);
+  let edge = 0;
+  if (theirHoods.length) {
+    const won = chance(s, brawn(ours) / (brawn(ours) + brawn(theirHoods) * 1.1));
+    const ourHoods = j.squad.map((id) => hood(s, id)).filter((h): h is Hood => !!h);
+    const hurt = won ? bruise(s, theirHoods, int(s, 0, 1)) : bruise(s, ourHoods, int(s, 1, 2));
+    const sore = hurt.length ? ` ${hurt.join(' and ')} ${hurt.length > 1 ? 'are' : 'is'} nursing bruises.` : '';
+    if (f === 'player' || df === 'player') s.stats.fights++;
+    log(
+      s,
+      won
+        ? `${who} saw off ${s.families[df].name}'s men outside ${b.name}.${sore}`
+        : `${who} got the worst of a scuffle outside ${b.name}.${sore}`,
+      null,
+    );
+    story(
+      s,
+      `FISTICUFFS ON ${streetOf(b).toUpperCase()}`,
+      `Two groups of "business associates" disagreed outside ${b.name}. Nobody pressed charges. Nobody ever does.`,
+      3,
+    );
+    allocate(s, df);
+    allocate(s, f);
+    if (!won) return;
+    edge = 0.1;
+  }
+  const held =
+    (b.uncollected === 0 ? HELD_BONUS : -HELD_BONUS) +
+    (s.buildings.some((x) => x.id !== b.id && holder(x) === df && dist(x, b) <= TURF_REACH) ? HELD_BONUS : 0);
+  const odds = Math.max(0.1, Math.min(0.85, signupOdds(s, f, j, b) - 0.15 - held + edge));
+  if (chance(s, odds)) {
+    b.protectedBy = f;
+    b.uncollected = 0;
+    p.wins++;
+    seasoned(s, j, squadStat(s, j, 'charm') >= squadStat(s, j, 'muscle') ? 'charm' : 'muscle');
+    log(s, `${b.name} now pays ${s.families[f].name}, not ${s.families[df].name}. ${who} made the case.`, null);
+    // Taking his paying customers adds up: one is a grumble, a few close together and he reaches for worse.
+    if (f === 'player') s.families.rival.provoked = Math.min(PROVOKED_MAX, s.families.rival.provoked + 1);
+    allocate(s, f);
+    allocate(s, df);
+    advanceLessons(s);
+  } else log(s, `The owner of ${b.name} is more afraid of ${s.families[df].name} than of ${who}. For now.`, null);
+  if (f === 'player') s.families.rival.notice = true;
 }
 
 function shuffleCopy<T>(s: GameState, xs: T[]): T[] {
@@ -2185,8 +2273,8 @@ function checkOver(s: GameState): void {
   }
 }
 
-export const WIN_SCORE = 5000;
-export const DRAW_SCORE = 2500;
+export const WIN_SCORE = 7000;
+export const DRAW_SCORE = 4000;
 
 // ---------------------------------------------------------------- new game
 

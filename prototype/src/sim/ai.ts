@@ -30,6 +30,14 @@ import {
   gunHands,
 } from './util';
 
+/** How often a family that's at odds leans on one of the other side's doors, per month. */
+export const LEAN_CHANCE = 0.6;
+/** At most this many of the other side's doors leaned on in a month. */
+export const LEANS_PER_MONTH = 2;
+
+/** How angry (see Family.provoked) a family must be before it takes buildings by force. */
+export const TAKEOVER_ANGER = 2;
+
 export function planFamily(s: GameState, f: FamilyId): void {
   const fam = s.families[f];
   const foe = other(f);
@@ -74,11 +82,12 @@ export function planFamily(s: GameState, f: FamilyId): void {
     .filter((x) => x.n >= 2 && inReach(x.at) && dist(x.at, home) <= 6)
     .sort((a, b) => dist(a.at, home) - a.n - (dist(b.at, home) - b.n));
   if (blocks[0] && crewSize(s, home) >= 2) oneOff('block', blocks[0].id, 'firm');
-  if (aggressive && chance(s, 0.6)) {
-    const theirs = near(protectedBy(s, foe));
-    if (theirs[0]) {
-      const r = runner(s, f, 'protection');
-      if (!r.jobs.some((j) => j.target === theirs[0].id)) r.jobs.push(blankJob(id(), 'signup', theirs[0].id, 'loud'));
+  // Once at odds, now and then lean on one of theirs: pressure, not shooting.
+  if (aggressive) {
+    const r = runner(s, f, 'protection');
+    for (const b of near(protectedBy(s, foe)).slice(0, LEANS_PER_MONTH)) {
+      if ((fam.provoked > 0 || chance(s, LEAN_CHANCE)) && !r.jobs.some((j) => j.target === b.id))
+        r.jobs.push(blankJob(id(), 'signup', b.id, 'firm'));
     }
   }
 
@@ -92,7 +101,8 @@ export function planFamily(s: GameState, f: FamilyId): void {
     acq,
   );
   if (forSale[0] && owned(s, f).length < cap && (f === 'player' || chance(s, 0.25))) oneOff('buy', forSale[0].id);
-  if (aggressive && f === 'rival' && s.month >= 5 && fam.cash > 1200 && chance(s, 0.35)) {
+  // Real violence only while provoked: after we hurt his people or took or wrecked his property.
+  if (fam.provoked >= TAKEOVER_ANGER && f === 'rival' && fam.cash > 1200 && chance(s, 0.35)) {
     const prize = near(owned(s, foe), acq)[0];
     if (prize) oneOff('takeover', prize.id, 'loud');
   }
@@ -153,4 +163,5 @@ export function planFamily(s: GameState, f: FamilyId): void {
   // Ongoing work first, then one-off jobs.
   for (const p of members(s, f)) p.jobs.sort((a, b) => Number(!JOBS[a.kind].ongoing) - Number(!JOBS[b.kind].ongoing));
   fam.grudge = false;
+  fam.provoked = Math.max(0, fam.provoked - 1);
 }
