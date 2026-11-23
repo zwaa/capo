@@ -2273,8 +2273,8 @@ function checkOver(s: GameState): void {
   }
 }
 
-export const WIN_SCORE = 5000;
-export const DRAW_SCORE = 2500;
+export const WIN_SCORE = 7000;
+export const DRAW_SCORE = 4000;
 
 // ---------------------------------------------------------------- new game
 
