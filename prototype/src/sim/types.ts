@@ -24,6 +24,9 @@ export type JobKind =
   | 'supply'
   | 'payoff';
 
+/** What a person's idle hoods do when nothing on the list needs them. */
+export type IdleOrder = 'rest' | 'patrol' | 'canvass';
+
 export type SpecialistKind = 'recruiter' | 'armourer' | 'mechanic' | 'lawyer';
 
 /**
@@ -51,6 +54,8 @@ export interface Job {
   x: number;
   y: number;
   checked: boolean;
+  /** Made up by a standing order (drumming up business), not ordered by hand. Gone at month end. */
+  auto?: boolean;
 }
 
 export interface Building {
@@ -111,6 +116,8 @@ export interface Person {
   pending: { jobs: Job[]; arriveDay: number } | null;
   demand: Demand | null;
   ownBuilding: string | null;
+  /** Standing order for idle hoods. */
+  idle: IdleOrder;
   plotting: boolean;
   wins: number;
 }

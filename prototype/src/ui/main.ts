@@ -30,10 +30,12 @@ import {
 import type { BossAction, JobPlan, Purchase } from '../sim/engine';
 import { LESSONS, advanceLessons, currentLesson } from '../sim/lessons';
 import { POOL, streetOf } from '../sim/setup';
-import type { Branch, Building, Card, GameState, Hood, Job, JobKind, Person, Posture, SpecialistKind } from '../sim/types';
+import type { Branch, Building, Card, GameState, Hood, IdleOrder, Job, JobKind, Person, Posture, SpecialistKind } from '../sim/types';
 import {
   BRANCHES,
   DAYS,
+  IDLE_ORDERS,
+  idleHoods,
   blockBuildings,
   blockId,
   blockName,
@@ -79,7 +81,7 @@ import { WardMap } from './map';
 // ---------------------------------------------------------------- state
 
 type Phase = 'paper' | 'orders' | 'watch' | 'plans' | 'over';
-const SAVE_KEY = 'capo-slice-v4';
+const SAVE_KEY = 'capo-slice-v5';
 const SPEEDS = [0, 1100, 550, 220];
 
 interface Hot {
@@ -265,7 +267,10 @@ function planSummary(p: Person, freeFrom: number[]): string {
   if (!idle.length) return '<p class="plan-sum">Every pair of hands is busy all month.</p>';
   const from = Math.min(...idle);
   const n = idle.length;
-  return `<p class="plan-sum idle">${n} of ${freeFrom.length} hands ${from ? `idle from about day ${from + 1}` : 'with nothing to do'}. Add jobs below${p.role === 'boss' ? '' : ', or move hoods to someone busier'}.</p>`;
+  const when = from ? `idle from about day ${from + 1}` : 'with nothing to do';
+  if (p.idle !== 'rest')
+    return `<p class="plan-sum">${n} of ${freeFrom.length} hands ${when}: they'll be ${IDLE_ORDERS[p.idle].doing}.</p>`;
+  return `<p class="plan-sum idle">${n} of ${freeFrom.length} hands ${when}. Add jobs below, or give them a standing order.</p>`;
 }
 
 // ---------------------------------------------------------------- hoods
@@ -396,10 +401,22 @@ function personCard(p: Person): string {
       <span class="resp-edit">${editing === p.id ? 'Done' : 'Change'}</span>
     </button>
     ${editing === p.id ? branchEditor(p) : ''}
+    ${idleControl(p)}
     ${demand}
     ${jobList(p, p.jobs, 'orders')}
     ${hoods}
   </div>`;
+}
+
+/** The standing order for this person's idle hoods. */
+function idleControl(p: Person): string {
+  const orders = Object.keys(IDLE_ORDERS) as IdleOrder[];
+  return `<div class="idle-order"><span>When idle</span><span class="seg" role="group" aria-label="What ${esc(first(p))}'s idle hoods do">${orders
+    .map(
+      (o) =>
+        `<button data-idle="${p.id}|${o}" aria-pressed="${p.idle === o}" title="${esc(IDLE_ORDERS[o].hint)}">${esc(IDLE_ORDERS[o].label)}</button>`,
+    )
+    .join('')}</span></div>`;
 }
 
 function lessonCard(): string {
@@ -581,7 +598,11 @@ function renderWatch(): string {
             return `<div class="wjob ${j.stalled ? 'bad' : ''}"><span>${esc(jobTitle(s, j))}</span><small>${esc(st)}</small><div class="bar"><i style="width:${pct}%"></i></div></div>`;
           })
           .join('');
-        return `<div class="lt ${p.status === 'active' ? '' : 'out'}"><div class="lt-head"><span class="lt-name">${esc(first(p))}</span><span class="chip">${statusOf(p) || `crew ${crewSize(s, p)} + 1`}</span></div>${p.pending ? `<span class="hint">Runner arrives day ${p.pending.arriveDay}</span>` : ''}${jobs || '<span class="hint">No jobs</span>'}</div>`;
+        const idle = p.status === 'active' ? idleHoods(s, p) : [];
+        const loafing = idle.length
+          ? `<span class="hint">${esc(idle.map(hoodFirst).join(', '))}: ${p.idle === 'rest' ? 'nothing to do' : IDLE_ORDERS[p.idle].doing}</span>`
+          : '';
+        return `<div class="lt ${p.status === 'active' ? '' : 'out'}"><div class="lt-head"><span class="lt-name">${esc(first(p))}</span><span class="chip">${statusOf(p) || `crew ${crewSize(s, p)} + 1`}</span></div>${p.pending ? `<span class="hint">Runner arrives day ${p.pending.arriveDay}</span>` : ''}${jobs || '<span class="hint">No jobs</span>'}${loafing}</div>`;
       })
       .join('')}</section>
     <section><h3>The word</h3><div class="ticker">${
@@ -824,6 +845,13 @@ document.addEventListener('click', (e) => {
     return render();
   }
   if (firing && !d.fire) firing = null;
+  if (d.idle) {
+    const [who, order] = d.idle.split('|');
+    const p = person(s, who);
+    if (p && p.family === 'player') p.idle = order as IdleOrder;
+    save();
+    return render();
+  }
   if (d.act === 'branches' && d.p) {
     editing = editing === d.p ? null : d.p;
     note = '';

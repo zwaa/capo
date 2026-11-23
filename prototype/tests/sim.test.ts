@@ -9,6 +9,7 @@ import {
   changePlans,
   createGame,
   draftJob,
+  endMonth,
   fireHood,
   forecast,
   hireHood,
@@ -23,7 +24,7 @@ import {
   stepDay,
 } from '../src/sim/engine';
 import { LESSONS } from '../src/sim/lessons';
-import { isLot } from '../src/sim/setup';
+import { blankJob, isLot } from '../src/sim/setup';
 import type { GameState } from '../src/sim/types';
 import {
   BRANCHES,
@@ -293,6 +294,51 @@ describe('managing the crew', () => {
     let n = 0;
     while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
     expect(last.done || last.progress > 0).toBe(true);
+  });
+});
+
+describe('standing orders for idle hoods', () => {
+  it('idle hoods on patrol pile in when something nearby is hit', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    boss.idle = 'patrol';
+    const home = { x: boss.homeX, y: boss.homeY };
+    const shop = s.buildings.filter((b) => !b.owner && !b.protectedBy && dist(b, home) <= 2)[0];
+    shop.protectedBy = 'player';
+    const dutch = s.people.find((p) => p.id === 'dutch')!;
+    dutch.jobs = [blankJob('jx', 'signup', shop.id, 'loud')];
+    s.families.rival.notice = true;
+    allocate(s, 'rival');
+    startMonth(s);
+    let fight = null;
+    for (let n = 0; n < 40 && !fight; n++) {
+      const r = stepDay(s);
+      fight = s.run!.queue.find((c) => c.kind === 'fight') ?? null;
+      if (!fight) s.run!.queue = [];
+      if (r === 'done') break;
+    }
+    expect(fight).not.toBeNull();
+    const cousins = crewOf(s, boss).map((h) => h.id);
+    expect(
+      String(fight!.ctx.dsquad)
+        .split(',')
+        .some((id) => cousins.includes(id)),
+    ).toBe(true);
+  });
+  it('drumming up business signs up homes next to our turf, and leaves nothing on the list', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    boss.idle = 'canvass';
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    const ours = s.buildings.filter((b) => b.protectedBy === 'player');
+    expect(ours.length).toBeGreaterThan(0);
+    expect(ours.every((b) => b.kind === 'home')).toBe(true);
+    endMonth(s);
+    expect(boss.jobs.some((j) => j.auto)).toBe(false);
   });
 });
 

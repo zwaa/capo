@@ -72,6 +72,9 @@ import {
   targets,
   totalHoods,
   gunHands,
+  idleHoods,
+  PATROL_FORCE,
+  PATROL_REACH,
   blockFree,
   blockName,
   blockOpen,
@@ -818,6 +821,7 @@ export function stepDay(s: GameState): StepResult {
 
   for (const p of s.people) {
     if (p.status !== 'active') continue;
+    drumUp(s, p);
     let lead: Job | null = null;
     for (const j of p.jobs) {
       if (j.done || j.stalled || JOBS[j.kind].ongoing || !j.hoods) continue;
@@ -852,6 +856,33 @@ export function stepDay(s: GameState): StepResult {
 
   if (run.queue.length) return 'card';
   return d >= DAYS ? 'done' : 'continue';
+}
+
+/**
+ * A crew told to drum up business puts an idle hand on the nearest door next
+ * to our turf that pays nobody: a quiet sign-up at the bottom of the list, so
+ * it never takes hands from real orders.
+ */
+function drumUp(s: GameState, p: Person): void {
+  if (p.idle !== 'canvass' || p.jobs.some((j) => j.auto && !j.done)) return;
+  if (!idleHoods(s, p).length) return;
+  const home = { x: p.homeX, y: p.homeY };
+  const queued = new Set(s.people.flatMap((x) => x.jobs.filter((j) => !j.done).map((j) => j.target)));
+  const door = s.buildings
+    .filter((b) => isHome(b) && !b.owner && !b.protectedBy && !b.refused && !queued.has(b.id) && onTurf(s, p.family, b, b.id))
+    .sort((a, b) => dist(a, home) - dist(b, home) || a.id.localeCompare(b.id))[0];
+  if (!door) return;
+  const j = blankJob(newId(s), 'signup', door.id, 'quiet');
+  j.auto = true;
+  p.jobs.push(j);
+  allocate(s, p.family);
+  if (!j.hoods) {
+    p.jobs = p.jobs.filter((x) => x !== j);
+    return;
+  }
+  prepare(s, p, j);
+  j.x = p.x;
+  j.y = p.y;
 }
 
 function personality(s: GameState, p: Person, j: Job): void {
@@ -1125,6 +1156,10 @@ function complete(s: GameState, p: Person, j: Job): void {
         seasoned(s, j, squadStat(s, j, 'charm') >= squadStat(s, j, 'muscle') ? 'charm' : 'muscle');
         return signUp(s, b, p, j.posture, j);
       }
+      if (j.auto) {
+        b.refused = true;
+        return log(s, `${b.name} turned ${squadNames(s, j) || name} away.`, f);
+      }
       if (f === 'player') {
         card(s, {
           kind: 'shopkeeper',
@@ -1261,6 +1296,16 @@ interface FightCtx {
   [k: string]: string | number;
 }
 
+/** Idle hoods on patrol near a building, by whose crew they're in. */
+function patrolsNear(s: GameState, b: Building): { p: Person; hoods: Hood[] }[] {
+  const f = b.owner ?? b.protectedBy;
+  if (!f) return [];
+  return active(s, f)
+    .filter((p) => p.idle === 'patrol' && dist({ x: p.homeX, y: p.homeY }, b) <= PATROL_REACH)
+    .map((p) => ({ p, hoods: idleHoods(s, p) }))
+    .filter((w) => w.hoods.length);
+}
+
 function guardsAt(s: GameState, b: Building): { p: Person; j: Job }[] {
   const f = b.owner ?? b.protectedBy;
   if (!f) return [];
@@ -1278,11 +1323,13 @@ function fightFor(s: GameState, att: Person, j: Job, target: Building | Person):
   let dsquad: string[] = [];
   if (isBuilding) {
     const g = guardsAt(s, target);
+    const watch = patrolsNear(s, target);
     defenders = g.map((x) => x.p);
-    dsquad = g.flatMap((x) => onlyHoods(s, x.j.squad));
+    dsquad = [...g.flatMap((x) => onlyHoods(s, x.j.squad)), ...watch.flatMap((w) => w.hoods.map((h) => h.id))];
     D =
       force(s, df, doormen(target.owner ? 3 : 1), null, 'firm') +
-      g.reduce((n, x) => n + force(s, df, workers(s, x.j.squad), x.p, 'firm') * 1.2, 0);
+      g.reduce((n, x) => n + force(s, df, workers(s, x.j.squad), x.p, 'firm') * 1.2, 0) +
+      watch.reduce((n, w) => n + force(s, df, w.hoods, w.p, 'firm') * PATROL_FORCE, 0);
   } else {
     // A hit: whoever is with the target at the time, about half his crew.
     defenders = [target];
@@ -1306,7 +1353,7 @@ function fightFor(s: GameState, att: Person, j: Job, target: Building | Person):
   };
   const playerInvolved =
     af === 'player' || (isBuilding ? target.owner === 'player' || target.protectedBy === 'player' : target.family === 'player');
-  if (playerInvolved && (defenders.length || af === 'player')) fightCard(s, ctx, target);
+  if (playerInvolved && (defenders.length || dsquad.length || af === 'player')) fightCard(s, ctx, target);
   else resolveFight(s, ctx, 0);
 }
 
@@ -1880,7 +1927,7 @@ export function endMonth(s: GameState): void {
   s.hoods = s.hoods.filter((h) => h.status !== 'dead');
   freshMarket(s);
   for (const p of s.people) {
-    p.jobs = p.jobs.filter((j) => !j.done);
+    p.jobs = p.jobs.filter((j) => !j.done && !j.auto);
     p.pending = null;
     p.x = p.homeX;
     p.y = p.homeY;

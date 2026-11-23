@@ -1,4 +1,4 @@
-import type { Branch, Building, FamilyId, GameState, Hood, Job, JobKind, Person, SpecialistKind } from './types';
+import type { Branch, Building, FamilyId, GameState, Hood, IdleOrder, Job, JobKind, Person, SpecialistKind } from './types';
 
 export const MONTHS = [
   'January',
@@ -57,6 +57,31 @@ export const protectedHomes = (s: GameState, f: FamilyId) => protectedBy(s, f).f
 /** A collector gets round five shops a month, or ten homes (they pay less and sit close together). */
 export const HOME_STOP = 0.5;
 export const stopsOf = (bs: Building[]) => bs.reduce((n, b) => n + (isHome(b) ? HOME_STOP : 1), 0);
+
+// ---------------------------------------------------------------- standing orders for idle hoods
+
+export const IDLE_ORDERS: Record<IdleOrder, { label: string; doing: string; hint: string }> = {
+  rest: { label: 'Rest', doing: 'resting', hint: 'Idle hoods stay home.' },
+  patrol: {
+    label: 'Watch our turf',
+    doing: 'watching our turf',
+    hint: 'Idle hoods walk the beat and pile in when anything we hold nearby is hit, nearly as good as guards.',
+  },
+  canvass: {
+    label: 'Drum up business',
+    doing: 'drumming up business',
+    hint: 'Idle hoods quietly sign up homes next to our turf that pay nobody, one door at a time. No rough stuff: a no is a no until next month. Shops still need a proper sign-up.',
+  },
+};
+/** How far from where they work patrolling hoods will run to a fight, and how well they do when they get there. */
+export const PATROL_REACH = 4;
+export const PATROL_FORCE = 0.8;
+
+/** A person's hoods with nothing to do right now: fit, and on no job that's running. */
+export function idleHoods(s: GameState, p: Person): Hood[] {
+  const busy = new Set(p.jobs.filter((j) => !j.done && !j.stalled).flatMap((j) => j.squad));
+  return ready(s, p).filter((h) => !busy.has(h.id));
+}
 
 // ---------------------------------------------------------------- blocks
 
