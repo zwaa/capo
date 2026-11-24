@@ -300,6 +300,31 @@ button {
 .pick .hint {
   color: var(--paper-dim);
 }
+.modes {
+  position: absolute;
+  top: 10px;
+  left: max(12px, env(safe-area-inset-left, 0px));
+  z-index: 4;
+  display: inline-flex;
+  border: 1px solid var(--rule);
+  background: rgb(11 14 18 / 0.85);
+}
+.modes button {
+  background: none;
+  border: 0;
+  padding: 5px 10px;
+  font: 600 11px var(--head);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.modes button + button {
+  border-left: 1px solid var(--rule);
+}
+.modes button[aria-pressed='true'] {
+  background: var(--lamp);
+  color: var(--paper-ink);
+}
 .legend {
   position: absolute;
   left: max(12px, env(safe-area-inset-left, 0px));

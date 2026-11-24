@@ -6,12 +6,17 @@
 //    A solid border means the family owns the building; a flag means it pays them protection
 //    (homes pay too, and fly a smaller flag).
 //  - A block picked for orders, or with a block sign-up on it, is framed with a dashed line.
+//  - Map modes put one question on the map at a time: Turf (who holds what), Income (what each
+//    place brings in, and what's going uncollected) and Reach (where sign-ups come easy, what
+//    our people can see).
 //  - Who holds what is public knowledge. Fog of war (a light hatch) only hides people:
 //    rival lieutenants, crews out on jobs and guards.
 
 import { isLot } from '../sim/setup';
 import type { Building, FamilyId, GameState, Person } from '../sim/types';
 import {
+  INCOME,
+  onTurf,
   BLOCK_H,
   BLOCK_W,
   JOBS,
@@ -56,6 +61,34 @@ const C = {
 
 const famColour = (f: FamilyId) => (f === 'player' ? C.lamp : C.steel);
 
+export type MapMode = 'turf' | 'income' | 'reach';
+
+/** The map modes, in switcher order, with what each one's legend says. */
+export const MAP_MODES: { id: MapMode; label: string; key: string }[] = [
+  {
+    id: 'turf',
+    label: 'Turf',
+    key: 'Click a shop or home for orders, for it or its whole block · Tinted ground: turf · Border: owned · Flag: pays protection · Hatched: out of sight · S speakeasy · G gambling · D still · ■ telephone',
+  },
+  {
+    id: 'income',
+    label: 'Income',
+    key: 'What each place brings in a month, in the colour of whoever takes it · Grey: pays nobody yet · Red "!": ours, but nobody went round to collect',
+  },
+  {
+    id: 'reach',
+    label: 'Reach',
+    key: "Lit: next to our turf, where sign-ups are easier and quicker · Blue: next to Calloway's · Dark and hatched: out of our sight",
+  },
+];
+
+/** What a place brings in a month to whoever holds it (owned stills supply the bars instead). */
+export function monthly(b: Building): number {
+  if (!b.owner) return b.protection;
+  if (b.racket === 'speakeasy' || b.racket === 'gambling') return INCOME[b.racket];
+  return b.racket === 'still' ? 0 : 50;
+}
+
 interface Pos {
   x: number;
   y: number;
@@ -73,6 +106,7 @@ export class WardMap {
   private flashes: { at: Pos; t: number }[] = [];
   raf = 0;
   showOrders = true;
+  mode: MapMode = 'turf';
   state: GameState | null = null;
   onHover: (b: Building | null, p: Person | null, px: number, py: number) => void = () => {};
   /** A click or tap on the map (b and p are null for an empty spot). */
@@ -224,8 +258,8 @@ export class WardMap {
       }
     }
 
-    // Turf: tinted ground, outlined where it ends.
-    for (let y = 0; y < s.height; y++) {
+    // Turf: tinted ground, outlined where it ends (the Turf mode only; the others colour the ground their own way).
+    for (let y = 0; y < s.height && this.mode === 'turf'; y++) {
       for (let x = 0; x < s.width; x++) {
         if (!isLot(x, y)) continue;
         const f = turfAt(s, x, y);
@@ -267,6 +301,9 @@ export class WardMap {
       if (b.kind === 'home') this.drawHome(b.x, b.y, bossAt(b.x, b.y), b.protectedBy);
       else this.drawShop(b, now);
     }
+
+    if (this.mode === 'reach') this.drawReach();
+    if (this.mode === 'income') this.drawIncome();
 
     // Orders: dashed lines from each of our people to their one-off jobs.
     if (this.showOrders && !s.run) {
@@ -435,6 +472,60 @@ export class WardMap {
       g.fillStyle = glow;
       g.fillRect(c.x - T, c.y - T, T * 2, T * 2);
     }
+  }
+
+  /** Reach: lit where we're next to our own turf, blue where Calloway is, dim elsewhere. */
+  private drawReach(): void {
+    const s = this.state!;
+    const g = this.ctx;
+    const T = this.tile;
+    for (let y = 0; y < s.height; y++) {
+      for (let x = 0; x < s.width; x++) {
+        if (!isLot(x, y)) continue;
+        const at = { x, y };
+        const X = this.ox + x * T;
+        const Y = this.oy + y * T;
+        const ours = onTurf(s, 'player', at);
+        const theirs = onTurf(s, 'rival', at);
+        g.fillStyle = ours ? 'rgba(227, 162, 59, 0.28)' : theirs ? 'rgba(95, 159, 184, 0.26)' : 'rgba(5, 7, 10, 0.45)';
+        g.fillRect(X, Y, T, T);
+        if (ours) {
+          g.strokeStyle = C.lamp;
+          g.lineWidth = Math.max(1.5, T * 0.04);
+          this.edges(x, y, (nx, ny) => !isLot(nx, ny) || !onTurf(s, 'player', { x: nx, y: ny }), X, Y, g.lineWidth / 2);
+        }
+      }
+    }
+  }
+
+  /** Income: a dark scrim, and each place's monthly worth in the colour of whoever takes it. */
+  private drawIncome(): void {
+    const s = this.state!;
+    const g = this.ctx;
+    const T = this.tile;
+    for (let y = 0; y < s.height; y++) {
+      for (let x = 0; x < s.width; x++) {
+        if (!isLot(x, y)) continue;
+        g.fillStyle = 'rgba(5, 7, 10, 0.62)';
+        g.fillRect(this.ox + x * T, this.oy + y * T, T, T);
+      }
+    }
+    g.save();
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.font = `700 ${Math.max(9, Math.round(T * 0.26))}px Oswald, 'Arial Narrow', sans-serif`;
+    for (const b of s.buildings) {
+      const f = holder(b);
+      const c = this.px(b);
+      const owed = b.protectedBy === 'player' && !b.owner && b.uncollected > 0;
+      const text = b.racket === 'still' && b.owner ? 'still' : `$${monthly(b)}${owed ? '!' : ''}`;
+      g.lineWidth = 3;
+      g.strokeStyle = C.night;
+      g.strokeText(text, c.x, c.y);
+      g.fillStyle = owed ? C.blood : f ? famColour(f) : C.dim;
+      g.fillText(text, c.x, c.y);
+    }
+    g.restore();
   }
 
   /** A dashed frame round a whole city block, just outside its kerbs. */
