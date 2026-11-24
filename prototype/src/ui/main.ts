@@ -76,7 +76,8 @@ import {
   gunHands,
   visible,
 } from '../sim/util';
-import { WardMap } from './map';
+import { MAP_MODES, WardMap, monthly } from './map';
+import type { MapMode } from './map';
 
 // ---------------------------------------------------------------- state
 
@@ -114,10 +115,11 @@ app.innerHTML = `
       <canvas id="map" aria-label="Map of the ward"></canvas>
       <div class="tip" id="tip" hidden></div>
       <div class="pick" id="pick" role="dialog" aria-label="Orders for this spot" hidden></div>
+      <div class="modes" id="modes" role="group" aria-label="Map mode"></div>
       <div class="legend">
         <span><i style="background:#e3a23b"></i>Russo</span>
         <span><i style="background:#5f9fb8"></i>Calloway</span>
-        <span class="key">Click a shop or home for orders, for it or its whole block · Tinted ground: turf · Border: owned · Flag: pays protection · Hatched: out of sight · S speakeasy · G gambling · D still · ■ telephone</span>
+        <span class="key" id="map-key"></span>
       </div>
     </div>
     <aside class="side" id="side"></aside>
@@ -129,11 +131,32 @@ let shownOverlay = '';
 const bar = document.getElementById('bar')!;
 const side = document.getElementById('side')!;
 const overlay = document.getElementById('overlay')!;
+const modesEl = document.getElementById('modes')!;
+const keyEl = document.getElementById('map-key')!;
+const MODE_KEY = 'capo-map-mode';
+
+/** Switch the map mode, and remember it on this browser (a convenience: it's fine if storage is off). */
+function setMode(m: MapMode): void {
+  map.mode = m;
+  try {
+    localStorage.setItem(MODE_KEY, m);
+  } catch {
+    // Storage blocked: the mode just won't be remembered.
+  }
+  renderModes();
+}
+
 const tip = document.getElementById('tip')!;
 const pickEl = document.getElementById('pick')!;
 /** What's picked on the map (for the orders menu), and where the click was. */
 let picked: { b: Building | null; p: Person | null; px: number; py: number } | null = null;
 const map = new WardMap(document.getElementById('map') as HTMLCanvasElement);
+try {
+  const m = localStorage.getItem(MODE_KEY);
+  if (MAP_MODES.some((x) => x.id === m)) map.mode = m as MapMode;
+} catch {
+  // Storage blocked: start on Turf.
+}
 
 // ---------------------------------------------------------------- helpers
 
@@ -736,8 +759,24 @@ function renderOverlay(): void {
   if (html && fresh && narrow.matches) window.scrollTo({ top: 0 });
 }
 
+/** The map-mode switcher, and a legend that says what the current mode shows. */
+function renderModes(): void {
+  modesEl.innerHTML = MAP_MODES.map(
+    (m) => `<button data-mode="${m.id}" aria-pressed="${map.mode === m.id}" title="${esc(m.key)}">${esc(m.label)}</button>`,
+  ).join('');
+  const mode = MAP_MODES.find((m) => m.id === map.mode)!;
+  let key = mode.key;
+  if (map.mode === 'income') {
+    const ours = s.buildings.filter((b) => holder(b) === 'player').reduce((n, b) => n + monthly(b), 0);
+    const near = s.buildings.filter((b) => !holder(b) && onTurf(s, 'player', b, b.id)).reduce((n, b) => n + b.protection, 0);
+    key = `Ours: about ${money(ours)} a month · next to our turf and paying nobody: ${money(near)} · ${key}`;
+  }
+  keyEl.textContent = key;
+}
+
 function render(): void {
   map.setState(s);
+  renderModes();
   map.showOrders = phase === 'orders';
   renderBar();
   side.innerHTML = phase === 'watch' || phase === 'plans' ? renderWatch() : renderOrders();
@@ -834,6 +873,7 @@ document.addEventListener('click', (e) => {
     return render();
   }
   if (d.act === 'pick-close') return closePick();
+  if (d.mode) return setMode(d.mode as MapMode);
   if (d.fire) {
     if (firing !== d.fire) {
       firing = d.fire;
@@ -987,6 +1027,12 @@ document.addEventListener('pointerdown', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && picked) return closePick();
+  // M cycles the map modes (not while typing in a field).
+  if ((e.key === 'm' || e.key === 'M') && !(e.target as HTMLElement).closest('select, input, textarea')) {
+    const i = MAP_MODES.findIndex((m) => m.id === map.mode);
+    setMode(MAP_MODES[(i + 1) % MAP_MODES.length].id);
+    return;
+  }
   if (e.code !== 'Space' || phase !== 'watch' || s.run?.queue.length) return;
   if ((e.target as HTMLElement).closest('select, button, input')) return;
   e.preventDefault();
