@@ -262,6 +262,38 @@ button {
   border-top: 2px dashed var(--paper-dim);
   padding-top: 8px;
 }
+.books {
+  display: grid;
+  gap: 3px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--paper-dim);
+}
+.books b {
+  font-size: 12px;
+}
+.books-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.books-row span {
+  display: grid;
+  min-width: 0;
+}
+.books-row small {
+  color: var(--paper-dim);
+  font-size: 11px;
+}
+.books-row em {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.books-row.short small,
+.books-row.short em {
+  color: #9c2a1f;
+}
 .pick-block .pick-orders {
   border-top: 0;
   padding-top: 0;

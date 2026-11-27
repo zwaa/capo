@@ -15,6 +15,7 @@
 import { isLot } from '../sim/setup';
 import type { Building, FamilyId, GameState, Person } from '../sim/types';
 import {
+  LEGIT_TRADE,
   allBlocks,
   blockBuildings,
   onTurf,
@@ -80,7 +81,7 @@ export const MAP_MODES: { id: MapMode; label: string; key: string }[] = [
   {
     id: 'income',
     label: 'Income',
-    key: 'What our places in each block took last month · Red border: something of ours paid nothing (nobody collected, nobody ran it, or raided) · Grey "new": signed this month, nothing due yet',
+    key: 'What our places in each block took last month · Red: came up short (nobody collected, nobody ran the back room, or raided) · Grey "new": nothing due yet · Click a block for its books',
   },
   {
     id: 'reach',
@@ -117,8 +118,27 @@ export const INCOME_SCALE: Step[] = [
 const INCOME_NONE = 'rgb(20, 24, 30)';
 const INCOME_NEW = 'rgb(44, 49, 58)';
 
-/** One of ours that should have brought something in last month and didn't (stills supply the bars; new doors haven't paid yet). */
-export const paidNothing = (b: Building): boolean => !b.took && b.racket !== 'still' && (!!b.owner || b.uncollected > 0);
+/** Tiles at least this many pixels wide have room for each place's own figure on the Income map. */
+const DETAIL_TILE = 40;
+
+/**
+ * Why one of ours brought in less than it should have last month, or null if it did its job.
+ * Owned places always make their legit trade, so a bar or den that made only that wasn't run.
+ */
+export function shortfall(b: Building): string | null {
+  if (!b.owner) return b.uncollected > 0 ? 'nobody went round to collect' : null;
+  if (b.raided) return 'shut by a raid';
+  if ((b.racket === 'speakeasy' || b.racket === 'gambling') && b.took <= LEGIT_TRADE) return 'back room shut: nobody ran it';
+  return null;
+}
+
+/** How one of our places reads on the Income map, and in the block's breakdown. */
+export function incomeLabel(b: Building): { text: string; kind: 'paid' | 'short' | 'new' | 'still' } {
+  if (shortfall(b)) return { text: `$${b.took}`, kind: 'short' };
+  if (b.racket === 'still' && b.took <= LEGIT_TRADE) return { text: b.took ? `$${b.took}` : 'still', kind: 'still' };
+  if (!b.took) return { text: 'new', kind: 'new' };
+  return { text: `$${b.took}`, kind: 'paid' };
+}
 
 interface Pos {
   x: number;
@@ -541,41 +561,60 @@ export class WardMap {
     }
   }
 
-  /** Income: each block by what our places in it took last month, with the total. Nobody else's books. */
+  /**
+   * Income: each block by what our places in it took last month, with the total. Nobody else's books.
+   * Up close (tiles big enough for text) each of our places gets its own figure too, and the block
+   * total moves to the street above it; from far out, only the blocks.
+   */
   private drawIncome(): void {
     const s = this.state!;
     const g = this.ctx;
     const T = this.tile;
+    const close = T >= DETAIL_TILE;
+    const font = (k: number, min: number) => `700 ${Math.max(min, Math.round(T * k))}px Oswald, 'Arial Narrow', sans-serif`;
+    const text = (str: string, x: number, y: number, colour: string) => {
+      g.lineWidth = 3;
+      g.strokeStyle = C.night;
+      g.strokeText(str, x, y);
+      g.fillStyle = colour;
+      g.fillText(str, x, y);
+    };
     g.save();
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     for (const id of allBlocks(s)) {
       const ours = blockBuildings(s, id).filter((b) => holder(b) === 'player');
       const took = ours.reduce((n, b) => n + b.took, 0);
-      const dry = ours.filter(paidNothing).length;
-      // Only new sign-ups here: nothing was due yet, so it isn't a $0 block.
-      const fresh = ours.length > 0 && !took && !dry;
+      const short = ours.filter((b) => shortfall(b)).length;
+      // Only new places here: nothing was due yet, so it isn't a $0 block.
+      const fresh = ours.length > 0 && ours.every((b) => incomeLabel(b).kind === 'new');
       const r = this.fillBlock(id, !ours.length ? INCOME_NONE : fresh ? INCOME_NEW : step(INCOME_SCALE, took).colour);
       if (!ours.length) continue;
-      const label = fresh ? 'new' : `$${took}`;
-      const cx = r.x + r.w / 2;
-      const cy = r.y + r.h / 2;
-      const ty = cy - (dry ? T * 0.14 : 0);
-      g.lineWidth = 3;
-      g.strokeStyle = C.night;
-      g.font = `700 ${Math.max(11, Math.round(T * 0.4))}px Oswald, 'Arial Narrow', sans-serif`;
-      g.strokeText(label, cx, ty);
-      g.fillStyle = fresh ? C.dim : C.ink;
-      g.fillText(label, cx, ty);
-      if (dry) {
-        g.font = `700 ${Math.max(9, Math.round(T * 0.24))}px Oswald, 'Arial Narrow', sans-serif`;
-        const note = `${dry} paid nothing`;
-        g.strokeText(note, cx, cy + T * 0.26);
-        g.fillStyle = '#ff9b8f';
-        g.fillText(note, cx, cy + T * 0.26);
+      if (short) {
         g.strokeStyle = C.blood;
         g.lineWidth = 2;
         g.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+      }
+      const total = fresh ? 'new' : `$${took}`;
+      if (close) {
+        // The block total sits in the street above, so the places' own figures have the block.
+        g.font = font(0.3, 11);
+        text(`${total}${short ? ` · ${short} short` : ''}`, r.x + r.w / 2, r.y - T * 0.5, short ? '#ff9b8f' : fresh ? C.dim : C.ink);
+        g.font = font(0.24, 10);
+        for (const b of ours) {
+          const c = this.px(b);
+          const l = incomeLabel(b);
+          text(l.text, c.x, c.y, l.kind === 'short' ? '#ff9b8f' : l.kind === 'paid' ? C.lamp : C.dim);
+        }
+      } else {
+        const cx = r.x + r.w / 2;
+        const cy = r.y + r.h / 2;
+        g.font = font(0.4, 11);
+        text(total, cx, cy - (short ? T * 0.14 : 0), fresh ? C.dim : C.ink);
+        if (short) {
+          g.font = font(0.24, 9);
+          text(`${short} came up short`, cx, cy + T * 0.26, '#ff9b8f');
+        }
       }
     }
     g.restore();
