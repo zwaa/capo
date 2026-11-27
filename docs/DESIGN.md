@@ -200,6 +200,13 @@ Each specialist has a **standing service** that applies everywhere, and can take
 
 **Advice never takes agency away.** The desk (the month's notices) only states facts and consequences: what happened, where, and what it means. Interpretation comes from a person, the consigliere, who has a temperament and can be wrong. Without one you get the facts and the numbers, and spotting the pattern is your job.
 
+**Later: hiring a consigliere is a choice of person, not a purchase.** Instead of one fixed advisor, a few candidates come through, and you interview them (a short card each) before taking one on:
+- **Temperament** colours the advice: *cautious* (overstates danger, careful options first), *ambitious* (always sees an opening, pushes expansion), *old-world* (prefers respect to fear, distrusts loud work), *cynical* (assumes the worst of your own people).
+- **Judgement** (their Brains) sets how often forecasts and reads on the rival are right, and how many they make. A cheap one is often wrong; a good one costs more.
+- **History and ties:** each has a past (a disbarred lawyer, a retired bookmaker, an old family friend) and maybe a tie to the rival or the police, which can surface later as a betrayal or a favour.
+- **Trust builds:** advice that proves right raises how much weight they get on the desk; advice you ignore and that proves right makes them bolder; repeated bad calls make them quieter. Fire one, and they know where the bodies are buried.
+- The interview shows a sample of how they would read *this* month, so the choice is felt, not read off a stat sheet.
+
 Driving isn't a specialism: every hood drives, and how well is part of their stats.
 
 **Nothing is locked without a specialist.** You can always hire hoods off the street, buy guns and cars on the open market, or launder through a crooked bank. It costs more, the quality is worse, or it draws more heat. A specialist makes that resource cheaper, better or safer.
@@ -443,6 +450,7 @@ After that the lessons switch off, and the run carries on in the same city. Less
 9. **Heat does a lot.** Block heat drives raids, job speed, arrests and goodwill (§8.1). Does that read clearly, or does it need trimming?
 10. **Capos acting alone.** When a card comes up the chain and you don't answer, what does each kind of capo do (§5.7)?
 11. **Zoom on a city map.** Map modes colour whole blocks so they read from far out, and show each place's figure only when there's room (the prototype decides by tile size, as real zoom would). How far out does a city map go: wards, then districts? Real zoom and pan wait until the map is bigger than one ward.
+12. **Interactive advisor hiring.** How many consigliere candidates, how often, and does a fired advisor become a risk (§6.4)?
 
 The grilling notes behind §5.2, §5.7, §7.1, §8.1 and §14 are in [IDEAS-grand-strategy.md](IDEAS-grand-strategy.md).
 
