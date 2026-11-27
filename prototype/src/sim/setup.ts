@@ -586,6 +586,8 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
     nextId,
     candidates: [],
     lessons: { on: true, index: 0 },
+    blockHeat: {},
+    blockHeatLog: [],
     stats: { fights: 0, changes: 0, demandsSeen: 0, raids: 0 },
   };
   return state;

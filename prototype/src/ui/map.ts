@@ -16,6 +16,7 @@ import { isLot } from '../sim/setup';
 import type { Building, FamilyId, GameState, Person } from '../sim/types';
 import {
   LEGIT_TRADE,
+  SLOW_HEAT,
   allBlocks,
   blockBuildings,
   onTurf,
@@ -64,7 +65,7 @@ const C = {
 
 const famColour = (f: FamilyId) => (f === 'player' ? C.lamp : C.steel);
 
-export type MapMode = 'turf' | 'wealth' | 'income' | 'reach';
+export type MapMode = 'turf' | 'wealth' | 'income' | 'heat' | 'reach';
 
 /** The map modes, in switcher order, with what each one's legend says. */
 export const MAP_MODES: { id: MapMode; label: string; key: string }[] = [
@@ -82,6 +83,11 @@ export const MAP_MODES: { id: MapMode; label: string; key: string }[] = [
     id: 'income',
     label: 'Income',
     key: 'What our places in each block took last month · Red: came up short (nobody collected, nobody ran the back room, or raided) · Grey "new": nothing due yet · Click a block for its books',
+  },
+  {
+    id: 'heat',
+    label: 'Heat',
+    key: 'Police on each block, whoever brought them: hot blocks mean raids on rackets there, and from 40 every job there takes a day longer · HQ: heat about the family itself · Click a block for why',
   },
   {
     id: 'reach',
@@ -105,6 +111,14 @@ export const WEALTH_SCALE: Step[] = [
   { from: 500, label: 'Comfortable', colour: 'rgb(46, 96, 58)' },
   { from: 800, label: 'Well off', colour: 'rgb(74, 138, 74)' },
   { from: 1200, label: 'Rich', colour: 'rgb(132, 184, 96)' },
+];
+/** Police on a block. Its "Hot" step starts where jobs slow down. */
+export const HEAT_SCALE: Step[] = [
+  { from: 0, label: 'Quiet', colour: 'rgb(30, 36, 44)' },
+  { from: 10, label: 'Watched', colour: 'rgb(78, 52, 42)' },
+  { from: 25, label: 'Warm', colour: 'rgb(122, 58, 42)' },
+  { from: SLOW_HEAT, label: 'Hot: jobs slower', colour: 'rgb(170, 66, 46)' },
+  { from: 65, label: 'Crawling with cops', colour: 'rgb(222, 86, 56)' },
 ];
 /** What our places in a block took last month. */
 export const INCOME_SCALE: Step[] = [
@@ -328,12 +342,15 @@ export class WardMap {
     for (let y = 0; y < s.height; y += 3) {
       for (let x = 0; x < s.width; x += 4) {
         const c = this.px({ x, y });
+        // Lamps burn low next to a hot block: a light hint of heat on the ordinary map.
+        const near = [-1, 0].flatMap((dx) => [-1, 0].map((dy) => s.blockHeat[`blk${x / BLOCK_W + dx}-${y / BLOCK_H + dy}`] ?? 0));
+        const dim = 1 - Math.min(0.85, Math.max(...near) / 80);
         const glow = g.createRadialGradient(c.x, c.y, 0, c.x, c.y, T * 1.1);
-        glow.addColorStop(0, 'rgba(227,162,59,0.16)');
+        glow.addColorStop(0, `rgba(227,162,59,${(0.16 * dim).toFixed(3)})`);
         glow.addColorStop(1, 'rgba(227,162,59,0)');
         g.fillStyle = glow;
         g.fillRect(c.x - T * 1.1, c.y - T * 1.1, T * 2.2, T * 2.2);
-        g.fillStyle = C.lamp;
+        g.fillStyle = dim < 0.6 ? C.dim : C.lamp;
         g.beginPath();
         g.arc(c.x, c.y, Math.max(1.5, T * 0.04), 0, Math.PI * 2);
         g.fill();
@@ -356,6 +373,7 @@ export class WardMap {
     if (this.mode === 'reach') this.drawReach();
     if (this.mode === 'income') this.drawIncome();
     if (this.mode === 'wealth') this.drawWealth();
+    if (this.mode === 'heat') this.drawHeat();
 
     // Orders: dashed lines from each of our people to their one-off jobs.
     if (this.showOrders && !s.run) {
@@ -387,7 +405,7 @@ export class WardMap {
 
     // Fog of war: a light hatch over what our people can't see. It hides people, not buildings.
     // The block-coloured modes leave it off: it would make one block look like two shades.
-    const blocky = this.mode === 'wealth' || this.mode === 'income';
+    const blocky = this.mode === 'wealth' || this.mode === 'income' || this.mode === 'heat';
     g.save();
     g.lineWidth = 1;
     for (let y = 0; y < s.height && !blocky; y++) {
@@ -616,6 +634,44 @@ export class WardMap {
           text(`${short} came up short`, cx, cy + T * 0.26, '#ff9b8f');
         }
       }
+    }
+    g.restore();
+  }
+
+  /** Heat: each block by how hot it is, with the number when there's room; and HQ heat at the boss's door. */
+  private drawHeat(): void {
+    const s = this.state!;
+    const g = this.ctx;
+    const T = this.tile;
+    g.save();
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.lineWidth = 3;
+    g.strokeStyle = C.night;
+    for (const id of allBlocks(s)) {
+      const h = s.blockHeat[id] ?? 0;
+      const r = this.fillBlock(id, step(HEAT_SCALE, h).colour);
+      if (!h || T < DETAIL_TILE) continue;
+      g.font = `700 ${Math.round(T * 0.4)}px Oswald, 'Arial Narrow', sans-serif`;
+      g.strokeText(String(h), r.x + r.w / 2, r.y + r.h / 2);
+      g.fillStyle = C.ink;
+      g.fillText(String(h), r.x + r.w / 2, r.y + r.h / 2);
+    }
+    // HQ heat sits on the boss's own door.
+    const boss = person(s, s.families.player.bossId);
+    if (boss) {
+      const c = this.px({ x: boss.homeX, y: boss.homeY });
+      const text = `HQ ${s.families.player.heat}`;
+      g.font = `700 ${Math.max(9, Math.round(T * 0.24))}px Oswald, 'Arial Narrow', sans-serif`;
+      const w = g.measureText(text).width + 8;
+      const hgt = Math.max(12, T * 0.32);
+      g.fillStyle = step(HEAT_SCALE, s.families.player.heat).colour;
+      g.fillRect(c.x - w / 2, c.y + T * 0.18, w, hgt);
+      g.strokeStyle = C.lamp;
+      g.lineWidth = 1;
+      g.strokeRect(c.x - w / 2 + 0.5, c.y + T * 0.18 + 0.5, w - 1, hgt - 1);
+      g.fillStyle = C.ink;
+      g.fillText(text, c.x, c.y + T * 0.18 + hgt / 2);
     }
     g.restore();
   }

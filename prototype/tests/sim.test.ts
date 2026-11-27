@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { autoplay } from '../scripts/autoplay';
 import { planFamily } from '../src/sim/ai';
 import {
+  addHeat,
   addJob,
   allocate,
+  coolBlocks,
   assignBranch,
   bossAction,
   canAct,
@@ -44,6 +46,11 @@ import {
   onTurf,
   targets,
   turfAt,
+  BLOCK_COOL,
+  SLOW_HEAT,
+  allBlocks,
+  heatAt,
+  nextBlocks,
 } from '../src/sim/util';
 
 /** Take Sal on (as the first lesson would) and promote him. */
@@ -362,6 +369,64 @@ describe('standing orders for idle hoods', () => {
     expect(ours.every((b) => b.kind === 'home')).toBe(true);
     endMonth(s);
     expect(boss.jobs.some((j) => j.auto)).toBe(false);
+  });
+});
+
+describe('local heat', () => {
+  const playMonth = (s: GameState) => {
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    endMonth(s);
+  };
+  it('heat from a place lands on its block, shared, and leaves HQ alone', () => {
+    const s = createGame(14);
+    const b = s.buildings.find((x) => x.owner === 'rival')!;
+    const hq = s.families.player.heat;
+    addHeat(s, 'player', 10, 'Gunfire', b);
+    expect(heatAt(s, b)).toBe(10);
+    expect(s.families.player.heat).toBe(hq);
+    const far = s.buildings.find((x) => blockId(x) !== blockId(b))!;
+    expect(heatAt(s, far)).toBe(0);
+    expect(s.blockHeatLog.at(-1)).toMatchObject({ label: 'Gunfire', amount: 10, family: 'player' });
+  });
+  it('spreads a little to the blocks next door, then every block cools', () => {
+    const s = createGame(14);
+    const id = allBlocks(s)[4];
+    s.blockHeat[id] = 50;
+    coolBlocks(s);
+    expect(s.blockHeat[id]).toBe(50 - BLOCK_COOL);
+    for (const n of nextBlocks(s, id)) expect(s.blockHeat[n]).toBe(5 - BLOCK_COOL);
+  });
+  it('jobs on a hot block take a day longer', () => {
+    const s = createGame(14);
+    s.lessons.on = false;
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const b = s.buildings.find((x) => x.kind === 'shop' && !x.owner && !x.protectedBy)!;
+    const j = addJob(s, boss.id, 'signup', b.id)!;
+    const before = forecast(s, boss).jobs[j.id].end!;
+    s.blockHeat[blockId(b)] = SLOW_HEAT;
+    expect(forecast(s, boss).jobs[j.id].end).toBe(before + 1);
+  });
+  it('a hot HQ gets raided: cash seized; a cool one does not', () => {
+    const hot = createGame(14);
+    hot.lessons.on = false;
+    let raided = false;
+    for (let m = 0; m < 4 && !raided; m++) {
+      hot.families.player.heat = 100;
+      hot.families.player.cash = 1000;
+      playMonth(hot);
+      raided = hot.families.player.ledger.some((l) => l.label === 'Cash seized in the raid on HQ');
+    }
+    expect(raided).toBe(true);
+    const cool = createGame(14);
+    cool.lessons.on = false;
+    for (let m = 0; m < 4; m++) {
+      cool.families.player.heat = 0;
+      playMonth(cool);
+      expect(cool.families.player.ledger.some((l) => l.label === 'Cash seized in the raid on HQ')).toBe(false);
+    }
   });
 });
 

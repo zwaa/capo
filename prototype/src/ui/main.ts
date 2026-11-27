@@ -30,7 +30,20 @@ import {
 import type { BossAction, JobPlan, Purchase } from '../sim/engine';
 import { LESSONS, advanceLessons, currentLesson } from '../sim/lessons';
 import { POOL, streetOf } from '../sim/setup';
-import type { Branch, Building, Card, GameState, Hood, IdleOrder, Job, JobKind, Person, Posture, SpecialistKind } from '../sim/types';
+import type {
+  Branch,
+  Building,
+  Card,
+  FamilyId,
+  GameState,
+  Hood,
+  IdleOrder,
+  Job,
+  JobKind,
+  Person,
+  Posture,
+  SpecialistKind,
+} from '../sim/types';
 import {
   BRANCHES,
   DAYS,
@@ -75,15 +88,19 @@ import {
   totalHoods,
   gunHands,
   visible,
+  HQ_RAID_FROM,
+  allBlocks,
+  SLOW_HEAT,
+  heatAt,
 } from '../sim/util';
-import { INCOME_SCALE, MAP_MODES, WEALTH_SCALE, WardMap, incomeLabel, shortfall } from './map';
+import { HEAT_SCALE, INCOME_SCALE, MAP_MODES, WEALTH_SCALE, WardMap, incomeLabel, shortfall } from './map';
 import type { Step } from './map';
 import type { MapMode } from './map';
 
 // ---------------------------------------------------------------- state
 
 type Phase = 'paper' | 'orders' | 'watch' | 'plans' | 'over';
-const SAVE_KEY = 'capo-slice-v7';
+const SAVE_KEY = 'capo-slice-v8';
 const SPEEDS = [0, 1100, 550, 220];
 
 interface Hot {
@@ -237,6 +254,14 @@ function renderBar(): void {
         `<div class="row"><span>${esc(l.label)}</span><em class="${l.amount < 0 ? 'neg' : ''}">${l.amount ? money(l.amount) : '·'}</em></div>`,
     )
     .join('');
+  // The blocks we do business on, hottest first.
+  const hotBlocks = allBlocks(s)
+    .filter((id) => blockBuildings(s, id).some((b) => holder(b) === 'player'))
+    .map((id) => ({ id, h: s.blockHeat[id] ?? 0 }))
+    .filter((x) => x.h > 0)
+    .sort((a, b) => b.h - a.h)
+    .slice(0, 4);
+  const hot = hotBlocks[0];
   const heat = p.heatLog
     .map((l) => `<div class="row"><span>${esc(l.label)}</span><em class="${l.amount > 0 ? 'neg' : ''}">${signed(l.amount)}</em></div>`)
     .join('');
@@ -245,10 +270,21 @@ function renderBar(): void {
     <div class="stat"><b>${esc(monthName(s.month))}</b><span>Month ${s.month + 1} of ${s.lastMonth + 1}</span></div>
     <div class="stat explain" tabindex="0"><b>${money(p.cash)}</b><span>Cash</span>
       <div class="why"><h4>${s.run ? 'This month so far' : 'Last month'}</h4>${cash || '<p>No money has moved yet.</p>'}</div></div>
-    <div class="stat explain" tabindex="0"><b>${p.heat}</b><span>Heat</span>
+    <div class="stat explain" tabindex="0"><b>${p.heat}${hot ? ` · ${hot.h}` : ''}</b><span>HQ heat${hot ? ' · hottest block' : ''}</span>
       <div class="heatbar"><i style="width:${p.heat}%"></i></div>
-      <div class="why"><h4>Why the heat is ${p.heat}</h4>${heat || '<p>Nothing new this month.</p>'}
-      <p style="margin-top:8px">High heat means raids. Raids shut rackets and catch people.</p></div></div>
+      <div class="why"><h4>Why HQ heat is ${p.heat}</h4>${heat || '<p>Nothing new this month.</p>'}
+      <p style="margin-top:8px">HQ heat is about the family itself: loose talk, the papers, complaints. Above ${HQ_RAID_FROM} the police may raid HQ.</p>
+      <h4 style="margin-top:10px">On our streets</h4>${
+        hotBlocks.length
+          ? hotBlocks
+              .map(
+                (x) =>
+                  `<div class="row"><span>${esc(cap(blockName(s, x.id)))}</span><em class="${x.h >= SLOW_HEAT ? 'neg' : ''}">${x.h}</em></div>`,
+              )
+              .join('')
+          : '<p>Quiet everywhere we do business.</p>'
+      }
+      <p style="margin-top:8px">Heat on a block brings raids on rackets there, and from ${SLOW_HEAT} slows every job there. See the Heat map.</p></div></div>
     <div class="stat explain" tabindex="0"><b>${owned(s, 'player').length} · ${protectedBy(s, 'player').length}</b><span>Owned · Paying</span>
       <div class="why"><h4>Your piece of the ward</h4><p>${owned(s, 'player').length} buildings owned, ${rackets(s, 'player').length} with a racket, ${protectedBy(s, 'player').length} shops paying protection.</p>
       <p style="margin-top:6px">Calloway: ${owned(s, 'rival').length} owned, ${rackets(s, 'rival').length} rackets, ${protectedBy(s, 'rival').length} paying.</p>
@@ -776,7 +812,13 @@ function renderModes(): void {
   const scale = (steps: Step[]) =>
     `<span class="scale">${steps.map((x) => `<span><i style="background:${x.colour}"></i>${esc(x.label)}</span>`).join('')}</span>`;
   keyEl.innerHTML =
-    (map.mode === 'wealth' ? scale(WEALTH_SCALE) : map.mode === 'income' ? scale(INCOME_SCALE) : '') + `<span>${esc(key)}</span>`;
+    (map.mode === 'wealth'
+      ? scale(WEALTH_SCALE)
+      : map.mode === 'income'
+        ? scale(INCOME_SCALE)
+        : map.mode === 'heat'
+          ? scale(HEAT_SCALE)
+          : '') + `<span>${esc(key)}</span>`;
 }
 
 function render(): void {
@@ -1117,8 +1159,29 @@ function blockSummary(id: string): string {
   );
   const free = bs.filter((b) => !holder(b)).reduce((t, b) => t + b.protection, 0);
   return `${homes} homes, ${bs.length - homes} shops<br>${parts.join(' · ')}${free ? `<br>Up for grabs: ${money(free)} a month` : ''}${
-    map.mode === 'income' ? blockBooks(bs) : ''
+    map.mode === 'income' ? blockBooks(bs) : map.mode === 'heat' ? blockHeatWhy(id) : ''
   }`;
+}
+
+/** On the Heat map: how hot a block is, and what moved it since last month began. */
+function blockHeatWhy(id: string): string {
+  const h = s.blockHeat[id] ?? 0;
+  const who = (f: FamilyId | null) => (f === 'player' ? 'us' : f === 'rival' ? 'Calloway' : '');
+  const rows = s.blockHeatLog
+    .filter((l) => l.block === id)
+    .map(
+      (l) =>
+        `<div class="books-row ${l.amount > 0 ? 'short' : ''}"><span>${esc(l.label)}${who(l.family) ? `<small>${esc(who(l.family))}</small>` : ''}</span><em>${signed(l.amount)}</em></div>`,
+    );
+  const effect =
+    h >= SLOW_HEAT ? 'Jobs here take a day longer; rackets here risk raids.' : h ? 'Rackets here risk raids.' : 'No police to speak of.';
+  return `<div class="books"><b>Heat ${h}</b><small>${effect}</small>${rows.join('') || '<small>Nothing new.</small>'}</div>`;
+}
+
+/** A line for the tooltip when the block around a place has police on it. */
+function heatLine(b: Building): string {
+  const h = heatAt(s, b);
+  return h ? `Block heat ${h}${h >= SLOW_HEAT ? ': jobs here slower' : ''}<br>` : '';
 }
 
 /** On the Income map: what each of our places in a block took last month, and why any came up short. */
@@ -1173,7 +1236,7 @@ function describe(b: Building | null, p: Person | null): string {
   }
   if (b && isHome(b)) {
     const pays = b.protectedBy === 'player' ? 'Pays us protection' : b.protectedBy === 'rival' ? 'Pays Calloway protection' : 'Pays nobody';
-    html += `${html ? '<hr style="border:0;border-top:1px solid #bbb;margin:6px 0">' : ''}<b>${esc(b.name)}</b>${esc(b.front)}, ${esc(streetOf(b))}<br>${pays}<br>Protection: ${money(b.protection)} a month<br>`;
+    html += `${html ? '<hr style="border:0;border-top:1px solid #bbb;margin:6px 0">' : ''}<b>${esc(b.name)}</b>${esc(b.front)}, ${esc(streetOf(b))}<br>${pays}<br>Protection: ${money(b.protection)} a month<br>${heatLine(b)}`;
     if (holder(b) !== 'player') {
       html += onTurf(s, 'player', b, b.id)
         ? '<span class="turf near">Next to our turf: easier to sign up</span>'
@@ -1192,7 +1255,7 @@ function describe(b: Building | null, p: Person | null): string {
               : 'Independent';
     html += `${html ? '<hr style="border:0;border-top:1px solid #bbb;margin:6px 0">' : ''}<b>${esc(b.name)}</b>${esc(streetOf(b))}<br>${who}<br>
       ${b.racket ? `Back room: ${b.racket}${b.raided ? ' (shut by a raid)' : ''}` : `Could hold a ${b.suits}`}<br>
-      ${b.owner ? '' : `Protection: ${money(b.protection)} a month<br>`}${!b.owner && b.protectedBy !== 'rival' ? `To buy: ${money(price(b, 'player'))}<br>` : ''}${b.telephone ? 'Telephone line<br>' : ''}`;
+      ${b.owner ? '' : `Protection: ${money(b.protection)} a month<br>`}${!b.owner && b.protectedBy !== 'rival' ? `To buy: ${money(price(b, 'player'))}<br>` : ''}${b.telephone ? 'Telephone line<br>' : ''}${heatLine(b)}`;
     if (holder(b) !== 'player') {
       html += onTurf(s, 'player', b, b.id)
         ? '<span class="turf near">Next to our turf: easier to sign up</span>'

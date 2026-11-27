@@ -157,6 +157,7 @@ export interface Family {
   name: string;
   bossId: string;
   cash: number;
+  /** HQ heat: what's about the family rather than a place (talk, the papers, complaints). High HQ heat risks a raid on HQ. */
   heat: number;
   heatLog: Line[];
   ledger: Line[];
@@ -212,6 +213,8 @@ export interface MonthRun {
   nextCardId: number;
   log: { day: number; text: string; family: FamilyId | null }[];
   news: NewsItem[];
+  /** Families whose HQ was raided this month (once a month at most). */
+  hqRaided: FamilyId[];
 }
 
 export interface NewsItem {
@@ -260,4 +263,8 @@ export interface GameState {
   candidates: number[];
   lessons: { on: boolean; index: number };
   stats: Stats;
+  /** Heat on each city block, by block id: police on the beat, shared by everyone with business there. */
+  blockHeat: Record<string, number>;
+  /** Why each block's heat moved since the month began (cleared when the next month starts). */
+  blockHeatLog: { block: string; label: string; amount: number; family: FamilyId | null }[];
 }

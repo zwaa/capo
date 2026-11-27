@@ -85,6 +85,19 @@ import {
   isBlockId,
   isHome,
   stopsOf,
+  BLOCK_COOL,
+  HEAT_SPREAD,
+  HQ_RAID_FROM,
+  HQ_RAID_ODDS,
+  HQ_SEIZE,
+  HQ_SEIZE_MAX,
+  RAID_ODDS,
+  SLOW_HEAT,
+  allBlocks,
+  blockId,
+  heatAt,
+  hottestHeld,
+  nextBlocks,
 } from './util';
 
 // ---------------------------------------------------------------- small helpers
@@ -103,11 +116,23 @@ function log(s: GameState, text: string, family: FamilyId | null): void {
 function story(s: GameState, headline: string, body: string, weight: number): void {
   s.run?.news.push({ headline, body, weight });
 }
-export function addHeat(s: GameState, f: FamilyId, n: number, why: string): void {
+/**
+ * Heat from something a family did. With a place, it lands on that block (shared by everyone with
+ * business there); without one, it's about the family and lands on HQ.
+ */
+export function addHeat(s: GameState, f: FamilyId, n: number, why: string, at?: { x: number; y: number }): void {
+  if (at) return addBlockHeat(s, blockId(at), n, why, f);
   const fam = s.families[f];
   const before = fam.heat;
   fam.heat = Math.max(0, Math.min(100, fam.heat + n));
   if (fam.heat !== before) fam.heatLog.push({ label: why, amount: fam.heat - before });
+}
+export function addBlockHeat(s: GameState, id: string, n: number, why: string, f: FamilyId | null): void {
+  const before = s.blockHeat[id] ?? 0;
+  const after = Math.max(0, Math.min(100, before + n));
+  if (after === before) return;
+  s.blockHeat[id] = after;
+  s.blockHeatLog.push({ block: id, label: why, amount: after - before, family: f });
 }
 export function spend(s: GameState, f: FamilyId, n: number, why: string): void {
   if (!n) return;
@@ -608,7 +633,8 @@ export function startMonth(s: GameState): void {
     s.families[f].ledger = [];
     s.families[f].heatLog = [];
   }
-  s.run = { day: 0, queue: [], scheduled: [], changesLeft: 2, rivalChangesLeft: 2, nextCardId: 1, log: [], news: [] };
+  s.blockHeatLog = [];
+  s.run = { day: 0, queue: [], scheduled: [], changesLeft: 2, rivalChangesLeft: 2, nextCardId: 1, log: [], news: [], hqRaided: [] };
   for (const f of ['player', 'rival'] as const) {
     allocate(s, f);
     const fam = s.families[f];
@@ -653,9 +679,10 @@ function workDays(s: GameState, p: Person, j: Job): number {
   // Working off your own turf takes longer: nobody knows you there.
   const t = building(s, j.target);
   const away = (j.kind === 'signup' || j.kind === 'takeover') && t && !onTurf(s, p.family, t, t.id) ? OFF_TURF_DAYS : 0;
+  const hot = j.target && heatAt(s, targetPos(s, j)) >= SLOW_HEAT ? 1 : 0;
   return Math.max(
     1,
-    info.work - Math.floor((squadStat(s, j) - 5) / 2) + adj + away + (info.risky && p.traits.includes('cautious') ? 2 : 0),
+    info.work - Math.floor((squadStat(s, j) - 5) / 2) + adj + away + hot + (info.risky && p.traits.includes('cautious') ? 2 : 0),
   );
 }
 
@@ -737,7 +764,9 @@ function schedule(s: GameState): void {
   const pf = s.families.player;
   const add = (kind: ScheduledEvent['kind'], ref: string | null = null, from = 3, to = 27) =>
     run.scheduled.push({ day: int(s, from, to), kind, ref });
-  if (pf.heat >= 15 && chance(s, 0.25 + pf.heat / 150)) add('cop');
+  // The patrolman comes when HQ is hot or one of our blocks is: whichever is worse.
+  const beat = Math.max(pf.heat, hottestHeld(s, 'player'));
+  if (beat >= 15 && chance(s, 0.25 + beat / 150)) add('cop');
   const supply = members(s, 'player')
     .flatMap((p) => p.jobs)
     .find((j) => j.kind === 'supply' && j.hoods);
@@ -781,7 +810,8 @@ function nextDoor(s: GameState, j: Job): Building | null {
 function doorDays(s: GameState, p: Person, j: Job, b: Building): number {
   const adj = j.posture === 'quiet' ? 1 : j.posture === 'loud' ? -1 : 0;
   const away = onTurf(s, p.family, b, b.id) ? 0 : OFF_TURF_DAYS;
-  return Math.max(1, (isHome(b) ? 1 : 3) - Math.floor((squadStat(s, j) - 5) / 2) + adj + away);
+  const hot = heatAt(s, b) >= SLOW_HEAT ? 1 : 0;
+  return Math.max(1, (isHome(b) ? 1 : 3) - Math.floor((squadStat(s, j) - 5) / 2) + adj + away + hot);
 }
 
 /** The chance a shopkeeper (or a tenant) says yes. */
@@ -821,6 +851,7 @@ export function stepDay(s: GameState): StepResult {
   }
   for (const ev of run.scheduled.filter((e) => e.day === d)) fire(s, ev);
   raids(s);
+  for (const f of ['player', 'rival'] as const) hqRaid(s, f);
 
   for (const p of s.people) {
     if (p.status !== 'active') continue;
@@ -920,10 +951,10 @@ function raids(s: GameState): void {
   for (const b of s.buildings) {
     if (!b.owner || !b.racket || b.raided) continue;
     const fam = s.families[b.owner];
-    if (!chance(s, (fam.heat / 5000) * (fam.captain ? 0.5 : 1))) continue;
+    if (!chance(s, (heatAt(s, b) / RAID_ODDS) * (fam.captain ? 0.5 : 1))) continue;
     b.raided = true;
     s.stats.raids += b.owner === 'player' ? 1 : 0;
-    addHeat(s, b.owner, -5, `Raid on ${b.name} let off steam`);
+    addHeat(s, b.owner, -5, `Raid on ${b.name} let off steam`, b);
     if (b.racket !== 'gambling' && fam.liquor) {
       const lost = Math.ceil(fam.liquor * 0.3);
       fam.liquor -= lost;
@@ -952,6 +983,35 @@ function raids(s: GameState): void {
   }
 }
 
+/** A raid on HQ when HQ heat runs high: cash seized, one of the boss's own crew picked up. */
+function hqRaid(s: GameState, f: FamilyId): void {
+  const fam = s.families[f];
+  const run = s.run!;
+  if (fam.heat < HQ_RAID_FROM || run.hqRaided.includes(f)) return;
+  if (!chance(s, ((fam.heat - HQ_RAID_FROM) / HQ_RAID_ODDS) * (fam.captain ? 0.5 : 1))) return;
+  run.hqRaided.push(f);
+  const boss = bossOf(s, f);
+  const seized = Math.min(HQ_SEIZE_MAX, Math.max(0, Math.round(fam.cash * HQ_SEIZE)));
+  spend(s, f, seized, 'Cash seized in the raid on HQ');
+  addHeat(s, f, -15, 'Raid on HQ let off steam');
+  const home = crewOf(s, boss).filter((h) => h.status === 'active');
+  const nabbed = home.length ? pick(s, home) : null;
+  if (nabbed) {
+    nabbed.status = 'jailed';
+    nabbed.recover = has(s, f, 'lawyer') ? 1 : 2;
+    allocate(s, f);
+  }
+  const what = `${seized ? `$${seized} seized` : 'Nothing worth seizing'}${nabbed ? `, ${nabbed.name} taken in` : ''}`;
+  log(s, `Police raid ${f === 'player' ? 'our HQ' : `${first(boss)}'s HQ`}. ${what}.`, f);
+  story(
+    s,
+    `POLICE RAID ${f === 'player' ? 'RUSSO' : 'CALLOWAY'} HOME`,
+    `Detectives spent the morning at the residence of ${boss.name}, leaving with ${seized ? 'a strongbox' : 'nothing but a parking ticket'}. ${boss.name} described the visit as "a social call."`,
+    f === 'player' ? 8 : 5,
+  );
+  if (f === 'player') emergency(s, 'Police at the door', `The police raided HQ. ${what}.`, { x: boss.homeX, y: boss.homeY });
+}
+
 function arrest(s: GameState, p: Person): void {
   p.status = 'jailed';
   p.recover = has(s, p.family, 'lawyer') ? 1 : 2;
@@ -965,9 +1025,12 @@ function fire(s: GameState, ev: ScheduledEvent): void {
   const pf = s.families.player;
   switch (ev.kind) {
     case 'cop': {
+      // He walks the hottest beat we do business on.
+      const ours = s.buildings.filter((x) => !isHome(x) && (x.owner === 'player' || x.protectedBy === 'player'));
+      const top = Math.max(0, ...ours.map((x) => heatAt(s, x)));
       const b = pick(
         s,
-        s.buildings.filter((x) => !isHome(x) && (x.owner === 'player' || x.protectedBy === 'player')),
+        ours.filter((x) => heatAt(s, x) === top),
       );
       if (!b) return;
       card(s, {
@@ -1177,7 +1240,7 @@ function complete(s: GameState, p: Person, j: Job): void {
           focus: b,
         });
       } else if (j.posture !== 'quiet') {
-        addHeat(s, f, 8, `Shopkeeper beaten at ${b.name}`);
+        addHeat(s, f, 8, `Shopkeeper beaten at ${b.name}`, b);
         signUp(s, b, p, 'quiet');
       }
       return;
@@ -1261,7 +1324,7 @@ function knock(s: GameState, p: Person, j: Job): void {
       b.refused = true;
       log(s, `${b.name} turned ${squadNames(s, j) || first(p)} away. They'll try again next month.`, f);
     } else {
-      addHeat(s, f, isHome(b) ? 2 : 8, `${isHome(b) ? 'Tenants' : 'Shopkeeper'} leaned on at ${b.name}`);
+      addHeat(s, f, isHome(b) ? 2 : 8, `${isHome(b) ? 'Tenants' : 'Shopkeeper'} leaned on at ${b.name}`, b);
       signUp(s, b, p, 'quiet', j);
     }
   }
@@ -1287,7 +1350,7 @@ function signUp(s: GameState, b: Building, p: Person, posture: Posture, j?: Job)
   p.wins++;
   // Tenants don't make the papers the way a shopkeeper does.
   const heat = isHome(b) ? Math.floor(HEAT[posture] / 4) : HEAT[posture];
-  if (heat) addHeat(s, f, heat, `${b.name} "persuaded" (${posture})`);
+  if (heat) addHeat(s, f, heat, `${b.name} "persuaded" (${posture})`, b);
   log(s, `${(j && squadNames(s, j)) || first(p)} signed up ${b.name}. It pays $${b.protection} a month.`, f);
   allocate(s, f);
   advanceLessons(s);
@@ -1442,6 +1505,9 @@ function casualty(s: GameState, h: Hood, posture: Posture): string {
   return `${h.name} (arrested at the scene)`;
 }
 
+/** Gunfire also puts this fraction (one in N) of its noise on the HQ of the family that started it. */
+const PAPERS_SHARE = 3;
+
 function resolveFight(s: GameState, ctx: FightCtx, mod: number): void {
   const att = person(s, String(ctx.att))!;
   const af = att.family;
@@ -1461,8 +1527,11 @@ function resolveFight(s: GameState, ctx: FightCtx, mod: number): void {
   const place = b ? b.name : streetOf(att);
   if (af === 'player' || df === 'player') s.stats.fights++;
 
-  addHeat(s, af, posture === 'loud' ? 18 : posture === 'firm' ? 10 : 5, `Gunfire at ${place}`);
-  if (defs.length) addHeat(s, df, 4, `Gunfire at ${place}`);
+  // Gunfire heats the block for everyone there, and the papers tie it to the family that started it.
+  const spot = b ?? target ?? att;
+  const noise = posture === 'loud' ? 18 : posture === 'firm' ? 10 : 5;
+  addHeat(s, af, noise + (defs.length ? 4 : 0), `Gunfire at ${place}`, spot);
+  addHeat(s, af, Math.ceil(noise / PAPERS_SHARE), `Papers tie the gunfire at ${place} to the family`);
 
   // Named hoods lost on each side: the losers lose more.
   const side = (csv: string | number) =>
@@ -1502,7 +1571,7 @@ function resolveFight(s: GameState, ctx: FightCtx, mod: number): void {
       hurt.push(l);
     }
   }
-  if (posture === 'loud' && chance(s, s.families[af].heat / 220)) {
+  if (posture === 'loud' && chance(s, heatAt(s, spot) / 220)) {
     const nab = pick(
       s,
       [att, ...defs].filter((p) => p.status === 'active'),
@@ -1628,7 +1697,7 @@ function lean(s: GameState, p: Person, j: Job, b: Building): void {
     ...guardsAt(s, b).flatMap((g) => g.j.squad.map((id) => hood(s, id)).filter((h): h is Hood => !!h)),
     ...patrolsNear(s, b).flatMap((w) => w.hoods),
   ];
-  addHeat(s, f, LEAN_HEAT[j.posture], `Leaning on ${b.name} (${j.posture})`);
+  addHeat(s, f, LEAN_HEAT[j.posture], `Leaning on ${b.name} (${j.posture})`, b);
   let edge = 0;
   if (theirHoods.length) {
     const won = chance(s, brawn(ours) / (brawn(ours) + brawn(theirHoods) * 1.1));
@@ -1837,7 +1906,7 @@ export function answer(s: GameState, cardId: number, optionId: string): Card | n
     case 'shopkeeper': {
       if (!p || !b) break;
       if (optionId === 'lean') {
-        addHeat(s, 'player', 8, `Shopkeeper roughed up at ${b.name}`);
+        addHeat(s, 'player', 8, `Shopkeeper roughed up at ${b.name}`, b);
         signUp(s, b, p, 'quiet');
       } else if (optionId === 'sweeten') {
         spend(s, 'player', 100, `Sweetener for ${b.name}`);
@@ -1854,7 +1923,7 @@ export function answer(s: GameState, cardId: number, optionId: string): Card | n
         else addHeat(s, 'player', 12, 'Patrolman Kearney complained to the captain');
       } else if (b && b.owner === 'player' && b.racket && chance(s, 0.4)) {
         b.raided = true;
-        addHeat(s, 'player', 4, `Kearney's raid on ${b.name}`);
+        addHeat(s, 'player', 4, `Kearney's raid on ${b.name}`, b);
         log(s, `Kearney came back with friends. ${b.name} is shut.`, 'player');
       }
       break;
@@ -1871,7 +1940,7 @@ export function answer(s: GameState, cardId: number, optionId: string): Card | n
           allocate(s, 'player');
         } else log(s, 'The driver lost the tail in the rail yards.', 'player');
       } else if (optionId === 'ambush') {
-        addHeat(s, 'player', 15, 'Ambush in an alley');
+        addHeat(s, 'player', 15, 'Ambush in an alley', b ?? undefined);
         const tail = pick(
           s,
           s.hoods.filter((x) => x.family === 'rival' && x.status === 'active'),
@@ -1998,6 +2067,7 @@ export function endMonth(s: GameState): void {
   if (!run || run.queue.length || run.day < DAYS) return;
   for (const b of s.buildings) b.took = 0;
   for (const f of ['player', 'rival'] as const) settle(s, f);
+  coolBlocks(s);
   people(s);
   // A month on the job is a month of experience; the laid-up mend.
   const worked = new Set(s.people.flatMap((p) => p.jobs.filter((j) => !j.stalled && j.hoods).flatMap((j) => j.squad)));
@@ -2145,6 +2215,19 @@ function settle(s: GameState, f: FamilyId): void {
   if (fam.captain) addHeat(s, f, -5, 'Captain looking the other way');
   const share = (owned(s, f).length + protectedBy(s, f).length) / s.buildings.length;
   if (share > 0.4) addHeat(s, f, Math.round((share - 0.4) * 40), 'Papers asking who runs the ward');
+}
+
+/** Month end: heat spreads a little to the blocks around a hot one, then every block cools. */
+export function coolBlocks(s: GameState): void {
+  const was = { ...s.blockHeat };
+  for (const id of allBlocks(s)) {
+    const h = was[id] ?? 0;
+    for (const n of nextBlocks(s, id)) {
+      const gain = Math.floor((h - (was[n] ?? 0)) * HEAT_SPREAD);
+      if (gain > 0) addBlockHeat(s, n, gain, `Heat spilling over from ${blockName(s, id)}`, null);
+    }
+  }
+  for (const id of allBlocks(s)) addBlockHeat(s, id, -BLOCK_COOL, 'Quiet nights', null);
 }
 
 /** A lieutenant given a building of their own keeps half its takings. */

@@ -28,6 +28,7 @@ import {
   runner,
   targets,
   gunHands,
+  hottestRacket,
 } from './util';
 
 /** How often a family that's at odds leans on one of the other side's doors, per month. */
@@ -60,7 +61,7 @@ export function planFamily(s: GameState, f: FamilyId): void {
   ensure('runGamble', rackets(s, f, 'gambling').length > 0);
   ensure('distill', stills > 0);
   ensure('supply', stills > 0 && bars > 0 && fam.cars > 0);
-  ensure('payoff', fam.heat > 25 && fam.cash > 400);
+  ensure('payoff', Math.max(fam.heat, hottestRacket(s, f)) > 25 && fam.cash > 400);
 
   const oneOff = (kind: JobKind, target: string | null, posture: Posture = 'firm', max = 1) => {
     const r = runner(s, f, JOBS[kind].branch);
