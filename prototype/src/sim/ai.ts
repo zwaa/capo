@@ -5,7 +5,53 @@
 import { chance } from './rng';
 import { blankJob, makeHood } from './setup';
 import type { FamilyId, GameState, JobKind, Person, Posture } from './types';
-import { JOBS, active, carPrice, crewSize, dist, gunPrice, has, hoodPrice, members, other, owned, price, protectedBy, rackets, runner, targets, totalHoods } from './util';
+import {
+  JOBS,
+  active,
+  allBlocks,
+  branchesOf,
+  blockCentre,
+  blockFree,
+  carPrice,
+  isHome,
+  crewSize,
+  dist,
+  gunPrice,
+  has,
+  hoodPrice,
+  members,
+  other,
+  owned,
+  price,
+  protectedBy,
+  rackets,
+  runner,
+  targets,
+  gunHands,
+  hottestRacket,
+  blockId,
+  blockBuildings,
+  building,
+  holder,
+  moodOf,
+} from './util';
+
+/** How often a family that's at odds leans on one of the other side's doors, per month. */
+export const LEAN_CHANCE = 0.6;
+/** At most this many of the other side's doors leaned on in a month. */
+export const LEANS_PER_MONTH = 2;
+
+/** How angry (see Family.provoked) a family must be before it takes buildings by force. */
+export const TAKEOVER_ANGER = 2;
+
+/** Pay off the beat on a racket's block from this heat; stop paying once it's below the other line; at most this many blocks. */
+const BEAT_FROM = 25;
+const BEAT_STOP = 10;
+const MAX_BEATS = 2;
+
+/** Spend on goodwill (a generous stance) only with this much in hand; charity with this much. */
+const GENEROUS_FROM = 3000;
+const CHARITY_FROM = 2000;
 
 export function planFamily(s: GameState, f: FamilyId): void {
   const fam = s.families[f];
@@ -13,7 +59,8 @@ export function planFamily(s: GameState, f: FamilyId): void {
   const aggressive = f === 'rival' ? fam.notice : s.families.rival.notice;
   const id = () => `j${s.nextId++}`;
 
-  for (const p of members(s, f)) p.jobs = p.jobs.filter((j) => !j.done && (!j.target || targets(s, f, j.kind).some((t) => t.id === j.target)));
+  for (const p of members(s, f))
+    p.jobs = p.jobs.filter((j) => !j.done && (!j.target || targets(s, f, j.kind).some((t) => t.id === j.target)));
 
   const ensure = (kind: JobKind, want: boolean) => {
     const r = runner(s, f, JOBS[kind].branch);
@@ -28,26 +75,64 @@ export function planFamily(s: GameState, f: FamilyId): void {
   ensure('runGamble', rackets(s, f, 'gambling').length > 0);
   ensure('distill', stills > 0);
   ensure('supply', stills > 0 && bars > 0 && fam.cars > 0);
-  ensure('payoff', fam.heat > 25 && fam.cash > 400);
+  ensure('payoff', Math.max(fam.heat, hottestRacket(s, f)) > 25 && fam.cash > 400);
+
+  // The beat: pay off the cops on the block of our hottest racket; drop it once the block has cooled.
+  const police = runner(s, f, 'police');
+  police.jobs = police.jobs.filter((j) => j.kind !== 'beat' || (s.blockHeat[j.target!] ?? 0) >= BEAT_STOP);
+  const hotSpot = [...new Set(rackets(s, f).map((b) => blockId(b)))].sort((a, b) => (s.blockHeat[b] ?? 0) - (s.blockHeat[a] ?? 0))[0];
+  const beats = police.jobs.filter((j) => j.kind === 'beat');
+  if (
+    hotSpot &&
+    (s.blockHeat[hotSpot] ?? 0) >= BEAT_FROM &&
+    fam.cash > 600 &&
+    beats.length < MAX_BEATS &&
+    !beats.some((j) => j.target === hotSpot)
+  )
+    police.jobs.push(blankJob(id(), 'beat', hotSpot));
 
   const oneOff = (kind: JobKind, target: string | null, posture: Posture = 'firm', max = 1) => {
     const r = runner(s, f, JOBS[kind].branch);
-    if (r.jobs.filter((j) => j.kind === kind && !JOBS[kind].ongoing).length >= max || r.jobs.some((j) => j.target === target && target)) return;
+    if (r.jobs.filter((j) => j.kind === kind && !JOBS[kind].ongoing).length >= max || r.jobs.some((j) => j.target === target && target))
+      return;
     r.jobs.push(blankJob(id(), kind, target, posture));
   };
   const home = runner(s, f, 'protection');
   const near = <T extends { x: number; y: number }>(xs: T[], from: Person = home) => xs.sort((a, b) => dist(a, from) - dist(b, from));
 
+  // Fear and goodwill. A stance on every block we hold: generous where we're rich and unloved,
+  // iron fist where a hothead runs protection and the block doesn't fear us yet, firm otherwise.
+  const ours = (id: string) => blockBuildings(s, id).filter((b) => holder(b) === f).length;
+  for (const bid of allBlocks(s)) {
+    const n = ours(bid);
+    const m = moodOf(s, f, bid);
+    if (!n) delete fam.stances[bid];
+    else if (fam.cash > GENEROUS_FROM && n >= 3 && m.goodwill < 30) fam.stances[bid] = 'generous';
+    else if (home.traits.includes('hothead') && m.fear < 30) fam.stances[bid] = 'ironfist';
+    else delete fam.stances[bid];
+  }
+  // Charity where we hold the most and are liked the least.
+  const cold = allBlocks(s)
+    .filter((bid) => ours(bid) >= 2 && moodOf(s, f, bid).goodwill < 10)
+    .sort((a, b) => ours(b) - ours(a))[0];
+  if (cold && fam.cash > CHARITY_FROM) oneOff('charity', cold);
   // Protection: sign up the nearest free shop; once at war, muscle in on theirs.
   // Before the war, Calloway keeps to the east end of the ward.
   const inReach = (b: { x: number }) => aggressive || f === 'player' || b.x >= s.width / 2;
-  const free = near(s.buildings.filter((b) => b.owner === null && b.protectedBy === null && inReach(b)));
+  const free = near(s.buildings.filter((b) => !isHome(b) && b.owner === null && b.protectedBy === null && inReach(b)));
   for (const b of free.slice(0, 2)) if (dist(b, home) <= 7) oneOff('signup', b.id, home.traits.includes('hothead') ? 'loud' : 'firm', 2);
-  if (aggressive && chance(s, 0.6)) {
-    const theirs = near(protectedBy(s, foe));
-    if (theirs[0]) {
-      const r = runner(s, f, 'protection');
-      if (!r.jobs.some((j) => j.target === theirs[0].id)) r.jobs.push(blankJob(id(), 'signup', theirs[0].id, 'loud'));
+  // Homes come a block at a time: the nearest block with the most doors that pay nobody.
+  const blocks = allBlocks(s)
+    .map((id) => ({ id, at: blockCentre(s, id), n: blockFree(s, id).filter(isHome).length }))
+    .filter((x) => x.n >= 2 && inReach(x.at) && dist(x.at, home) <= 6)
+    .sort((a, b) => dist(a.at, home) - a.n - (dist(b.at, home) - b.n));
+  if (blocks[0] && crewSize(s, home) >= 2) oneOff('block', blocks[0].id, 'firm');
+  // Once at odds, now and then lean on one of theirs: pressure, not shooting.
+  if (aggressive) {
+    const r = runner(s, f, 'protection');
+    for (const b of near(protectedBy(s, foe)).slice(0, LEANS_PER_MONTH)) {
+      if ((fam.provoked > 0 || chance(s, LEAN_CHANCE)) && !r.jobs.some((j) => j.target === b.id))
+        r.jobs.push(blankJob(id(), 'signup', b.id, 'firm'));
     }
   }
 
@@ -61,7 +146,8 @@ export function planFamily(s: GameState, f: FamilyId): void {
     acq,
   );
   if (forSale[0] && owned(s, f).length < cap && (f === 'player' || chance(s, 0.25))) oneOff('buy', forSale[0].id);
-  if (aggressive && f === 'rival' && s.month >= 5 && fam.cash > 1200 && chance(s, 0.35)) {
+  // Real violence only while provoked: after we hurt his people or took or wrecked his property.
+  if (fam.provoked >= TAKEOVER_ANGER && f === 'rival' && fam.cash > 1200 && chance(s, 0.35)) {
     const prize = near(owned(s, foe), acq)[0];
     if (prize) oneOff('takeover', prize.id, 'loud');
   }
@@ -72,7 +158,9 @@ export function planFamily(s: GameState, f: FamilyId): void {
 
   // Enforcement: guard the best place if the enemy is close; settle grudges.
   const enf = runner(s, f, 'enforcement');
-  const prized = owned(s, f).filter((b) => b.racket).sort((a, b) => Math.min(...active(s, foe).map((p) => dist(p, a)), 99) - Math.min(...active(s, foe).map((p) => dist(p, b)), 99))[0];
+  const prized = owned(s, f)
+    .filter((b) => b.racket)
+    .sort((a, b) => Math.min(...active(s, foe).map((p) => dist(p, a)), 99) - Math.min(...active(s, foe).map((p) => dist(p, b)), 99))[0];
   if (aggressive && prized && !enf.jobs.some((j) => j.kind === 'guard')) enf.jobs.push(blankJob(id(), 'guard', prized.id));
   if (fam.grudge) {
     const victim = targets(s, f, 'hit')[0];
@@ -112,9 +200,28 @@ export function planFamily(s: GameState, f: FamilyId): void {
     if (f === 'player' && !s.market.length) break;
     buy('hood', short.p);
   }
-  while (fam.guns < totalHoods(s, f) && fam.cash > gunPrice(s, f) + 300) buy('gun');
+  while (fam.guns < gunHands(s, f) && fam.cash > gunPrice(s, f) + 300) buy('gun');
+
+  // Standing orders for idle hoods: whoever runs Protection drums up business; everyone else watches the turf.
+  // The dial jobs only where they help a fight we're in: on a block where we're going after their doors,
+  // frighten it if it doesn't fear us yet, and sour their name if it likes them.
+  const contested = [
+    ...new Set(
+      members(s, f)
+        .flatMap((p) => p.jobs)
+        .filter((j) => j.kind === 'signup' && !j.done && building(s, j.target)?.protectedBy === foe)
+        .map((j) => blockId(building(s, j.target)!)),
+    ),
+  ];
+  const scare = contested.find((bid) => moodOf(s, f, bid).fear < 30);
+  if (scare) oneOff('intimidate', scare);
+  const sour = contested.find((bid) => moodOf(s, foe, bid).goodwill >= 15);
+  if (sour) oneOff('badmouth', sour);
+
+  for (const p of members(s, f)) p.idle = branchesOf(s, p).includes('protection') ? 'canvass' : 'patrol';
 
   // Ongoing work first, then one-off jobs.
   for (const p of members(s, f)) p.jobs.sort((a, b) => Number(!JOBS[a.kind].ongoing) - Number(!JOBS[b.kind].ongoing));
   fam.grudge = false;
+  fam.provoked = Math.max(0, fam.provoked - 1);
 }

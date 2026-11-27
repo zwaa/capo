@@ -11,6 +11,9 @@ tutorial should build the family up from scratch. v2 is rebuilt around that.
 - **Start from nothing.** The boss, two cousins (Vito and Carlo), two pistols, $300 and a rented room. No lieutenants, no property.
 - **Named hoods.** Every hood has a name, often a nickname, four stats, up to two traits, a line of history and experience. Each job takes the free hands best suited to it (the best talker on a sign-up, the toughest on a takeover), and the squad's stats decide how it goes. Hoods grow with work, get wounded, jailed or killed by name, and the newspaper names them.
 - **Lieutenants are promoted, not hired.** A hood with enough experience is lieutenant material and can be promoted in a meeting. Each month a hiring hall offers a few named hoods, with stats and history on show.
+- **A readable map.** Asphalt roads with lane markings, pavement blocks of homes and shops (shops have a lit front and sign). Turf is tinted ground in the family colour; a border means owned, a flag means it pays protection. Who holds what is public; fog of war (a light hatch) only hides people.
+- **Turf matters.** Signing up a shop next to your turf (within two lots of a shop you hold, or of the boss's door) is easier; off your turf it's harder and takes two extra days. The same goes for Calloway.
+- **Orders from the map.** Click a shop, building or rival on the map for the orders that make sense there; each goes on the list of whoever runs that branch.
 - **Branches and job lists.** Eight branches in four areas (Muscle, Property, Vice, Fixing). Each branch is run by the boss or a lieutenant, and a lieutenant can take up to three. Every person ranks the jobs across their branches in one list.
 - **Hands are the capacity.** Each job needs a number of hands (and sometimes a car or cash). The person running a list works too, so a crew of two is three hands. Being in debt stalls only jobs that cost money. Hands go to the top of the list first; jobs that get nobody stall, and the orders screen says why.
 - **Protection and property are separate.** Shops pay protection (and stop if nobody collects). Owned buildings can hold a back room (speakeasy, gambling den or still) and a telephone.
@@ -26,8 +29,11 @@ Not in the slice: City Hall and elections, laundering, the doctor, brewmaster, a
 ## Running it
 
 ```sh
-npm install
+npm install        # also turns on the repo's git hooks
 npm run dev        # play at http://localhost:5173
+npm run check      # typecheck, lint, format check and tests: must pass before a commit
+npm run lint:fix   # fix lint problems that can be fixed automatically
+npm run format     # format everything with Prettier
 npm test           # simulation tests
 npm run sim -- 300 # headless balance check: an AI plays the Russo side over 300 seeds
 npm run artifact   # single-file build for publishing (dist/capo.html)
@@ -46,9 +52,9 @@ npm run artifact   # single-file build for publishing (dist/capo.html)
 
 From `npm run sim -- 300`. The Russo side is played by a simple autopilot that takes on whoever the lessons offer, promotes its most capable hood, hands out branches and answers telegrams. It never really plans:
 
-| Russo player | Win | Draw | Loss |
-|---|---|---|---|
-| Autopilot, sensible answers | 2% | 22% | 76% |
-| Autopilot, random answers | 4% | 33% | 63% |
+| Russo player                | Win | Draw | Loss |
+| --------------------------- | --- | ---- | ---- |
+| Autopilot, sensible answers | 2%  | 22%  | 76%  |
+| Autopilot, random answers   | 4%  | 33%  | 63%  |
 
 The autopilot is weak, so these numbers say little about a human. The thresholds need tuning from real play.

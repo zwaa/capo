@@ -5,19 +5,12 @@ export type Trait = 'hothead' | 'greedy' | 'cautious' | 'ambitious' | 'oldworld'
 export type Status = 'active' | 'wounded' | 'jailed' | 'dead' | 'defected';
 
 /** The branches of the business in this slice (City Hall comes later). */
-export type Branch =
-  | 'protection'
-  | 'enforcement'
-  | 'acquisitions'
-  | 'fronts'
-  | 'speakeasies'
-  | 'gambling'
-  | 'bootlegging'
-  | 'police';
+export type Branch = 'protection' | 'enforcement' | 'acquisitions' | 'fronts' | 'speakeasies' | 'gambling' | 'bootlegging' | 'police';
 
 export type JobKind =
   | 'collect'
   | 'signup'
+  | 'block'
   | 'guard'
   | 'hit'
   | 'wreck'
@@ -29,9 +22,16 @@ export type JobKind =
   | 'runGamble'
   | 'distill'
   | 'supply'
-  | 'payoff';
+  | 'payoff'
+  | 'beat'
+  | 'charity'
+  | 'intimidate'
+  | 'badmouth';
 
-export type SpecialistKind = 'recruiter' | 'armourer' | 'mechanic' | 'lawyer';
+/** What a person's idle hoods do when nothing on the list needs them. */
+export type IdleOrder = 'rest' | 'patrol' | 'canvass';
+
+export type SpecialistKind = 'recruiter' | 'armourer' | 'mechanic' | 'lawyer' | 'consigliere';
 
 /**
  * A standing job. The plan part (kind, target, posture) persists month to
@@ -58,10 +58,14 @@ export interface Job {
   x: number;
   y: number;
   checked: boolean;
+  /** Made up by a standing order (drumming up business), not ordered by hand. Gone at month end. */
+  auto?: boolean;
 }
 
 export interface Building {
   id: string;
+  /** A shop can be bought and fitted out; a home (tenement, rowhouses) only pays protection. */
+  kind: 'shop' | 'home';
   name: string;
   front: string;
   suits: Racket;
@@ -76,6 +80,10 @@ export interface Building {
   raided: boolean;
   /** Months in a row nobody collected. Shops stop paying after a while. */
   uncollected: number;
+  /** What it brought its holder last month, before costs and skims (for the Income map). */
+  took: number;
+  /** Turned away a block sign-up this month (quietly): the crew moves on until next month. */
+  refused: boolean;
 }
 
 export interface Demand {
@@ -114,6 +122,8 @@ export interface Person {
   pending: { jobs: Job[]; arriveDay: number } | null;
   demand: Demand | null;
   ownBuilding: string | null;
+  /** Standing order for idle hoods. */
+  idle: IdleOrder;
   plotting: boolean;
   wins: number;
 }
@@ -151,6 +161,9 @@ export interface Family {
   name: string;
   bossId: string;
   cash: number;
+  /** Our stance on each block we hold (by block id): it nudges fear and goodwill there each month. Missing means Firm. */
+  stances: Record<string, Stance>;
+  /** HQ heat: what's about the family rather than a place (talk, the papers, complaints). High HQ heat risks a raid on HQ. */
   heat: number;
   heatLog: Line[];
   ledger: Line[];
@@ -165,6 +178,8 @@ export interface Family {
   /** Captain paid this month (a staffed payoff job). */
   captain: boolean;
   grudge: boolean;
+  /** Months left of real anger: after we hurt their people or took or wrecked their property. Only then do they reach for takeovers. */
+  provoked: number;
   /** Rival only: has Calloway noticed you yet? */
   notice: boolean;
 }
@@ -176,17 +191,7 @@ export interface CardOption {
   disabled?: boolean;
 }
 
-export type CardKind =
-  | 'hothead'
-  | 'shopkeeper'
-  | 'fight'
-  | 'cop'
-  | 'tail'
-  | 'emergency'
-  | 'betrayal'
-  | 'offer'
-  | 'bail'
-  | 'snitch';
+export type CardKind = 'hothead' | 'shopkeeper' | 'fight' | 'cop' | 'tail' | 'emergency' | 'betrayal' | 'offer' | 'bail' | 'snitch';
 
 export interface Card {
   id: number;
@@ -214,6 +219,10 @@ export interface MonthRun {
   nextCardId: number;
   log: { day: number; text: string; family: FamilyId | null }[];
   news: NewsItem[];
+  /** Families whose HQ was raided this month (once a month at most). */
+  hqRaided: FamilyId[];
+  /** Things that happened to us this month that go on the desk at month end. */
+  notices: Notice[];
 }
 
 export interface NewsItem {
@@ -240,6 +249,47 @@ export interface Stats {
   raids: number;
 }
 
+/** Something on the boss's desk: what happened last month that needs a decision, and where. */
+export interface Notice {
+  kind: 'heat' | 'hq' | 'rival' | 'stopped' | 'slipping' | 'raid' | 'short';
+  /** alarm: something lost or about to be; warn: act soon; info: worth knowing. */
+  level: 'alarm' | 'warn' | 'info';
+  title: string;
+  text: string;
+  /** Where on the map, if anywhere. */
+  at: { x: number; y: number } | null;
+}
+
+/** A month in numbers, kept for comparisons and trends. */
+export interface MonthSummary {
+  month: number;
+  net: number;
+  income: number;
+  holds: number;
+  rivalHolds: number;
+  hq: number;
+  /** What our places on each block took (by block id). */
+  took: Record<string, number>;
+  /** Block heat at month end (by block id). */
+  heat: Record<string, number>;
+  /** Blocks where Calloway moved against us this month (from the desk). */
+  rivalMoves: string[];
+}
+
+/** The month's briefing: the numbers for everyone, and the consigliere's reading of them if we have one. */
+export interface Briefing {
+  facts: string[];
+  advice: { text: string; confidence: 'Likely' | 'Rumour' | null }[];
+}
+
+/** How a block feels about a family. */
+export interface Mood {
+  fear: number;
+  goodwill: number;
+}
+/** What we do on a block we hold, month in, month out. */
+export type Stance = 'generous' | 'firm' | 'ironfist';
+
 export interface GameState {
   seed: number;
   rng: number;
@@ -262,4 +312,17 @@ export interface GameState {
   candidates: number[];
   lessons: { on: boolean; index: number };
   stats: Stats;
+  /** The boss's desk: what last month left to deal with (rebuilt at each month end). */
+  notices: Notice[];
+  /** Last month's briefing (null before the first month ends), and the last few months in numbers. */
+  briefing: Briefing | null;
+  history: MonthSummary[];
+  /** How each block feels about each family (by block id): fear and goodwill, 0-100 each. Missing means 0. */
+  mood: Record<string, Record<FamilyId, Mood>>;
+  /** Why fear and goodwill moved since the month began (cleared when the next month starts). */
+  moodLog: { block: string; family: FamilyId; dial: 'fear' | 'goodwill'; label: string; amount: number }[];
+  /** Heat on each city block, by block id: police on the beat, shared by everyone with business there. */
+  blockHeat: Record<string, number>;
+  /** Why each block's heat moved since the month began (cleared when the next month starts). */
+  blockHeatLog: { block: string; label: string; amount: number; family: FamilyId | null }[];
 }

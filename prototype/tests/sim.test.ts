@@ -1,25 +1,66 @@
 import { describe, expect, it } from 'vitest';
 import { autoplay } from '../scripts/autoplay';
+import { planFamily } from '../src/sim/ai';
 import {
+  addHeat,
   addJob,
+  addMood,
+  desk,
+  setStance,
+  settleMood,
+  signupOdds,
   allocate,
+  coolBlocks,
   assignBranch,
   bossAction,
   canAct,
   changePlans,
   createGame,
   draftJob,
+  endMonth,
+  fireHood,
+  forecast,
   hireHood,
   moveHood,
   moveJob,
+  needFor,
+  OFF_TURF_DAYS,
+  ordersFor,
   purchase,
   reach,
   startMonth,
   stepDay,
 } from '../src/sim/engine';
+import { brief } from '../src/sim/brief';
 import { LESSONS } from '../src/sim/lessons';
+import { blankJob, freshMarket, isLot } from '../src/sim/setup';
 import type { GameState } from '../src/sim/types';
-import { BRANCHES, LT_CAP, PROMOTE_XP, bossOf, branchesOf, crewOf, crewSize, lieutenants, targets } from '../src/sim/util';
+import {
+  BRANCHES,
+  LT_CAP,
+  PROMOTE_XP,
+  blockBuildings,
+  blockId,
+  bossOf,
+  branchesOf,
+  crewOf,
+  crewSize,
+  dist,
+  gunHands,
+  totalHoods,
+  lieutenants,
+  onTurf,
+  targets,
+  turfAt,
+  BLOCK_COOL,
+  SLOW_HEAT,
+  allBlocks,
+  heatAt,
+  nextBlocks,
+  moodOf,
+  CHARITY_GOODWILL,
+  FEAR_FADE,
+} from '../src/sim/util';
 
 /** Take Sal on (as the first lesson would) and promote him. */
 function salAsLieutenant(s: GameState) {
@@ -35,9 +76,20 @@ describe('determinism', () => {
     for (const seed of [1, 7, 42]) expect(JSON.stringify(autoplay(seed))).toBe(JSON.stringify(autoplay(seed)));
   });
   it('different seeds give different cities and different hoods for hire', () => {
-    const at = (n: number) => createGame(n).buildings.map((b) => `${b.x},${b.y}`).join();
+    const at = (n: number) =>
+      createGame(n)
+        .buildings.map((b) => `${b.x},${b.y}`)
+        .join();
     expect(at(1)).not.toBe(at(2));
-    expect(createGame(1).market.map((h) => h.name).join()).not.toBe(createGame(2).market.map((h) => h.name).join());
+    expect(
+      createGame(1)
+        .market.map((h) => h.name)
+        .join(),
+    ).not.toBe(
+      createGame(2)
+        .market.map((h) => h.name)
+        .join(),
+    );
   });
 });
 
@@ -110,6 +162,477 @@ describe('jobs and squads', () => {
   });
 });
 
+describe('orders from the map', () => {
+  it('offers the orders that fit a target, to whoever runs the branch', () => {
+    const s = createGame(13);
+    const free = s.buildings.find((b) => !b.owner && !b.protectedBy)!;
+    const kinds = ordersFor(s, free.id).map((o) => o.kind);
+    expect(kinds).toContain('signup');
+    expect(kinds).toContain('buy');
+    expect(kinds).not.toContain('takeover');
+    for (const o of ordersFor(s, free.id)) expect(o.runner).toBe(bossOf(s, 'player').id);
+    const theirs = s.buildings.find((b) => b.owner === 'rival')!;
+    expect(ordersFor(s, theirs.id).map((o) => o.kind)).toContain('takeover');
+  });
+  it('shows an order as queued once it is on a list', () => {
+    const s = createGame(13);
+    const free = s.buildings.find((b) => !b.owner && !b.protectedBy && !bossOf(s, 'player').jobs.some((j) => j.target === b.id))!;
+    const buy = ordersFor(s, free.id).find((o) => o.kind === 'buy')!;
+    expect(buy.queued).toBeNull();
+    const j = addJob(s, buy.runner, 'buy', free.id)!;
+    expect(ordersFor(s, free.id).find((o) => o.kind === 'buy')!.queued).toEqual({ person: buy.runner, job: j.id });
+  });
+});
+
+describe('turf', () => {
+  it('starts at the boss’s door and grows with every shop held', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    expect(onTurf(s, 'player', { x: boss.homeX, y: boss.homeY })).toBe(true);
+    expect(turfAt(s, boss.homeX, boss.homeY)).toBe('player');
+    const far = s.buildings.filter((b) => !b.owner && !b.protectedBy).sort((a, b) => b.x - a.x)[0];
+    expect(onTurf(s, 'player', far, far.id)).toBe(false);
+    far.protectedBy = 'player';
+    const next = { x: far.x, y: far.y + (far.y % 3 === 1 ? 1 : -1) };
+    expect(onTurf(s, 'player', next)).toBe(true);
+  });
+  it('draws turf only on what a family holds, not the lots next to it', () => {
+    const s = createGame(14);
+    const free = s.buildings.filter((b) => !b.owner && !b.protectedBy && b.x > 4);
+    const ours = free[0];
+    ours.protectedBy = 'player';
+    expect(turfAt(s, ours.x, ours.y)).toBe('player');
+    const next = free.find((b) => dist(b, ours) === 1)!;
+    expect(turfAt(s, next.x, next.y)).toBeNull();
+  });
+  it('makes sign-ups off our turf take longer', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    const far = s.buildings.filter((b) => !b.owner && !b.protectedBy).sort((a, b) => b.x - a.x)[0];
+    boss.jobs = [];
+    addJob(s, boss.id, 'signup', far.id);
+    startMonth(s);
+    const offTurf = boss.jobs[0].days;
+    s.run = null;
+    far.protectedBy = null;
+    s.buildings.find((b) => b.id !== far.id && !b.owner && dist(b, far) <= 2)!.protectedBy = 'player';
+    startMonth(s);
+    expect(offTurf - boss.jobs[0].days).toBe(OFF_TURF_DAYS);
+  });
+});
+
+describe('homes and blocks', () => {
+  it('fills every lot that is not a shop with a home, and homes are not for sale', () => {
+    const s = createGame(14);
+    let lots = 0;
+    for (let y = 0; y < s.height; y++) for (let x = 0; x < s.width; x++) if (isLot(x, y)) lots++;
+    expect(s.buildings.length).toBe(lots);
+    const homes = s.buildings.filter((b) => b.kind === 'home');
+    expect(homes.length).toBeGreaterThan(10);
+    expect(homes.every((b) => b.protection < 50)).toBe(true);
+    const buyable = new Set(targets(s, 'player', 'buy').map((t) => t.id));
+    expect(homes.some((b) => buyable.has(b.id))).toBe(false);
+    // Calloway already collects on his own doorstep.
+    expect(homes.some((b) => b.protectedBy === 'rival')).toBe(true);
+  });
+  it('records what each place paid at month end, and nothing for doors nobody collected', () => {
+    const s = createGame(14);
+    s.lessons.on = false; // the first lesson would put the collect job back
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const free = s.buildings.filter((b) => b.kind === 'shop' && !b.owner && !b.protectedBy);
+    const [paid, front] = free;
+    paid.protectedBy = 'player';
+    front.owner = 'player';
+    addJob(s, boss.id, 'collect', null);
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    endMonth(s);
+    expect(paid.took).toBe(paid.protection);
+    expect(front.took).toBe(50);
+    // Same door, nobody collecting next month: it pays nothing.
+    boss.jobs = [];
+    startMonth(s);
+    n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    endMonth(s);
+    expect(paid.protectedBy).toBe('player');
+    expect(paid.took).toBe(0);
+    expect(s.buildings.filter((b) => !b.owner && !b.protectedBy).every((b) => b.took === 0)).toBe(true);
+  });
+  it('a pair of hands collects from ten homes, or five shops', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const collect = addJob(s, boss.id, 'collect', null)!;
+    const free = s.buildings.filter((b) => !b.owner && !b.protectedBy);
+    for (const b of free.filter((b) => b.kind === 'home').slice(0, 10)) b.protectedBy = 'player';
+    expect(needFor(s, 'player', collect, boss)).toBe(1);
+    for (const b of free.filter((b) => b.kind === 'shop').slice(0, 5)) b.protectedBy = 'player';
+    expect(needFor(s, 'player', collect, boss)).toBe(2);
+  });
+  it('offers to sign up the block around any building', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    const blk = blockId({ x: boss.homeX, y: boss.homeY });
+    expect(ordersFor(s, blk).map((o) => o.kind)).toEqual(['block', 'beat', 'charity', 'intimidate']);
+  });
+  it('a block sign-up goes door to door through the block', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    const blk = blockId({ x: boss.homeX, y: boss.homeY });
+    boss.jobs = [];
+    addJob(s, boss.id, 'block', blk, 'loud');
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    const ours = blockBuildings(s, blk).filter((b) => b.protectedBy === 'player');
+    expect(ours.length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('managing the crew', () => {
+  it('a demoted lieutenant goes back to the street, and his branches and crew come home', () => {
+    const s = createGame(14);
+    const sal = salAsLieutenant(s);
+    assignBranch(s, 'player', 'protection', sal.id);
+    const cousin = crewOf(s, bossOf(s, 'player'))[0];
+    moveHood(s, cousin.id, sal.id);
+    s.families.player.actions = 2;
+    bossAction(s, { kind: 'demote', lt: sal.id });
+    expect(lieutenants(s, 'player')).toHaveLength(0);
+    const boss = bossOf(s, 'player');
+    expect(s.families.player.branches.protection).toBe(boss.id);
+    expect(boss.jobs.some((j) => j.kind === 'collect')).toBe(true);
+    const back = s.hoods.find((h) => h.name === 'Sal Benedetto')!;
+    expect(back.under).toBe(boss.id);
+    expect(back.xp).toBe(PROMOTE_XP);
+    expect(back.loyalty).toBeLessThan(sal.loyalty);
+    expect(cousin.under).toBe(boss.id);
+  });
+  it('lets a hood go; one with loose lips talks', () => {
+    const s = createGame(14);
+    const h = crewOf(s, bossOf(s, 'player'))[0];
+    h.traits = ['looselips'];
+    const heat = s.families.player.heat;
+    expect(fireHood(s, 'player', h.id)).toBeNull();
+    expect(s.hoods.includes(h)).toBe(false);
+    expect(s.families.player.heat).toBeGreaterThan(heat);
+  });
+  it('hands freed by a finished job pick up the next one waiting', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const near = s.buildings
+      .filter((b) => b.kind === 'home' && !b.owner && !b.protectedBy)
+      .sort((a, b) => dist(a, { x: boss.homeX, y: boss.homeY }) - dist(b, { x: boss.homeX, y: boss.homeY }));
+    // Three hands, four one-hand jobs: the last waits for someone to finish.
+    const jobs = near.slice(0, 4).map((b) => addJob(s, boss.id, 'signup', b.id, 'loud')!);
+    const last = jobs[3];
+    expect(last.stalled).toBeTruthy();
+    const plan = forecast(s, boss).jobs[last.id];
+    expect(plan.start).toBeGreaterThan(1);
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    expect(last.done || last.progress > 0).toBe(true);
+  });
+});
+
+describe('standing orders for idle hoods', () => {
+  it('idle hoods on patrol pile in when someone leans on a door nearby: fists, nobody dies', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    boss.idle = 'patrol';
+    const home = { x: boss.homeX, y: boss.homeY };
+    const shop = s.buildings.filter((b) => !b.owner && !b.protectedBy && dist(b, home) <= 2)[0];
+    shop.protectedBy = 'player';
+    const dutch = s.people.find((p) => p.id === 'dutch')!;
+    dutch.jobs = [blankJob('jx', 'signup', shop.id, 'loud')];
+    s.families.rival.notice = true;
+    allocate(s, 'rival');
+    startMonth(s);
+    let fightCards = 0;
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) {
+      fightCards += s.run!.queue.filter((c) => c.kind === 'fight').length;
+      s.run!.queue = [];
+    }
+    expect(s.run!.log.some((l) => /scuffle|saw off/.test(l.text) && l.text.includes(shop.name))).toBe(true);
+    expect(fightCards).toBe(0);
+    expect(s.hoods.filter((h) => h.status === 'dead')).toHaveLength(0);
+    expect(s.people.filter((p) => p.status === 'dead')).toHaveLength(0);
+  });
+  it('drumming up business signs up homes next to our turf, and leaves nothing on the list', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    boss.idle = 'canvass';
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    const ours = s.buildings.filter((b) => b.protectedBy === 'player');
+    expect(ours.length).toBeGreaterThan(0);
+    expect(ours.every((b) => b.kind === 'home')).toBe(true);
+    endMonth(s);
+    expect(boss.jobs.some((j) => j.auto)).toBe(false);
+  });
+});
+
+describe('local heat', () => {
+  const playMonth = (s: GameState) => {
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    endMonth(s);
+  };
+  it('heat from a place lands on its block, shared, and leaves HQ alone', () => {
+    const s = createGame(14);
+    const b = s.buildings.find((x) => x.owner === 'rival')!;
+    const hq = s.families.player.heat;
+    addHeat(s, 'player', 10, 'Gunfire', b);
+    expect(heatAt(s, b)).toBe(10);
+    expect(s.families.player.heat).toBe(hq);
+    const far = s.buildings.find((x) => blockId(x) !== blockId(b))!;
+    expect(heatAt(s, far)).toBe(0);
+    expect(s.blockHeatLog.at(-1)).toMatchObject({ label: 'Gunfire', amount: 10, family: 'player' });
+  });
+  it('spreads a little to the blocks next door, then every block cools', () => {
+    const s = createGame(14);
+    const id = allBlocks(s)[4];
+    s.blockHeat[id] = 50;
+    coolBlocks(s);
+    expect(s.blockHeat[id]).toBe(50 - BLOCK_COOL);
+    for (const n of nextBlocks(s, id)) expect(s.blockHeat[n]).toBe(5 - BLOCK_COOL);
+  });
+  it('jobs on a hot block take a day longer', () => {
+    const s = createGame(14);
+    s.lessons.on = false;
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const b = s.buildings.find((x) => x.kind === 'shop' && !x.owner && !x.protectedBy)!;
+    const j = addJob(s, boss.id, 'signup', b.id)!;
+    const before = forecast(s, boss).jobs[j.id].end!;
+    s.blockHeat[blockId(b)] = SLOW_HEAT;
+    expect(forecast(s, boss).jobs[j.id].end).toBe(before + 1);
+  });
+  it('paying off the beat costs an envelope a month and cools that block, and a little around it', () => {
+    const s = createGame(14);
+    s.lessons.on = false;
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const id = blockId({ x: boss.homeX, y: boss.homeY });
+    s.blockHeat[id] = 40;
+    for (const n of nextBlocks(s, id)) s.blockHeat[n] = 20;
+    expect(ordersFor(s, id).some((o) => o.kind === 'beat')).toBe(true);
+    addJob(s, boss.id, 'beat', id);
+    playMonth(s);
+    expect(s.families.player.ledger.some((l) => l.label.startsWith('The beat on') && l.amount < 0)).toBe(true);
+    expect(s.blockHeatLog).toContainEqual({ block: id, label: 'Beat cops paid to look the other way', amount: -10, family: 'player' });
+    for (const n of nextBlocks(s, id))
+      expect(s.blockHeatLog.some((l) => l.block === n && l.label === 'Beat cops next door paid off')).toBe(true);
+  });
+  it('a hot HQ gets raided: cash seized; a cool one does not', () => {
+    const hot = createGame(14);
+    hot.lessons.on = false;
+    let raided = false;
+    for (let m = 0; m < 4 && !raided; m++) {
+      hot.families.player.heat = 100;
+      hot.families.player.cash = 1000;
+      playMonth(hot);
+      raided = hot.families.player.ledger.some((l) => l.label === 'Cash seized in the raid on HQ');
+    }
+    expect(raided).toBe(true);
+    const cool = createGame(14);
+    cool.lessons.on = false;
+    for (let m = 0; m < 4; m++) {
+      cool.families.player.heat = 0;
+      playMonth(cool);
+      expect(cool.families.player.ledger.some((l) => l.label === 'Cash seized in the raid on HQ')).toBe(false);
+    }
+  });
+});
+
+describe('fear and goodwill', () => {
+  const playMonth = (s: GameState) => {
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    endMonth(s);
+  };
+  const freeShop = (s: GameState) => s.buildings.find((x) => x.kind === 'shop' && !x.owner && !x.protectedBy)!;
+  it('a block that fears or likes us is easier to sign up', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const b = freeShop(s);
+    const j = addJob(s, boss.id, 'signup', b.id)!;
+    const cold = signupOdds(s, 'player', j, b);
+    addMood(s, 'player', b, 'goodwill', 50, 'test');
+    expect(signupOdds(s, 'player', j, b)).toBeGreaterThan(cold);
+    expect(s.moodLog.at(-1)).toMatchObject({ family: 'player', dial: 'goodwill', amount: 50, label: 'test' });
+  });
+  it('a feared door keeps paying a month longer when nobody collects', () => {
+    const s = createGame(14);
+    s.lessons.on = false;
+    bossOf(s, 'player').jobs = [];
+    const b = freeShop(s);
+    b.protectedBy = 'player';
+    b.uncollected = 1;
+    addMood(s, 'player', b, 'fear', 60, 'test');
+    playMonth(s);
+    expect(b.protectedBy).toBe('player');
+    expect(b.uncollected).toBe(2);
+  });
+  it('stances: generous costs money and builds goodwill; iron fist builds fear and heat; firm holds fear', () => {
+    const s = createGame(14);
+    const [a, b, c] = s.buildings.filter((x) => !x.owner && !x.protectedBy && x.x < 4);
+    const blocks = [...new Set([a, b, c].map((x) => blockId(x)))];
+    expect(blocks.length).toBe(1);
+    const id = blocks[0];
+    a.protectedBy = 'player';
+    s.families.player.cash = 500;
+    setStance(s, 'player', id, 'generous');
+    settleMood(s);
+    expect(s.families.player.cash).toBe(490);
+    expect(moodOf(s, 'player', id).goodwill).toBe(5 - 1);
+    setStance(s, 'player', id, 'ironfist');
+    settleMood(s);
+    expect(moodOf(s, 'player', id).fear).toBe(5 - FEAR_FADE);
+    expect(s.blockHeat[id]).toBe(2);
+    setStance(s, 'player', id, 'firm');
+    const fear = moodOf(s, 'player', id).fear;
+    settleMood(s);
+    expect(moodOf(s, 'player', id).fear).toBe(fear);
+    // Stances only stick where we hold something.
+    setStance(s, 'player', 'blk2-2', 'ironfist');
+    expect(s.families.player.stances['blk2-2']).toBeUndefined();
+  });
+  it('charity costs $150 and buys goodwill on the block', () => {
+    const s = createGame(14);
+    s.lessons.on = false;
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const id = blockId({ x: boss.homeX, y: boss.homeY });
+    s.families.player.cash = 1000;
+    addJob(s, boss.id, 'charity', id);
+    playMonth(s);
+    expect(s.families.player.ledger.some((l) => l.label.startsWith('Charity on') && l.amount === -150)).toBe(true);
+    expect(s.moodLog.some((l) => l.block === id && l.dial === 'goodwill' && l.amount === CHARITY_GOODWILL)).toBe(true);
+  });
+  it('heat sours goodwill, and liked blocks send recruits', () => {
+    const s = createGame(14);
+    const id = blockId({ x: bossOf(s, 'player').homeX, y: bossOf(s, 'player').homeY });
+    addMood(s, 'player', id, 'goodwill', 50, 'test');
+    s.blockHeat[id] = 60;
+    settleMood(s);
+    expect(moodOf(s, 'player', id).goodwill).toBe(50 - 1 - 3);
+    freshMarket(s);
+    expect(s.market.length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('the desk', () => {
+  it('lists hot blocks we do business on, a warm HQ, uncollected doors and idle back rooms, worst first', () => {
+    const s = createGame(14);
+    const [a, b] = s.buildings.filter((x) => x.kind === 'shop' && !x.owner && !x.protectedBy);
+    a.protectedBy = 'player';
+    a.uncollected = 1;
+    b.owner = 'player';
+    b.racket = 'speakeasy';
+    b.took = 50;
+    s.blockHeat[blockId(a)] = 45;
+    s.families.player.heat = 60;
+    const d = desk(s, []);
+    expect(d.map((n) => n.kind)).toEqual(expect.arrayContaining(['hq', 'heat', 'slipping', 'short']));
+    expect(d[0]).toMatchObject({ kind: 'hq', level: 'alarm' });
+    expect(d.find((n) => n.kind === 'heat')!.at).not.toBeNull();
+    // Hot blocks where we hold nothing aren't our business.
+    const quiet = createGame(14);
+    quiet.blockHeat[blockId(quiet.buildings.find((x) => x.owner === 'rival')!)] = 80;
+    expect(desk(quiet, []).filter((n) => n.kind === 'heat')).toEqual([]);
+  });
+  it('fills at month end and stays through planning', () => {
+    const s = createGame(14);
+    s.lessons.on = false;
+    s.families.player.heat = 100;
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    endMonth(s);
+    expect(s.notices.some((x) => x.kind === 'hq')).toBe(true);
+    startMonth(s);
+    expect(s.notices.some((x) => x.kind === 'hq')).toBe(true);
+  });
+});
+
+describe('the briefing', () => {
+  it('gives everyone the numbers against last month, and no advice without a consigliere', () => {
+    const s = createGame(14);
+    s.lessons.on = false;
+    for (let m = 0; m < 2; m++) {
+      startMonth(s);
+      let n = 0;
+      while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+      endMonth(s);
+    }
+    expect(s.briefing!.facts[0]).toMatch(/^Net for the month: .*\(last month /);
+    expect(s.briefing!.advice).toEqual([]);
+    expect(s.history.length).toBe(2);
+  });
+  it('a consigliere forecasts doors about to go quiet and reads where Calloway has been working', () => {
+    const s = createGame(14);
+    s.families.player.specialists.push('consigliere');
+    const b = s.buildings.find((x) => x.kind === 'shop' && !x.owner && !x.protectedBy)!;
+    b.protectedBy = 'player';
+    b.uncollected = 1;
+    const moved = { kind: 'rival' as const, level: 'alarm' as const, title: 'x', text: 'x', at: { x: b.x, y: b.y } };
+    brief(s, [moved]);
+    const second = brief(s, [moved]);
+    expect(second.advice.some((a) => a.text.includes('could go quiet') && a.confidence === 'Likely')).toBe(true);
+    expect(second.advice.some((a) => a.text.includes('two months running'))).toBe(true);
+    // Options, never orders: every line he gives is his view, and the facts stay facts.
+    expect(second.facts.length).toBeGreaterThan(0);
+  });
+});
+
+describe('a slow burn', () => {
+  it('Calloway only reaches for takeovers after real violence against him', () => {
+    const s = createGame(14);
+    const ours = s.buildings.find((b) => !b.owner && !b.protectedBy && b.kind === 'shop')!;
+    ours.owner = 'player';
+    s.families.rival.notice = true;
+    s.families.rival.cash = 9000;
+    s.month = 8;
+    const takeovers = () =>
+      s.people
+        .filter((p) => p.family === 'rival')
+        .flatMap((p) => p.jobs)
+        .filter((j) => j.kind === 'takeover').length;
+    for (let i = 0; i < 20; i++) planFamily(s, 'rival');
+    expect(takeovers()).toBe(0);
+    for (let i = 0; i < 20 && !takeovers(); i++) {
+      s.families.rival.provoked = 3;
+      planFamily(s, 'rival');
+    }
+    expect(takeovers()).toBeGreaterThan(0);
+  });
+});
+
+describe('guns', () => {
+  it('lieutenants need pistols too, not just their hoods', () => {
+    const s = createGame(14);
+    const before = gunHands(s, 'player');
+    expect(before).toBe(totalHoods(s, 'player'));
+    salAsLieutenant(s);
+    // Sal was a hood and is now a lieutenant: he still needs his pistol.
+    expect(gunHands(s, 'player')).toBe(before + 1);
+    expect(totalHoods(s, 'player')).toBe(before);
+  });
+});
+
 describe('the hiring hall', () => {
   it('hires a named hood into the boss crew', () => {
     const s = createGame(12);
@@ -162,7 +685,11 @@ describe('promotion and branches', () => {
       h.xp = PROMOTE_XP;
       s.families.player.actions = 5;
       bossAction(s, { kind: 'promote', hood: h.id });
-      s.market.push(...createGame(100 + i).market.slice(0, 1).map((m) => ({ ...m, id: `x${i}` })));
+      s.market.push(
+        ...createGame(100 + i)
+          .market.slice(0, 1)
+          .map((m) => ({ ...m, id: `x${i}` })),
+      );
     }
     expect(lieutenants(s, 'player').length).toBe(LT_CAP);
   });

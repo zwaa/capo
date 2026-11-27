@@ -3,10 +3,14 @@ import {
   DRAW_SCORE,
   WIN_SCORE,
   addJob,
+  setStance,
   answer,
+  ordersFor,
   assignBranch,
   bossAction,
   canAct,
+  fireHood,
+  forecast,
   changePlans,
   createGame,
   draftJob,
@@ -24,12 +28,36 @@ import {
   hoodCost,
   moveHood,
 } from '../sim/engine';
-import type { BossAction, Purchase } from '../sim/engine';
+import type { BossAction, JobPlan, Purchase } from '../sim/engine';
 import { LESSONS, advanceLessons, currentLesson } from '../sim/lessons';
 import { POOL, streetOf } from '../sim/setup';
-import type { Branch, Building, Card, GameState, Hood, Job, JobKind, Person, Posture, SpecialistKind } from '../sim/types';
+import type {
+  Branch,
+  Building,
+  Card,
+  FamilyId,
+  GameState,
+  Hood,
+  IdleOrder,
+  Job,
+  JobKind,
+  Person,
+  Posture,
+  Notice,
+  SpecialistKind,
+  Stance,
+} from '../sim/types';
 import {
   BRANCHES,
+  DAYS,
+  IDLE_ORDERS,
+  idleHoods,
+  blockBuildings,
+  blockId,
+  blockName,
+  building,
+  cap,
+  isHome,
   PROMOTE_XP,
   WAGE,
   crewOf,
@@ -37,6 +65,8 @@ import {
   has,
   hoodFirst,
   hoodLabel,
+  holder,
+  onTurf,
   squadNames,
   JOBS,
   LT_CAP,
@@ -59,14 +89,23 @@ import {
   rackets,
   targets,
   totalHoods,
+  gunHands,
   visible,
+  HQ_RAID_FROM,
+  allBlocks,
+  SLOW_HEAT,
+  heatAt,
+  STANCES,
+  moodOf,
 } from '../sim/util';
-import { WardMap } from './map';
+import { HEAT_SCALE, INCOME_SCALE, MAP_MODES, MOOD_SCALE, WEALTH_SCALE, WardMap, incomeLabel, moodStep, shortfall } from './map';
+import type { Step } from './map';
+import type { MapMode } from './map';
 
 // ---------------------------------------------------------------- state
 
 type Phase = 'paper' | 'orders' | 'watch' | 'plans' | 'over';
-const SAVE_KEY = 'capo-slice-v3';
+const SAVE_KEY = 'capo-slice-v11';
 const SPEEDS = [0, 1100, 550, 220];
 
 interface Hot {
@@ -81,6 +120,10 @@ let phase: Phase = 'paper';
 let speed = 2;
 let timer = 0;
 let note = '';
+/** Whose branches are open for changing (a person id), if anyone's. */
+let editing: string | null = null;
+/** A hood about to be let go: the button asks once more. */
+let firing: string | null = null;
 /** The job each person's "add a job" row is building. */
 const adding: Record<string, { kind: JobKind | ''; target: string }> = {};
 /** Draft job lists during a Change of Plans. */
@@ -94,10 +137,12 @@ app.innerHTML = `
     <div class="mapwrap">
       <canvas id="map" aria-label="Map of the ward"></canvas>
       <div class="tip" id="tip" hidden></div>
+      <div class="pick" id="pick" role="dialog" aria-label="Orders for this spot" hidden></div>
+      <div class="modes" id="modes" role="group" aria-label="Map mode"></div>
       <div class="legend">
         <span><i style="background:#e3a23b"></i>Russo</span>
         <span><i style="background:#5f9fb8"></i>Calloway</span>
-        <span class="key">Filled: owned · Striped awning: pays protection · S speakeasy · G gambling · D still · ■ telephone</span>
+        <span class="key" id="map-key"></span>
       </div>
     </div>
     <aside class="side" id="side"></aside>
@@ -109,16 +154,49 @@ let shownOverlay = '';
 const bar = document.getElementById('bar')!;
 const side = document.getElementById('side')!;
 const overlay = document.getElementById('overlay')!;
+const modesEl = document.getElementById('modes')!;
+const keyEl = document.getElementById('map-key')!;
+const MODE_KEY = 'capo-map-mode';
+
+/** Switch the map mode, and remember it on this browser (a convenience: it's fine if storage is off). */
+function setMode(m: MapMode): void {
+  map.mode = m;
+  try {
+    localStorage.setItem(MODE_KEY, m);
+  } catch {
+    // Storage blocked: the mode just won't be remembered.
+  }
+  renderModes();
+}
+
 const tip = document.getElementById('tip')!;
+const pickEl = document.getElementById('pick')!;
+/** What's picked on the map (for the orders menu), and where the click was. */
+let picked: { b: Building | null; p: Person | null; px: number; py: number } | null = null;
 const map = new WardMap(document.getElementById('map') as HTMLCanvasElement);
+try {
+  const m = localStorage.getItem(MODE_KEY);
+  if (MAP_MODES.some((x) => x.id === m)) map.mode = m as MapMode;
+} catch {
+  // Storage blocked: start on Turf.
+}
 
 // ---------------------------------------------------------------- helpers
 
-const esc = (t: string | number) => String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const esc = (t: string | number) =>
+  String(t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 const md = (t: string) => esc(t).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 const money = (n: number) => `${n < 0 ? '−' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0');
-const TRAIT: Record<string, string> = { hothead: 'Hothead', greedy: 'Greedy', cautious: 'Cautious', ambitious: 'Ambitious', oldworld: 'Old-world', loyal: 'Loyal', looselips: 'Loose lips' };
+const TRAIT: Record<string, string> = {
+  hothead: 'Hothead',
+  greedy: 'Greedy',
+  cautious: 'Cautious',
+  ambitious: 'Ambitious',
+  oldworld: 'Old-world',
+  loyal: 'Loyal',
+  looselips: 'Loose lips',
+};
 const POSTURES: Posture[] = ['quiet', 'firm', 'loud'];
 
 function mood(p: Person): { text: string; cls: string } {
@@ -130,7 +208,15 @@ function mood(p: Person): { text: string; cls: string } {
 }
 
 function statusOf(p: Person): string {
-  return p.status === 'active' ? '' : p.status === 'wounded' ? 'In hospital' : p.status === 'jailed' ? 'In a cell' : p.status === 'dead' ? 'Dead' : 'Gone over';
+  return p.status === 'active'
+    ? ''
+    : p.status === 'wounded'
+      ? 'In hospital'
+      : p.status === 'jailed'
+        ? 'In a cell'
+        : p.status === 'dead'
+          ? 'Dead'
+          : 'Gone over';
 }
 
 function save(): void {
@@ -154,6 +240,7 @@ function load(): GameState | null {
 
 function newGame(lessons = true): void {
   stop();
+  closePick();
   s = createGame((Math.random() * 2 ** 31) | 0, undefined, lessons);
   phase = 'paper';
   note = '';
@@ -166,17 +253,43 @@ function newGame(lessons = true): void {
 
 function renderBar(): void {
   const p = s.families.player;
-  const cash = p.ledger.map((l) => `<div class="row"><span>${esc(l.label)}</span><em class="${l.amount < 0 ? 'neg' : ''}">${l.amount ? money(l.amount) : '·'}</em></div>`).join('');
-  const heat = p.heatLog.map((l) => `<div class="row"><span>${esc(l.label)}</span><em class="${l.amount > 0 ? 'neg' : ''}">${signed(l.amount)}</em></div>`).join('');
+  const cash = p.ledger
+    .map(
+      (l) =>
+        `<div class="row"><span>${esc(l.label)}</span><em class="${l.amount < 0 ? 'neg' : ''}">${l.amount ? money(l.amount) : '·'}</em></div>`,
+    )
+    .join('');
+  // The blocks we do business on, hottest first.
+  const hotBlocks = allBlocks(s)
+    .filter((id) => blockBuildings(s, id).some((b) => holder(b) === 'player'))
+    .map((id) => ({ id, h: s.blockHeat[id] ?? 0 }))
+    .filter((x) => x.h > 0)
+    .sort((a, b) => b.h - a.h)
+    .slice(0, 4);
+  const hot = hotBlocks[0];
+  const heat = p.heatLog
+    .map((l) => `<div class="row"><span>${esc(l.label)}</span><em class="${l.amount > 0 ? 'neg' : ''}">${signed(l.amount)}</em></div>`)
+    .join('');
   bar.innerHTML = `
     <div class="logo">Capo<small>Vertical slice · v2</small></div>
     <div class="stat"><b>${esc(monthName(s.month))}</b><span>Month ${s.month + 1} of ${s.lastMonth + 1}</span></div>
     <div class="stat explain" tabindex="0"><b>${money(p.cash)}</b><span>Cash</span>
       <div class="why"><h4>${s.run ? 'This month so far' : 'Last month'}</h4>${cash || '<p>No money has moved yet.</p>'}</div></div>
-    <div class="stat explain" tabindex="0"><b>${p.heat}</b><span>Heat</span>
+    <div class="stat explain" tabindex="0"><b>${p.heat}${hot ? ` · ${hot.h}` : ''}</b><span>HQ heat${hot ? ' · hottest block' : ''}</span>
       <div class="heatbar"><i style="width:${p.heat}%"></i></div>
-      <div class="why"><h4>Why the heat is ${p.heat}</h4>${heat || '<p>Nothing new this month.</p>'}
-      <p style="margin-top:8px">High heat means raids. Raids shut rackets and catch people.</p></div></div>
+      <div class="why"><h4>Why HQ heat is ${p.heat}</h4>${heat || '<p>Nothing new this month.</p>'}
+      <p style="margin-top:8px">HQ heat is about the family itself: loose talk, the papers, complaints. Above ${HQ_RAID_FROM} the police may raid HQ.</p>
+      <h4 style="margin-top:10px">On our streets</h4>${
+        hotBlocks.length
+          ? hotBlocks
+              .map(
+                (x) =>
+                  `<div class="row"><span>${esc(cap(blockName(s, x.id)))}</span><em class="${x.h >= SLOW_HEAT ? 'neg' : ''}">${x.h}</em></div>`,
+              )
+              .join('')
+          : '<p>Quiet everywhere we do business.</p>'
+      }
+      <p style="margin-top:8px">Heat on a block brings raids on rackets there, and from ${SLOW_HEAT} slows every job there. See the Heat map.</p></div></div>
     <div class="stat explain" tabindex="0"><b>${owned(s, 'player').length} · ${protectedBy(s, 'player').length}</b><span>Owned · Paying</span>
       <div class="why"><h4>Your piece of the ward</h4><p>${owned(s, 'player').length} buildings owned, ${rackets(s, 'player').length} with a racket, ${protectedBy(s, 'player').length} shops paying protection.</p>
       <p style="margin-top:6px">Calloway: ${owned(s, 'rival').length} owned, ${rackets(s, 'rival').length} rackets, ${protectedBy(s, 'rival').length} paying.</p>
@@ -189,14 +302,40 @@ function renderBar(): void {
 
 // ---------------------------------------------------------------- job lists
 
-function jobStatus(j: Job, scope: string): { text: string; cls: string } {
+function jobStatus(j: Job, scope: string, plan?: JobPlan): { text: string; cls: string } {
   if (scope === 'plans') return { text: JOBS[j.kind].ongoing ? 'Ongoing' : 'One-off', cls: '' };
+  // Waiting for hands: the plan says when someone frees up to take it.
+  if (j.stalled && plan?.start && !JOBS[j.kind].ongoing) return { text: `Waits for free hands: ${when(plan)}`, cls: 'warn' };
+  if (j.stalled && /hands|Nobody free/.test(j.stalled) && !JOBS[j.kind].ongoing)
+    return { text: `${j.stalled}: not this month`, cls: 'bad' };
   if (j.stalled) return { text: j.stalled, cls: 'bad' };
   if (j.need === 0) return { text: JOBS[j.kind].ongoing ? 'Nothing to do yet' : 'Ready', cls: 'idle' };
   const car = j.car ? ' · car' : '';
   const who = squadNames(s, j);
   if (j.hoods < j.need) return { text: `${who}: ${j.hoods} of ${j.need} hands, only partly done${car}`, cls: 'warn' };
-  return { text: `${who}${car}`, cls: 'ok' };
+  const days = plan?.start && !JOBS[j.kind].ongoing ? ` · ${when(plan)}` : JOBS[j.kind].ongoing ? ' · all month' : '';
+  return { text: `${who}${car}${days}`, cls: 'ok' };
+}
+
+/** "days 3-8", "about day 12 to 19", "starts day 25, runs into next month". */
+function when(plan: JobPlan): string {
+  const { start, end } = plan;
+  if (!start || !end) return '';
+  if (end > DAYS) return `starts about day ${start}, runs into next month`;
+  return start === 1 ? `about days 1-${end}` : `about days ${start}-${end}`;
+}
+
+/** A line under the list: how much of the month this crew's plan fills. */
+function planSummary(p: Person, freeFrom: number[]): string {
+  if (!freeFrom.length) return '';
+  const idle = freeFrom.filter((d) => d < DAYS - 2);
+  if (!idle.length) return '<p class="plan-sum">Every pair of hands is busy all month.</p>';
+  const from = Math.min(...idle);
+  const n = idle.length;
+  const when = from ? `idle from about day ${from + 1}` : 'with nothing to do';
+  if (p.idle !== 'rest')
+    return `<p class="plan-sum">${n} of ${freeFrom.length} hands ${when}: they'll be ${IDLE_ORDERS[p.idle].doing}.</p>`;
+  return `<p class="plan-sum idle">${n} of ${freeFrom.length} hands ${when}. Add jobs below, or give them a standing order.</p>`;
 }
 
 // ---------------------------------------------------------------- hoods
@@ -213,28 +352,46 @@ function xpPips(h: Hood): string {
 }
 
 function hoodStatus(h: Hood): string {
-  return h.status === 'wounded' ? '<span class="chip warn">In hospital</span>' : h.status === 'jailed' ? '<span class="chip warn">In a cell</span>' : '';
+  return h.status === 'wounded'
+    ? '<span class="chip warn">In hospital</span>'
+    : h.status === 'jailed'
+      ? '<span class="chip warn">In a cell</span>'
+      : '';
 }
 
 /** One hood in a crew: stats, experience, whose crew, and a promotion when earned. */
 function hoodRow(h: Hood): string {
   const people = members(s, 'player');
-  const opts = people.map((p) => `<option value="${p.id}" ${h.under === p.id ? 'selected' : ''}>${esc(p.role === 'boss' ? `${first(p)}'s crew (you)` : `${first(p)}'s crew`)}</option>`).join('');
+  const opts = people
+    .map(
+      (p) =>
+        `<option value="${p.id}" ${h.under === p.id ? 'selected' : ''}>${esc(p.role === 'boss' ? `${first(p)}'s crew (you)` : `${first(p)}'s crew`)}</option>`,
+    )
+    .join('');
   const promote = h.xp >= PROMOTE_XP ? actButton({ kind: 'promote', hood: h.id }, 'Promote (1 meeting)') : '';
+  const fire = s.run
+    ? ''
+    : `<button class="small ${firing === h.id ? 'danger' : ''}" data-fire="${h.id}" title="They leave the family. A loose-lipped one talks.">${firing === h.id ? `Let ${esc(hoodFirst(h))} go?` : 'Let go'}</button>`;
   return `<div class="hood ${h.status === 'active' ? '' : 'out'}" title="${esc(h.bio)}">
     <div class="hn"><b>${esc(hoodLabel(h))}</b>
       <small>${statLine(h)}${h.traits.map((t) => ` · ${TRAIT[t]}`).join('')}</small></div>
     <div class="hx">${hoodStatus(h)}${xpPips(h)}</div>
-    <div class="hc">${people.length > 1 ? `<select data-movehood="${h.id}" aria-label="Whose crew ${esc(hoodFirst(h))} is in">${opts}</select>` : ''}${promote}</div>
+    <div class="hc">${people.length > 1 ? `<select data-movehood="${h.id}" aria-label="Whose crew ${esc(hoodFirst(h))} is in">${opts}</select>` : ''}${promote}${fire}</div>
   </div>`;
 }
 
 function jobList(p: Person, jobs: Job[], scope: 'orders' | 'plans'): string {
   const live = jobs.filter((j) => !j.done);
+  const fc = scope === 'orders' ? forecast(s, p) : null;
   const rows = live
     .map((j, i) => {
-      const st = jobStatus(j, scope);
-      return `<div class="job ${st.cls}">
+      const plan = fc?.jobs[j.id];
+      const st = jobStatus(j, scope, plan);
+      const bar =
+        plan?.start && plan.end
+          ? `<i class="when" style="left:${((plan.start - 1) / DAYS) * 100}%;width:${(Math.min(DAYS, plan.end) - plan.start + 1) * (100 / DAYS)}%" aria-hidden="true"></i>`
+          : '';
+      return `<div class="job ${st.cls}">${bar}
         <span class="rank">${i + 1}</span>
         <div class="jt"><b>${esc(jobTitle(s, j))}</b><small>${esc(st.text)}</small></div>
         <div class="jbtns">
@@ -246,14 +403,14 @@ function jobList(p: Person, jobs: Job[], scope: 'orders' | 'plans'): string {
       </div>`;
     })
     .join('');
-  return `<div class="jobs">${rows || '<p class="hint">No jobs. Add one below.</p>'}</div>${addRow(p, scope)}`;
+  return `<div class="jobs">${rows || '<p class="hint">No jobs. Add one below.</p>'}</div>${fc && live.length ? planSummary(p, fc.freeFrom) : ''}${addRow(p, scope)}`;
 }
 
 function addRow(p: Person, scope: string): string {
   const key = `${scope}:${p.id}`;
   const a = (adding[key] ??= { kind: '', target: '' });
   const mine = branchesOf(s, p);
-  if (!mine.length) return '<p class="hint">Give them a branch under Who runs what, and they can take jobs.</p>';
+  if (!mine.length) return '<p class="hint">Click their branches above to give them some, and they can take jobs.</p>';
   const kinds = mine
     .map((b) => {
       const info = BRANCHES.find((x) => x.id === b)!;
@@ -303,17 +460,35 @@ function personCard(p: Person): string {
     ${p.traits.length ? `<div class="chips">${p.traits.map((t) => `<span class="chip">${TRAIT[t]}</span>`).join('')}</div>` : ''}
     <div class="stats"><span>Muscle <b>${p.muscle}</b></span><span>Brains <b>${p.brains}</b></span><span>Nerve <b>${p.nerve}</b></span><span>Charm <b>${p.charm}</b></span></div>
     ${p.role === 'lt' ? `<div class="meter"><span>Ambition</span><div><i style="width:${p.ambition}%"></i></div></div>` : ''}
-    <div class="chips">${branches || '<span class="hint">No branches yet</span>'}</div>
+    ${p.role === 'lt' ? `<div class="lt-acts">${actButton({ kind: 'demote', lt: p.id }, 'Demote (1 meeting)', `title="Back to the street: branches and crew come to you. He won't like it."`)}</div>` : ''}
+    <button class="resp" data-act="branches" data-p="${p.id}" aria-expanded="${editing === p.id}">
+      <span class="chips">${branches || '<span class="hint">No branches yet</span>'}</span>
+      <span class="resp-edit">${editing === p.id ? 'Done' : 'Change'}</span>
+    </button>
+    ${editing === p.id ? branchEditor(p) : ''}
+    ${idleControl(p)}
     ${demand}
     ${jobList(p, p.jobs, 'orders')}
     ${hoods}
   </div>`;
 }
 
+/** The standing order for this person's idle hoods. */
+function idleControl(p: Person): string {
+  const orders = Object.keys(IDLE_ORDERS) as IdleOrder[];
+  return `<div class="idle-order"><span>When idle</span><span class="seg" role="group" aria-label="What ${esc(first(p))}'s idle hoods do">${orders
+    .map(
+      (o) =>
+        `<button data-idle="${p.id}|${o}" aria-pressed="${p.idle === o}" title="${esc(IDLE_ORDERS[o].hint)}">${esc(IDLE_ORDERS[o].label)}</button>`,
+    )
+    .join('')}</span></div>`;
+}
+
 function lessonCard(): string {
   if (!s.lessons.on) return '';
   const l = currentLesson(s);
-  if (!l) return `<section class="lesson"><h3>Lessons</h3><p class="hint">All ${LESSONS.length} lessons done. The rest of the year is yours.</p></section>`;
+  if (!l)
+    return `<section class="lesson"><h3>Lessons</h3><p class="hint">All ${LESSONS.length} lessons done. The rest of the year is yours.</p></section>`;
   return `<section class="lesson">
     <div class="lesson-head"><h3>Lesson ${s.lessons.index + 1} of ${LESSONS.length}</h3><button class="link" data-act="lessons-off">Turn lessons off</button></div>
     <h2>${esc(l.title)}</h2>
@@ -336,30 +511,52 @@ function candidates(): string {
     .join('')}</section>`;
 }
 
-function whoRunsWhat(): string {
+/**
+ * Who runs what, opened from a person's branches. On the boss's card every
+ * branch can go to anyone; on a lieutenant's, each branch is theirs or not.
+ */
+function branchEditor(p: Person): string {
   const fam = s.families.player;
   const people = members(s, 'player');
   const areas = [...new Set(BRANCHES.map((b) => b.area))];
-  return `<section>
-    <h3>Who runs what</h3>
-    <p class="hint">Each branch is run by you or a lieutenant (up to ${MAX_BRANCHES} each). Its jobs move with it. A lieutenant whose stats suit the branch works its jobs faster and safer.</p>
+  const mineCount = branchesOf(s, p).length;
+  const control = (b: (typeof BRANCHES)[number]): string => {
+    if (p.role === 'lt') {
+      const theirs = fam.branches[b.id] === p.id;
+      const full = !theirs && mineCount >= MAX_BRANCHES;
+      const now = person(s, fam.branches[b.id])!;
+      return `<button class="small" data-branch-give="${p.id}|${b.id}" ${full ? `disabled title="${esc(first(p))} already runs ${MAX_BRANCHES}"` : ''}>${
+        theirs ? 'Take it back' : `Give to ${esc(first(p))}${now.role === 'lt' ? ` (from ${esc(first(now))})` : ''}`
+      }</button>`;
+    }
+    const opts = people
+      .map((x) => {
+        const full = x.role === 'lt' && branchesOf(s, x).length >= MAX_BRANCHES && fam.branches[b.id] !== x.id;
+        const tag = x.role === 'boss' ? ' (you)' : full ? ' (full)' : x.status !== 'active' ? ` (${statusOf(x).toLowerCase()})` : '';
+        return `<option value="${x.id}" ${fam.branches[b.id] === x.id ? 'selected' : ''} ${full ? 'disabled' : ''}>${esc(first(x))}${tag}</option>`;
+      })
+      .join('');
+    return `<select data-branch="${b.id}" aria-label="Who runs ${esc(b.label)}">${opts}</select>`;
+  };
+  const runsIt = (b: (typeof BRANCHES)[number]) => fam.branches[b.id] === p.id;
+  return `<div class="resp-panel">
+    <p class="hint">${
+      p.role === 'boss'
+        ? 'Every branch is run by you or a lieutenant (up to ' + MAX_BRANCHES + ' each). Its jobs move with it.'
+        : `${esc(first(p))} can run up to ${MAX_BRANCHES} branches. Their jobs move with them, and stats that suit a branch work its jobs faster and safer.`
+    }</p>
+    ${note ? `<p class="hint" style="color:var(--lamp)">${esc(note)}</p>` : ''}
     <div class="branches">${areas
       .map(
-        (area) => `<div class="area"><h4>${esc(area)}</h4>${BRANCHES.filter((b) => b.area === area)
-          .map((b) => {
-            const opts = people
-              .map((p) => {
-                const full = p.role === 'lt' && branchesOf(s, p).length >= MAX_BRANCHES && fam.branches[b.id] !== p.id;
-                const tag = p.role === 'boss' ? ' (you)' : full ? ' (full)' : p.status !== 'active' ? ` (${statusOf(p).toLowerCase()})` : '';
-                return `<option value="${p.id}" ${fam.branches[b.id] === p.id ? 'selected' : ''} ${full ? 'disabled' : ''}>${esc(first(p))}${tag}</option>`;
-              })
-              .join('');
-            return `<label class="branch"><span><b>${esc(b.label)}</b><small>${esc(b.blurb)}. Suits ${b.stat}.</small></span><select data-branch="${b.id}" aria-label="Who runs ${esc(b.label)}">${opts}</select></label>`;
-          })
-          .join('')}</div>`,
+        (area) =>
+          `<div class="area"><h4>${esc(area)}</h4>${BRANCHES.filter((b) => b.area === area)
+            .map((b) => {
+              return `<div class="branch ${runsIt(b) ? 'mine' : ''}"><span><b>${esc(b.label)}</b><small>${esc(b.blurb)}. Suits ${b.stat}.</small></span>${control(b)}</div>`;
+            })
+            .join('')}</div>`,
       )
       .join('')}</div>
-  </section>`;
+  </div>`;
 }
 
 function supplies(): string {
@@ -384,10 +581,16 @@ function supplies(): string {
   </section>
   <section>
     <h3>Supplies</h3>
-    ${row('gun', 'Pistols', `${fam.guns} for ${hoods} hoods${fam.guns < hoods ? ': some go in bare-handed' : ': everyone is armed'}.`)}
+    ${row('gun', 'Pistols', `${fam.guns} for ${armedOf(hoods)}${fam.guns < gunHands(s, 'player') ? ': some go in bare-handed' : ': everyone is armed'}.`)}
     ${row('car', 'Cars', `${fam.cars} in the garage. Hits, takeovers and supply runs need one each.`)}
     <div class="supply"><span><b>Liquor</b><small>${fam.liquor} cases. Bars pour 15 a month each; stills make 25.</small></span></div>
   </section>`;
+}
+
+/** "5 hoods and 2 lieutenants": who the pistols have to go round. */
+function armedOf(hoods: number): string {
+  const lts = lieutenants(s, 'player').length;
+  return `${hoods} hood${hoods === 1 ? '' : 's'}${lts ? ` and ${lts} lieutenant${lts === 1 ? '' : 's'}` : ''}`;
 }
 
 function meetings(): string {
@@ -405,7 +608,7 @@ function meetings(): string {
     ${note ? `<p class="hint" style="color:var(--lamp)">${esc(note)}</p>` : ''}
     <div class="meeting"><span><b>Promote a lieutenant</b><small>${lieutenants(s, 'player').length} of ${LT_CAP}. Lieutenants come from your own hoods: anyone with ${PROMOTE_XP} experience can be promoted from their row in a crew. ${ready ? `${ready} ready now.` : 'Nobody is ready yet.'}</small></span></div>
     <h4 class="sub">Specialists</h4>
-    ${(['recruiter', 'armourer', 'mechanic', 'lawyer'] as SpecialistKind[]).map(spec).join('')}
+    ${(['consigliere', 'recruiter', 'armourer', 'mechanic', 'lawyer'] as SpecialistKind[]).map(spec).join('')}
     ${lts.length ? `<div class="meeting"><span><b>An envelope</b><small>Loyalty up. ${money(REWARD_COST)}.</small></span><select id="reward-lt" aria-label="Who gets the envelope">${lts.map((l) => `<option value="${l.id}">${esc(first(l))}</option>`).join('')}</select>${actButton({ kind: 'reward', lt: lts[0].id }, 'Give', 'data-pickreward="1"')}</div>` : ''}
   </section>`;
 }
@@ -414,11 +617,11 @@ function renderOrders(): string {
   const people = members(s, 'player');
   const rivals = members(s, 'rival');
   return `
+    ${deskPanel()}
     ${lessonCard()}
     <section><h2>Orders for ${esc(monthName(s.month))}</h2>
       <p class="hint">Each person works down their own list. Hands go to the jobs at the top first, and jobs that get nobody stall. Ongoing jobs carry over each month; one-off jobs drop off when they're done.</p></section>
     ${candidates()}
-    ${whoRunsWhat()}
     <section><h3>Your people</h3>${people.map(personCard).join('')}</section>
     ${supplies()}
     ${meetings()}
@@ -447,11 +650,25 @@ function renderWatch(): string {
           .map((j) => {
             const info = JOBS[j.kind];
             const pct = info.ongoing ? (j.stalled || !j.hoods ? 0 : 100) : Math.min(100, (j.progress / Math.max(1, j.days)) * 100);
-            const st = j.done ? 'Done' : j.stalled ? j.stalled : info.ongoing ? (j.hoods ? 'All month' : 'Nothing to do') : j.progress ? `Day ${j.progress} of ${j.days}` : 'On the way';
+            const st = j.done
+              ? 'Done'
+              : j.stalled
+                ? j.stalled
+                : info.ongoing
+                  ? j.hoods
+                    ? 'All month'
+                    : 'Nothing to do'
+                  : j.progress
+                    ? `Day ${j.progress} of ${j.days}`
+                    : 'On the way';
             return `<div class="wjob ${j.stalled ? 'bad' : ''}"><span>${esc(jobTitle(s, j))}</span><small>${esc(st)}</small><div class="bar"><i style="width:${pct}%"></i></div></div>`;
           })
           .join('');
-        return `<div class="lt ${p.status === 'active' ? '' : 'out'}"><div class="lt-head"><span class="lt-name">${esc(first(p))}</span><span class="chip">${statusOf(p) || `crew ${crewSize(s, p)} + 1`}</span></div>${p.pending ? `<span class="hint">Runner arrives day ${p.pending.arriveDay}</span>` : ''}${jobs || '<span class="hint">No jobs</span>'}</div>`;
+        const idle = p.status === 'active' ? idleHoods(s, p) : [];
+        const loafing = idle.length
+          ? `<span class="hint">${esc(idle.map(hoodFirst).join(', '))}: ${p.idle === 'rest' ? 'nothing to do' : IDLE_ORDERS[p.idle].doing}</span>`
+          : '';
+        return `<div class="lt ${p.status === 'active' ? '' : 'out'}"><div class="lt-head"><span class="lt-name">${esc(first(p))}</span><span class="chip">${statusOf(p) || `crew ${crewSize(s, p)} + 1`}</span></div>${p.pending ? `<span class="hint">Runner arrives day ${p.pending.arriveDay}</span>` : ''}${jobs || '<span class="hint">No jobs</span>'}${loafing}</div>`;
       })
       .join('')}</section>
     <section><h3>The word</h3><div class="ticker">${
@@ -460,7 +677,9 @@ function renderWatch(): string {
         .reverse()
         .filter((e) => e.family !== 'rival' || /took|driven|hit|raid|gone over|muscled|new orders|wrecked|taken in/i.test(e.text))
         .slice(0, 14)
-        .map((e) => `<p class="${e.family ?? 'none'}"><span>d${e.day}</span>${esc(e.family === 'rival' ? `Calloway: ${e.text}` : e.text)}</p>`)
+        .map(
+          (e) => `<p class="${e.family ?? 'none'}"><span>d${e.day}</span>${esc(e.family === 'rival' ? `Calloway: ${e.text}` : e.text)}</p>`,
+        )
         .join('') || '<p class="none"><span></span>Quiet so far.</p>'
     }</div></section>`;
 }
@@ -504,18 +723,24 @@ function renderEdition(): string {
     </div>
     <div class="stories">
       ${lead ? `<article class="story lead"><h2>${esc(lead.headline)}</h2><p>${esc(lead.body)}</p></article>` : ''}
-      ${rest.slice(0, 4).map((n) => `<article class="story"><h2>${esc(n.headline)}</h2><p>${esc(n.body)}</p></article>`).join('')}
+      ${rest
+        .slice(0, 4)
+        .map((n) => `<article class="story"><h2>${esc(n.headline)}</h2><p>${esc(n.body)}</p></article>`)
+        .join('')}
     </div>
     <div class="cols">
       <div class="wire"><h3>The Wire</h3>${s.wire.length ? s.wire.map((w) => `<p><em>${w.confidence}</em>${esc(w.text)}</p>`).join('') : '<p>Your informants heard nothing worth repeating.</p>'}</div>
       <div class="ledger"><h3>The Ledger</h3>${
         p.ledger.length
-          ? p.ledger.map((x) => `<p><span>${esc(x.label)}</span><em>${x.amount ? money(x.amount) : '·'}</em></p>`).join('') + `<p class="total"><span>Net</span><em>${money(total)}</em></p>`
+          ? p.ledger.map((x) => `<p><span>${esc(x.label)}</span><em>${x.amount ? money(x.amount) : '·'}</em></p>`).join('') +
+            `<p class="total"><span>Net</span><em>${money(total)}</em></p>`
           : `<p>${money(p.cash)} in an envelope, two cousins and two pistols. A rented room on ${esc(streetOf({ y: bossOf(s, 'player').homeY }))}.</p>`
       }</div>
       <div class="trouble"><h3>Trouble at home</h3>${trouble.length ? trouble.map((x) => `<p>${esc(label(x))} ${esc(x.demand!.text)}.</p>`).join('') : '<p>Nobody is asking for anything. Yet.</p>'}
       ${l ? `<p><b>Lesson ${s.lessons.index + 1}:</b> ${esc(l.title)}. ${esc(l.goal)}.</p>` : ''}</div>
     </div>
+    ${paperBrief()}
+    ${paperDesk()}
     <button class="primary go" data-act="to-work">To work</button>
   </div>`;
 }
@@ -539,7 +764,12 @@ function renderPlans(): string {
 
 function renderOver(): string {
   const o = s.over!;
-  const verdict = o.result === 'win' ? 'A family to be reckoned with' : o.result === 'draw' ? 'A small outfit, still standing' : 'Back to the rented room';
+  const verdict =
+    o.result === 'win'
+      ? 'A family to be reckoned with'
+      : o.result === 'draw'
+        ? 'A small outfit, still standing'
+        : 'Back to the rented room';
   return `<div class="paper over" role="dialog" aria-modal="true" aria-labelledby="over-title">
     <div class="masthead"><div class="dateline"><span>Final edition</span><span>${esc(monthName(Math.min(s.month, s.lastMonth)))}</span></div></div>
     <h1 id="over-title">${esc(o.headline)}</h1>
@@ -574,12 +804,49 @@ function renderOverlay(): void {
   if (html && fresh && narrow.matches) window.scrollTo({ top: 0 });
 }
 
+/** The map-mode switcher, and a legend that says what the current mode shows. */
+function renderModes(): void {
+  modesEl.innerHTML = MAP_MODES.map(
+    (m) => `<button data-mode="${m.id}" aria-pressed="${map.mode === m.id}" title="${esc(m.key)}">${esc(m.label)}</button>`,
+  ).join('');
+  const mode = MAP_MODES.find((m) => m.id === map.mode)!;
+  let key = mode.key;
+  if (map.mode === 'income') {
+    const ours = s.buildings.filter((b) => holder(b) === 'player');
+    const took = ours.reduce((n, b) => n + b.took, 0);
+    const short = ours.filter((b) => shortfall(b)).length;
+    key = `Last month our places took ${money(took)}${short ? ` · ${short} came up short` : ''} (before wages and cuts) · ${key}`;
+  }
+  if (map.mode === 'wealth' || map.mode === 'income' || map.mode === 'heat' || map.mode === 'mood')
+    key += ' · Outlines: who holds each place (solid: owns it, dashed: pays them)';
+  const scale = (steps: Step[]) =>
+    `<span class="scale">${steps.map((x) => `<span><i style="background:${x.colour}"></i>${esc(x.label)}</span>`).join('')}</span>`;
+  keyEl.innerHTML =
+    (map.mode === 'wealth'
+      ? scale(WEALTH_SCALE)
+      : map.mode === 'income'
+        ? scale(INCOME_SCALE)
+        : map.mode === 'heat'
+          ? scale(HEAT_SCALE)
+          : map.mode === 'mood'
+            ? scale(MOOD_SCALE)
+            : '') + `<span>${esc(key)}</span>`;
+  const legend = keyEl.parentElement!;
+  // Measured only while the map is on screen (on a phone the newspaper hides it, and everything measures zero).
+  if (legend.offsetParent) map.keepClear(modesEl.offsetTop + modesEl.offsetHeight, legend.offsetHeight + 12);
+}
+
 function render(): void {
   map.setState(s);
+  renderModes();
   map.showOrders = phase === 'orders';
+  map.notices = phase === 'orders' || phase === 'paper' ? onDesk() : [];
   renderBar();
   side.innerHTML = phase === 'watch' || phase === 'plans' ? renderWatch() : renderOrders();
   renderOverlay();
+  // The map menu follows the game: refreshed between months, gone when paperwork covers the map.
+  if (picked && (phase === 'orders' || phase === 'watch')) renderPick();
+  else if (picked) closePick();
 }
 
 // ---------------------------------------------------------------- the clock
@@ -653,6 +920,69 @@ document.addEventListener('click', (e) => {
   if (!el || el.disabled) return;
   const d = el.dataset;
   const scope = d.scope ?? 'orders';
+
+  // Orders given from the map menu.
+  if (d.pickAdd) {
+    const [runner, kind, target] = d.pickAdd.split('|');
+    note = addJob(s, runner, kind as JobKind, target) ? '' : 'That order could not be given.';
+    advanceLessons(s);
+    save();
+    return render();
+  }
+  if (d.pickDel) {
+    const [who, job] = d.pickDel.split('|');
+    removeJob(s, who, job);
+    save();
+    return render();
+  }
+  if (d.act === 'pick-close') return closePick();
+  if (d.mode) return setMode(d.mode as MapMode);
+  if (d.noteShow) return showNotice(Number(d.noteShow));
+  if (d.noteHide) {
+    dismissed.add(`${s.month}:${d.noteHide}`);
+    return render();
+  }
+  if (d.act === 'desk-all') {
+    deskAll = !deskAll;
+    return render();
+  }
+  if (d.stance) {
+    const [id, stance] = d.stance.split('|');
+    setStance(s, 'player', id, stance as Stance);
+    save();
+    return render();
+  }
+  if (d.fire) {
+    if (firing !== d.fire) {
+      firing = d.fire;
+      return render();
+    }
+    firing = null;
+    note = fireHood(s, 'player', d.fire) ?? '';
+    save();
+    return render();
+  }
+  if (firing && !d.fire) firing = null;
+  if (d.idle) {
+    const [who, order] = d.idle.split('|');
+    const p = person(s, who);
+    if (p && p.family === 'player') p.idle = order as IdleOrder;
+    save();
+    return render();
+  }
+  if (d.act === 'branches' && d.p) {
+    editing = editing === d.p ? null : d.p;
+    note = '';
+    return render();
+  }
+  if (d.branchGive) {
+    const [who, branch] = d.branchGive.split('|');
+    const theirs = s.families.player.branches[branch as Branch] === who;
+    note = assignBranch(s, 'player', branch as Branch, theirs ? s.families.player.bossId : who) ?? '';
+    advanceLessons(s);
+    save();
+    return render();
+  }
 
   if (d.jposture && d.p && d.j) {
     if (scope === 'plans') {
@@ -753,7 +1083,10 @@ document.addEventListener('click', (e) => {
       const changed: Record<string, Job[]> = {};
       for (const [id, list] of Object.entries(plans)) {
         const p = person(s, id);
-        const before = p?.jobs.filter((j) => !j.done).map((j) => `${j.id}:${j.posture}`).join();
+        const before = p?.jobs
+          .filter((j) => !j.done)
+          .map((j) => `${j.id}:${j.posture}`)
+          .join();
         if (p && before !== list.map((j) => `${j.id}:${j.posture}`).join()) changed[id] = list;
       }
       if (Object.keys(changed).length) changePlans(s, changed);
@@ -765,10 +1098,19 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('pointerdown', (e) => {
-  if (!(e.target as HTMLElement).closest('canvas')) tip.hidden = true;
+  const t = e.target as HTMLElement;
+  if (!t.closest('canvas')) tip.hidden = true;
+  if (picked && !t.closest('canvas, #pick')) closePick();
 });
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && picked) return closePick();
+  // M cycles the map modes (not while typing in a field).
+  if ((e.key === 'm' || e.key === 'M') && !(e.target as HTMLElement).closest('select, input, textarea')) {
+    const i = MAP_MODES.findIndex((m) => m.id === map.mode);
+    setMode(MAP_MODES[(i + 1) % MAP_MODES.length].id);
+    return;
+  }
   if (e.code !== 'Space' || phase !== 'watch' || s.run?.queue.length) return;
   if ((e.target as HTMLElement).closest('select, button, input')) return;
   e.preventDefault();
@@ -778,27 +1120,314 @@ document.addEventListener('keydown', (e) => {
 });
 
 map.onHover = (b: Building | null, p: Person | null, px: number, py: number) => {
-  if (!b && !p) {
+  if ((!b && !p) || picked) {
     tip.hidden = true;
     return;
   }
-  let html = '';
-  if (p) {
-    const top = p.jobs.find((j) => !j.done && !j.stalled && j.hoods);
-    html += `<b>${esc(label(p))}</b>${p.family === 'rival' ? 'Calloway Outfit' : 'Russo family'} · crew ${p.family === 'player' ? crewSize(s, p) : 'unknown'}${top && p.family === 'player' ? `<br>${esc(jobTitle(s, top))}` : ''}`;
-  }
-  if (b) {
-    const who = b.owner === 'player' ? 'Ours' : b.owner === 'rival' ? "Calloway's" : b.protectedBy === 'player' ? 'Pays us protection' : b.protectedBy === 'rival' ? 'Pays Calloway protection' : 'Independent';
-    html += `${html ? '<hr style="border:0;border-top:1px solid #bbb;margin:6px 0">' : ''}<b>${esc(b.name)}</b>${esc(streetOf(b))}<br>${who}<br>
-      ${b.racket ? `Back room: ${b.racket}${b.raided ? ' (shut by a raid)' : ''}` : `Could hold a ${b.suits}`}<br>
-      ${b.owner ? '' : `Protection: ${money(b.protection)} a month<br>`}${!b.owner && b.protectedBy !== 'rival' ? `To buy: ${money(price(b, 'player'))}<br>` : ''}${b.telephone ? 'Telephone line' : ''}`;
-  }
-  tip.innerHTML = html;
+  tip.innerHTML = describe(b, p);
   tip.hidden = false;
   const wrap = tip.parentElement!.getBoundingClientRect();
   tip.style.left = `${Math.max(4, Math.min(px + 14, wrap.width - 250))}px`;
   tip.style.top = `${Math.max(4, Math.min(py + 14, wrap.height - 150))}px`;
 };
+
+// ---------------------------------------------------------------- orders from the map
+
+const ORDER_VERB: Partial<Record<JobKind, string>> = {
+  signup: 'Sign them up for protection',
+  beat: 'Pay off the beat cops here',
+  charity: 'Charity on this block',
+  intimidate: 'Put the fear into this block',
+  badmouth: 'Bad-mouth Calloway here',
+  block: 'Sign up the whole block',
+  guard: 'Guard it',
+  hit: 'Hit them',
+  wreck: 'Wreck the back room',
+  buy: 'Buy it',
+  takeover: 'Take it over',
+  fitout: 'Fit out a back room',
+  phone: 'Put in a telephone',
+};
+
+function closePick(): void {
+  picked = null;
+  map.selected = null;
+  map.selectedBlock = null;
+  pickEl.hidden = true;
+}
+
+/** Info about what was clicked, plus the orders that make sense there (between months only). */
+function renderPick(): void {
+  if (!picked) return;
+  const { b, p, px, py } = picked;
+  let html = `<button class="ic close" data-act="pick-close" aria-label="Close">✕</button><div class="pick-info">${describe(b, p)}</div>`;
+  const blk = b ? blockId(b) : null;
+  if (phase === 'orders') {
+    const ids = [b?.id, p && p.family === 'rival' ? p.id : undefined].filter((x): x is string => !!x);
+    const orders = ids.flatMap((id) => ordersFor(s, id));
+    html += orders.length ? orderRows(orders) : '<p class="hint">Nothing to order here right now.</p>';
+  } else if (phase === 'watch') {
+    html += '<p class="hint">Orders are given between months. Use a Change of Plans if something comes up.</p>';
+  }
+  // The block around it: who it pays, and (between months) the order to sign up the lot.
+  if (blk) {
+    const bo = phase === 'orders' ? ordersFor(s, blk) : [];
+    html += `<div class="pick-block"><div class="pick-info"><b>${esc(cap(blockName(s, blk)))}</b>${blockSummary(blk)}</div>${bo.length ? orderRows(bo) : ''}</div>`;
+  }
+  pickEl.innerHTML = html;
+  pickEl.hidden = false;
+  // Keep it inside the map, next to the click.
+  const wrap = pickEl.parentElement!.getBoundingClientRect();
+  const w = pickEl.offsetWidth;
+  const h = pickEl.offsetHeight;
+  pickEl.style.left = `${Math.max(4, Math.min(px + 14, wrap.width - w - 4))}px`;
+  pickEl.style.top = `${Math.max(4, Math.min(py + 14, wrap.height - h - 4))}px`;
+}
+
+/** Who a block pays: "6 homes, 2 shops · 3 pay us, 1 pays Calloway, 4 pay nobody". */
+function blockSummary(id: string): string {
+  const bs = blockBuildings(s, id);
+  const homes = bs.filter(isHome).length;
+  const n = (f: 'player' | 'rival' | null) => bs.filter((b) => holder(b) === f).length;
+  const parts = [n('player') && `${n('player')} ours`, n('rival') && `${n('rival')} Calloway's`, n(null) && `${n(null)} pay nobody`].filter(
+    Boolean,
+  );
+  const free = bs.filter((b) => !holder(b)).reduce((t, b) => t + b.protection, 0);
+  return `${homes} homes, ${bs.length - homes} shops<br>${parts.join(' · ')}${free ? `<br>Up for grabs: ${money(free)} a month` : ''}${
+    map.mode === 'income' ? blockBooks(bs) : map.mode === 'heat' ? blockHeatWhy(id) : map.mode === 'mood' ? blockMoodWhy(id) : ''
+  }${stanceControl(id)}`;
+}
+
+/** Our stance on a block we hold something on: what we do there month in, month out. */
+function stanceControl(id: string): string {
+  if (!blockBuildings(s, id).some((b) => holder(b) === 'player')) return '';
+  const now = s.families.player.stances[id] ?? 'firm';
+  const buttons = (Object.keys(STANCES) as Stance[])
+    .map(
+      (k) =>
+        `<button data-stance="${id}|${k}" aria-pressed="${now === k}" title="${esc(STANCES[k].hint)}">${esc(STANCES[k].label)}</button>`,
+    )
+    .join('');
+  return `<div class="stance"><span>Stance here</span><span class="seg" role="group" aria-label="Our stance on this block">${buttons}</span><small>${esc(STANCES[now].hint)}</small></div>`;
+}
+
+/** On the Mood map: how a block feels about each family, and what moved it since last month began. */
+function blockMoodWhy(id: string): string {
+  const us = moodOf(s, 'player', id);
+  const them = moodOf(s, 'rival', id);
+  const rows = s.moodLog
+    .filter((l) => l.block === id)
+    .map(
+      (l) =>
+        `<div class="books-row"><span>${esc(l.label)}<small>${l.family === 'player' ? 'Our' : "Calloway's"} ${l.dial}</small></span><em>${signed(l.amount)}</em></div>`,
+    );
+  return `<div class="books"><b>Us: fear ${us.fear}, goodwill ${us.goodwill} (${esc(moodStep(us).label.toLowerCase())})</b><small>Calloway: fear ${them.fear}, goodwill ${them.goodwill}</small>${rows.join('') || '<small>Nothing new.</small>'}</div>`;
+}
+
+/** On the Heat map: how hot a block is, and what moved it since last month began. */
+function blockHeatWhy(id: string): string {
+  const h = s.blockHeat[id] ?? 0;
+  const who = (f: FamilyId | null) => (f === 'player' ? 'us' : f === 'rival' ? 'Calloway' : '');
+  const rows = s.blockHeatLog
+    .filter((l) => l.block === id)
+    .map(
+      (l) =>
+        `<div class="books-row ${l.amount > 0 ? 'short' : ''}"><span>${esc(l.label)}${who(l.family) ? `<small>${esc(who(l.family))}</small>` : ''}</span><em>${signed(l.amount)}</em></div>`,
+    );
+  const effect =
+    h >= SLOW_HEAT ? 'Jobs here take a day longer; rackets here risk raids.' : h ? 'Rackets here risk raids.' : 'No police to speak of.';
+  return `<div class="books"><b>Heat ${h}</b><small>${effect}</small>${rows.join('') || '<small>Nothing new.</small>'}</div>`;
+}
+
+/** Lines for the tooltip: police on the block, and how it feels about us. */
+function heatLine(b: Building): string {
+  const h = heatAt(s, b);
+  const m = moodOf(s, 'player', b);
+  return `${h ? `Block heat ${h}${h >= SLOW_HEAT ? ': jobs here slower' : ''}<br>` : ''}${
+    m.fear || m.goodwill ? `The block: ${moodStep(m).label.toLowerCase()} (fear ${m.fear}, goodwill ${m.goodwill})<br>` : ''
+  }`;
+}
+
+/** On the Income map: what each of our places in a block took last month, and why any came up short. */
+function blockBooks(bs: Building[]): string {
+  const ours = bs.filter((b) => holder(b) === 'player').sort((a, b) => b.took - a.took);
+  if (!ours.length) return '';
+  const rows = ours.map((b) => {
+    const l = incomeLabel(b);
+    const why = shortfall(b) ?? (l.kind === 'new' ? 'new: nothing due yet' : l.kind === 'still' ? 'makes liquor for the bars' : '');
+    return `<div class="books-row ${l.kind}"><span>${esc(b.name)}${why ? `<small>${esc(why)}</small>` : ''}</span><em>${esc(l.text === 'new' || l.text === 'still' ? '·' : l.text)}</em></div>`;
+  });
+  return `<div class="books"><b>Last month</b>${rows.join('')}</div>`;
+}
+
+/** The order buttons in the map menu. */
+function orderRows(orders: ReturnType<typeof ordersFor>): string {
+  return `<div class="pick-orders">${orders
+    .map((o) => {
+      const runner = person(s, o.runner)!;
+      const who = runner.role === 'boss' ? 'you' : first(runner);
+      const branch = BRANCHES.find((x) => x.id === JOBS[o.kind].branch)!.label;
+      const target = building(s, o.target) ?? null;
+      const extra = o.kind === 'buy' && target ? ` (${money(price(target, 'player'))})` : '';
+      const title = ORDER_VERB[o.kind] ?? JOBS[o.kind].label;
+      if (o.queued) {
+        const q = person(s, o.queued.person)!;
+        const qj = q.jobs.find((j) => j.id === o.queued!.job);
+        return `<div class="po queued"><span><b>${esc(title)}</b><small>On ${esc(q.role === 'boss' ? 'your' : `${first(q)}'s`)} list${qj?.stalled ? `: ${esc(qj.stalled)}` : ''}</small></span>
+              <button class="small" data-pick-del="${q.id}|${o.queued.job}">Cancel</button></div>`;
+      }
+      return `<div class="po"><span><b>${esc(title)}${esc(extra)}</b><small>${esc(branch)}, by ${esc(who)}.<span class="po-hint"> ${esc(JOBS[o.kind].hint)}</span></small></span>
+            <button class="small" data-pick-add="${o.runner}|${o.kind}|${o.target}">Order</button></div>`;
+    })
+    .join('')}</div>`;
+}
+
+map.onPick = (b: Building | null, p: Person | null, px: number, py: number) => {
+  if (!b && !p) return closePick();
+  tip.hidden = true;
+  picked = { b, p, px, py };
+  map.selected = b ?? p;
+  map.selectedBlock = b ? blockId(b) : null;
+  renderPick();
+};
+
+/** The details shown on hover and at the top of the orders menu. */
+// ---------------------------------------------------------------- the desk
+
+/** Notices dismissed this session (by month and index): they leave the desk and the map. */
+const dismissed = new Set<string>();
+/** Show every notice on the desk, not just the first few. */
+let deskAll = false;
+/** How many notices the desk shows before "show all". */
+const DESK_SHOWN = 6;
+const LEVEL_WORD: Record<Notice['level'], string> = { alarm: 'Urgent', warn: 'Soon', info: 'Note' };
+/** Which map mode shows a notice best. */
+const NOTICE_MODE: Record<Notice['kind'], MapMode> = {
+  heat: 'heat',
+  hq: 'heat',
+  raid: 'heat',
+  stopped: 'income',
+  slipping: 'income',
+  short: 'income',
+  rival: 'turf',
+};
+
+/** The notices still on the desk, with their index in s.notices. */
+function onDesk(): (Notice & { i: number })[] {
+  return s.notices.map((n, i) => ({ ...n, i })).filter((n) => !dismissed.has(`${s.month}:${n.i}`));
+}
+
+/** Show a notice: switch to the map mode that explains it, and pulse the place. */
+function showNotice(i: number): void {
+  const n = s.notices[i];
+  if (!n) return;
+  setMode(NOTICE_MODE[n.kind]);
+  if (n.at) map.focus(n.at);
+  if (narrow.matches) window.scrollTo({ top: 0, behavior: 'smooth' });
+  render();
+}
+
+function noticeRow(n: Notice & { i: number }, controls: boolean): string {
+  return `<div class="note ${n.level}"><i aria-hidden="true">!</i><span><b>${esc(n.title)}</b><small>${esc(n.text)}</small></span>${
+    controls
+      ? `<span class="note-acts">${n.at ? `<button class="small" data-note-show="${n.i}">Show</button>` : ''}<button class="ic" data-note-hide="${n.i}" aria-label="Dismiss" title="Done with it">✕</button></span>`
+      : `<span class="note-level">${LEVEL_WORD[n.level]}</span>`
+  }</div>`;
+}
+
+/** The consigliere's lines, with how sure he is. */
+function adviceRows(): string {
+  const b = s.briefing;
+  if (!b?.advice.length) return '';
+  const who = SPECIALISTS.consigliere.name.split(' ').at(-1);
+  return `<div class="advice"><h4>${esc(who!)} says</h4>${b.advice
+    .map((a) => `<p>${a.confidence ? `<em>${a.confidence}</em>` : ''}${esc(a.text)}</p>`)
+    .join('')}</div>`;
+}
+
+/** In the Morning Edition: the month in numbers, and the consigliere's reading if we have one. */
+function paperBrief(): string {
+  const b = s.briefing;
+  if (!b) return '';
+  return `<div class="paper-brief"><div><h3>The month in numbers</h3>${b.facts.map((f) => `<p>${esc(f)}</p>`).join('')}</div>${
+    adviceRows() ||
+    `<div class="advice none"><h3>No consigliere</h3><p>Nobody reads these numbers for you. A consigliere would (Meetings).</p></div>`
+  }</div>`;
+}
+
+/** On the orders screen: what last month left on the desk. */
+function deskPanel(): string {
+  const all = onDesk();
+  if (!s.notices.length && !s.briefing) return '';
+  const numbers = s.briefing ? `<div class="desk-facts">${s.briefing.facts.map((f) => `<p>${esc(f)}</p>`).join('')}</div>` : '';
+  if (!s.notices.length)
+    return `<section class="desk"><h3>On your desk</h3>${numbers}${adviceRows()}<p class="hint">Nothing else.</p></section>`;
+  const shown = deskAll ? all : all.slice(0, DESK_SHOWN);
+  return `<section class="desk"><h3>On your desk (${all.length})</h3>${numbers}${adviceRows()}${
+    all.length
+      ? shown.map((n) => noticeRow(n, true)).join('') +
+        (all.length > DESK_SHOWN
+          ? `<button class="link" data-act="desk-all">${deskAll ? 'Show fewer' : `Show all ${all.length}`}</button>`
+          : '')
+      : '<p class="hint">All dealt with.</p>'
+  }</section>`;
+}
+
+/** In the Morning Edition: the desk, briefly. */
+function paperDesk(): string {
+  if (!s.notices.length) return '';
+  const all = onDesk();
+  return `<div class="paper-desk"><h3>On your desk</h3>${all
+    .slice(0, DESK_SHOWN)
+    .map((n) => noticeRow(n, false))
+    .join(
+      '',
+    )}${all.length > DESK_SHOWN ? `<p class="more">And ${all.length - DESK_SHOWN} more, waiting when you get to work.</p>` : ''}</div>`;
+}
+
+/** Notices about a place, for its tooltip. */
+function noticesAt(b: Building): string {
+  const here = onDesk().filter((n) => n.at && n.at.x === b.x && n.at.y === b.y);
+  return here.map((n) => `<span class="turf far">${esc(n.title)}</span>`).join('');
+}
+
+function describe(b: Building | null, p: Person | null): string {
+  let html = '';
+  if (p) {
+    const top = p.jobs.find((j) => !j.done && !j.stalled && j.hoods);
+    html += `<b>${esc(label(p))}</b>${p.family === 'rival' ? 'Calloway Outfit' : 'Russo family'} · crew ${p.family === 'player' ? crewSize(s, p) : 'unknown'}${top && p.family === 'player' ? `<br>${esc(jobTitle(s, top))}` : ''}`;
+  }
+  if (b && isHome(b)) {
+    const pays = b.protectedBy === 'player' ? 'Pays us protection' : b.protectedBy === 'rival' ? 'Pays Calloway protection' : 'Pays nobody';
+    html += `${html ? '<hr style="border:0;border-top:1px solid #bbb;margin:6px 0">' : ''}<b>${esc(b.name)}</b>${esc(b.front)}, ${esc(streetOf(b))}<br>${pays}<br>Protection: ${money(b.protection)} a month<br>${heatLine(b)}`;
+    if (holder(b) !== 'player') {
+      html += onTurf(s, 'player', b, b.id)
+        ? '<span class="turf near">Next to our turf: easier to sign up</span>'
+        : '<span class="turf far">Off our turf: harder and slower to sign up</span>';
+    }
+  } else if (b) {
+    const who =
+      b.owner === 'player'
+        ? 'Ours'
+        : b.owner === 'rival'
+          ? "Calloway's"
+          : b.protectedBy === 'player'
+            ? 'Pays us protection'
+            : b.protectedBy === 'rival'
+              ? 'Pays Calloway protection'
+              : 'Independent';
+    html += `${html ? '<hr style="border:0;border-top:1px solid #bbb;margin:6px 0">' : ''}<b>${esc(b.name)}</b>${esc(streetOf(b))}<br>${who}<br>
+      ${b.racket ? `Back room: ${b.racket}${b.raided ? ' (shut by a raid)' : ''}` : `Could hold a ${b.suits}`}<br>
+      ${b.owner ? '' : `Protection: ${money(b.protection)} a month<br>`}${!b.owner && b.protectedBy !== 'rival' ? `To buy: ${money(price(b, 'player'))}<br>` : ''}${b.telephone ? 'Telephone line<br>' : ''}${heatLine(b)}`;
+    if (holder(b) !== 'player') {
+      html += onTurf(s, 'player', b, b.id)
+        ? '<span class="turf near">Next to our turf: easier to sign up</span>'
+        : '<span class="turf far">Off our turf: harder and slower to sign up</span>';
+    }
+  }
+  if (b) html += noticesAt(b);
+  return html;
+}
 
 // ---------------------------------------------------------------- boot
 
@@ -819,4 +1448,3 @@ function start(data?: Hot['data']): void {
 hot?.snapshot?.(() => ({ save: JSON.stringify(s), phase }));
 if (hot?.ready) hot.ready(start);
 else start(hot?.data);
-

@@ -16,7 +16,11 @@
       "extensions": ["anthropic.claude-code", "dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "vitest.explorer"],
       "settings": {
         "terminal.integrated.defaultProfile.linux": "zsh",
-        "files.eol": "\n"
+        "files.eol": "\n",
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "eslint.workingDirectories": ["prototype"],
+        "prettier.prettierPath": "prototype/node_modules/prettier"
       }
     }
   },

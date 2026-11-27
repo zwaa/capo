@@ -1,12 +1,12 @@
 import { chance, int, pick, shuffle } from './rng';
 import type { RngHolder } from './rng';
 import type { Branch, Building, FamilyId, GameState, Hood, Job, JobKind, Person, Posture, Racket, Trait } from './types';
-import { BRANCHES } from './util';
+import { BRANCHES, LIKED_MOOD, STREET_NAMES, dist } from './util';
 
 export const WIDTH = 12;
 export const HEIGHT = 8;
 
-export const STREETS = ['Kessler Street', 'Canal Street', 'Orchard Avenue', 'Foundry Row', 'Larkin Street', 'Mercer Avenue', 'Tallow Lane', 'Dock Road'];
+export const STREETS = STREET_NAMES;
 
 const FRONTS: { front: string; suits: Racket }[] = [
   { front: 'Café', suits: 'speakeasy' },
@@ -31,24 +31,149 @@ const FRONTS: { front: string; suits: Racket }[] = [
   { front: 'Cooperage', suits: 'still' },
 ];
 
-const SURNAMES = ['Novak', 'Rosa', 'Fenwick', 'Albrecht', 'Costa', 'Kaminski', 'Lindqvist', 'Moretti', 'Okafor', 'Pruitt', 'Quinlan', 'Sorensen', 'Tedesco', 'Vance', 'Weiss', 'Zielinski', 'Brandt', 'Healy', 'Ivanov', 'Murphy'];
+const HOMES = ['Tenement', 'Rowhouses', 'Boarding House', 'Walk-up', 'Tenement'];
+
+const SURNAMES = [
+  'Novak',
+  'Rosa',
+  'Fenwick',
+  'Albrecht',
+  'Costa',
+  'Kaminski',
+  'Lindqvist',
+  'Moretti',
+  'Okafor',
+  'Pruitt',
+  'Quinlan',
+  'Sorensen',
+  'Tedesco',
+  'Vance',
+  'Weiss',
+  'Zielinski',
+  'Brandt',
+  'Healy',
+  'Ivanov',
+  'Murphy',
+];
 
 // ---------------------------------------------------------------- hood names
 
 const FIRST = [
-  'Tony', 'Vinnie', 'Joey', 'Paulie', 'Sammy', 'Mo', 'Izzy', 'Patsy', 'Augie', 'Dom', 'Gus', 'Hymie', 'Rocco', 'Sid', 'Carmine',
-  'Mae', 'Dot', 'Lil', 'Kitty', 'Red', 'Mikey', 'Charlie', 'Willie', 'Jack', 'Danny', 'Abe', 'Nate', 'Ruby', 'Pearl', 'Stan',
-  'Walt', 'Otto', 'Pete', 'Al', 'Bruno', 'Enzo', 'Harry', 'Max', 'Rose', 'Nell', 'Jimmy', 'Phil', 'Lenny', 'Marty', 'Sol',
+  'Tony',
+  'Vinnie',
+  'Joey',
+  'Paulie',
+  'Sammy',
+  'Mo',
+  'Izzy',
+  'Patsy',
+  'Augie',
+  'Dom',
+  'Gus',
+  'Hymie',
+  'Rocco',
+  'Sid',
+  'Carmine',
+  'Mae',
+  'Dot',
+  'Lil',
+  'Kitty',
+  'Red',
+  'Mikey',
+  'Charlie',
+  'Willie',
+  'Jack',
+  'Danny',
+  'Abe',
+  'Nate',
+  'Ruby',
+  'Pearl',
+  'Stan',
+  'Walt',
+  'Otto',
+  'Pete',
+  'Al',
+  'Bruno',
+  'Enzo',
+  'Harry',
+  'Max',
+  'Rose',
+  'Nell',
+  'Jimmy',
+  'Phil',
+  'Lenny',
+  'Marty',
+  'Sol',
 ];
 const LAST = [
-  'Caruso', 'Lombardi', 'Esposito', 'Kelly', 'Gallagher', 'Rourke', 'Shapiro', 'Goldberg', 'Nowak', 'Petrov', 'Rizzo', 'Ferraro',
-  'Donnelly', 'Sweeney', 'Abramowitz', 'Mancini', 'Greco', 'Levine', 'Hart', 'Boyle', 'Murray', 'Szabo', 'Horvat', 'Dunn',
-  'Costello', 'Fiore', 'Brennan', 'Walsh', 'Katz', 'Lindgren', 'Bauer', 'Vitale', 'Romano', 'Feeney', 'Klein', 'Sokol',
+  'Caruso',
+  'Lombardi',
+  'Esposito',
+  'Kelly',
+  'Gallagher',
+  'Rourke',
+  'Shapiro',
+  'Goldberg',
+  'Nowak',
+  'Petrov',
+  'Rizzo',
+  'Ferraro',
+  'Donnelly',
+  'Sweeney',
+  'Abramowitz',
+  'Mancini',
+  'Greco',
+  'Levine',
+  'Hart',
+  'Boyle',
+  'Murray',
+  'Szabo',
+  'Horvat',
+  'Dunn',
+  'Costello',
+  'Fiore',
+  'Brennan',
+  'Walsh',
+  'Katz',
+  'Lindgren',
+  'Bauer',
+  'Vitale',
+  'Romano',
+  'Feeney',
+  'Klein',
+  'Sokol',
 ];
 export const NICKS = [
-  'Two Times', 'the Ear', 'Shoes', 'Lefty', 'Specs', 'Bananas', 'Ice', 'the Kid', 'Moon', 'Dimes', 'the Barber', 'Spats', 'Sugar',
-  'Mumbles', 'Feathers', 'the Mule', 'Cheese', 'Pockets', 'Sunday', 'Peanuts', 'the Priest', 'Gloves', 'Socks', 'Whispers', 'Blue',
-  'Tick-Tock', 'Fingers', 'the Hat', 'Lucky', 'Doc',
+  'Two Times',
+  'the Ear',
+  'Shoes',
+  'Lefty',
+  'Specs',
+  'Bananas',
+  'Ice',
+  'the Kid',
+  'Moon',
+  'Dimes',
+  'the Barber',
+  'Spats',
+  'Sugar',
+  'Mumbles',
+  'Feathers',
+  'the Mule',
+  'Cheese',
+  'Pockets',
+  'Sunday',
+  'Peanuts',
+  'the Priest',
+  'Gloves',
+  'Socks',
+  'Whispers',
+  'Blue',
+  'Tick-Tock',
+  'Fingers',
+  'the Hat',
+  'Lucky',
+  'Doc',
 ];
 const BIOS = [
   'Drove a milk wagon until the horse died.',
@@ -100,14 +225,56 @@ export function makeHood(h: RngHolder, id: string, family: FamilyId, under: stri
  * three turn up through the lessons; the rest can appear in the hiring hall.
  */
 export const POOL: { name: string; nickname: string; s: [number, number, number, number]; traits: Trait[]; pitch: string }[] = [
-  { name: 'Sal Benedetto', nickname: 'the Torch', s: [7, 3, 8, 3], traits: ['hothead', 'greedy'], pitch: 'Ran collections for your uncle. Good with his hands. Too good, some say.' },
-  { name: 'Rosa Marchetti', nickname: 'Velvet', s: [4, 6, 6, 8], traits: ['ambitious', 'oldworld'], pitch: 'Ran the bar at the Orchard Avenue social club for ten years. Knows everyone, remembers everything.' },
-  { name: 'Mickey Doyle', nickname: 'Ledger', s: [4, 8, 4, 6], traits: ['cautious', 'loyal'], pitch: 'An ex-clerk at the precinct house. Knows which captain takes what.' },
+  {
+    name: 'Sal Benedetto',
+    nickname: 'the Torch',
+    s: [7, 3, 8, 3],
+    traits: ['hothead', 'greedy'],
+    pitch: 'Ran collections for your uncle. Good with his hands. Too good, some say.',
+  },
+  {
+    name: 'Rosa Marchetti',
+    nickname: 'Velvet',
+    s: [4, 6, 6, 8],
+    traits: ['ambitious', 'oldworld'],
+    pitch: 'Ran the bar at the Orchard Avenue social club for ten years. Knows everyone, remembers everything.',
+  },
+  {
+    name: 'Mickey Doyle',
+    nickname: 'Ledger',
+    s: [4, 8, 4, 6],
+    traits: ['cautious', 'loyal'],
+    pitch: 'An ex-clerk at the precinct house. Knows which captain takes what.',
+  },
   { name: 'Lou Fenwick', nickname: 'the Ox', s: [8, 2, 6, 3], traits: ['loyal'], pitch: 'Strong, steady, not much for conversation.' },
-  { name: 'Tommy Quinlan', nickname: 'Silk', s: [3, 6, 5, 8], traits: ['greedy', 'ambitious'], pitch: 'Could sell a stove in July. Watch your wallet.' },
-  { name: 'Ada Kaminski', nickname: 'Ledgers', s: [3, 9, 4, 5], traits: ['cautious'], pitch: 'Ran the numbers for the Polish club. Never wrote anything down.' },
-  { name: 'Joe Tedesco', nickname: 'Matches', s: [6, 4, 8, 3], traits: ['hothead', 'looselips'], pitch: 'Fearless. Also talks in his sleep, and when awake.' },
-  { name: 'Irving Weiss', nickname: 'the Professor', s: [2, 8, 4, 7], traits: ['oldworld', 'loyal'], pitch: 'A former schoolteacher with debts and a gift for figures.' },
+  {
+    name: 'Tommy Quinlan',
+    nickname: 'Silk',
+    s: [3, 6, 5, 8],
+    traits: ['greedy', 'ambitious'],
+    pitch: 'Could sell a stove in July. Watch your wallet.',
+  },
+  {
+    name: 'Ada Kaminski',
+    nickname: 'Ledgers',
+    s: [3, 9, 4, 5],
+    traits: ['cautious'],
+    pitch: 'Ran the numbers for the Polish club. Never wrote anything down.',
+  },
+  {
+    name: 'Joe Tedesco',
+    nickname: 'Matches',
+    s: [6, 4, 8, 3],
+    traits: ['hothead', 'looselips'],
+    pitch: 'Fearless. Also talks in his sleep, and when awake.',
+  },
+  {
+    name: 'Irving Weiss',
+    nickname: 'the Professor',
+    s: [2, 8, 4, 7],
+    traits: ['oldworld', 'loyal'],
+    pitch: 'A former schoolteacher with debts and a gift for figures.',
+  },
 ];
 
 export function notableHood(i: number, id: string, family: FamilyId, under: string): Hood {
@@ -135,7 +302,23 @@ export const isLot = (x: number, y: number) => x % 4 !== 0 && y % 3 !== 0;
 export const streetOf = (b: { y: number }) => STREETS[b.y % STREETS.length];
 
 export function blankJob(id: string, kind: JobKind, target: string | null = null, posture: Posture = 'firm'): Job {
-  return { id, kind, target, posture, need: 0, hoods: 0, squad: [], car: false, stalled: null, progress: 0, days: 0, done: false, x: 0, y: 0, checked: false };
+  return {
+    id,
+    kind,
+    target,
+    posture,
+    need: 0,
+    hoods: 0,
+    squad: [],
+    car: false,
+    stalled: null,
+    progress: 0,
+    days: 0,
+    done: false,
+    x: 0,
+    y: 0,
+    checked: false,
+  };
 }
 
 export function makePerson(
@@ -173,6 +356,7 @@ export function makePerson(
     pending: null,
     demand: null,
     ownBuilding: null,
+    idle: 'rest',
     plotting: false,
     wins: 0,
   };
@@ -181,12 +365,17 @@ export function makePerson(
 /** Three hoods looking for work this month (four with a recruiter, and better). */
 export function freshMarket(s: GameState): void {
   const good = s.families.player.specialists.includes('recruiter');
-  const n = good ? 4 : 3;
+  // Blocks that like us send their sons: one liked block, one more hood; two, better ones.
+  const liked = Object.values(s.mood).filter((m) => (m.player?.goodwill ?? 0) >= LIKED_MOOD).length;
+  const n = (good ? 4 : 3) + (liked >= 1 ? 1 : 0);
+  const bonus = (good ? 1 : 0) + (liked >= 2 ? 1 : 0);
   s.market = [];
-  for (let i = 0; i < n; i++) s.market.push(makeHood(s, `h${s.nextId++}`, 'player', '', good ? 1 : 0));
+  for (let i = 0; i < n; i++) s.market.push(makeHood(s, `h${s.nextId++}`, 'player', '', bonus));
   // Now and then a notable turns up (when lessons aren't handing them out).
   if (!s.lessons.on && chance(s, 0.2)) {
-    const free = POOL.map((_, i) => i).filter((i) => !s.hoods.some((h) => h.name === POOL[i].name) && !s.people.some((p) => p.name === POOL[i].name));
+    const free = POOL.map((_, i) => i).filter(
+      (i) => !s.hoods.some((h) => h.name === POOL[i].name) && !s.people.some((p) => p.name === POOL[i].name),
+    );
     if (free.length) s.market.push(notableHood(pick(s, free), `h${s.nextId++}`, 'player', ''));
   }
 }
@@ -204,6 +393,7 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
 
   const buildings: Building[] = lots.slice(0, 20).map((p, i) => ({
     id: `b${i}`,
+    kind: 'shop' as const,
     name: `${names[i]}'s ${fronts[i].front}`,
     front: fronts[i].front,
     suits: fronts[i].suits,
@@ -216,6 +406,8 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
     telephone: false,
     raided: false,
     uncollected: 0,
+    took: 0,
+    refused: false,
   }));
 
   // The boss starts in a rented room in the west; Calloway owns the east.
@@ -230,6 +422,31 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
   Object.assign(den, { owner: 'rival', racket: 'gambling' });
   for (const b of east.filter((b) => !b.owner).slice(0, 4)) b.protectedBy = 'rival';
 
+  // Every other lot is a home: tenements and rowhouses. They pay a little protection each,
+  // and Calloway already collects from the ones on his doorstep.
+  const held = buildings.filter((b) => b.owner || b.protectedBy);
+  free.forEach((p, i) => {
+    const front = pick(h, HOMES);
+    buildings.push({
+      id: `r${i}`,
+      kind: 'home',
+      name: `${front} at ${int(h, 2, 60) * 2} ${STREETS[p.y % STREETS.length]}`,
+      front,
+      suits: 'speakeasy',
+      x: p.x,
+      y: p.y,
+      protection: int(h, 1, 3) * 10,
+      protectedBy: p !== home && held.some((b) => dist(b, p) <= 1) ? 'rival' : null,
+      owner: null,
+      racket: null,
+      telephone: false,
+      raided: false,
+      uncollected: 0,
+      took: 0,
+      refused: false,
+    });
+  });
+
   const boss = makePerson('boss', 'player', 'boss', bossName, 'the Nephew', [5, 5, 5, 5], [], home);
   const rboss = makePerson('calloway', 'rival', 'boss', 'Jim Calloway', 'Big Jim', [6, 6, 6, 5], ['oldworld'], hq);
   const dutch = makePerson('dutch', 'rival', 'lt', 'Dutch Brennan', 'Knuckles', [8, 3, 7, 2], ['hothead'], hq);
@@ -242,18 +459,47 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
 
   // Your two cousins. They've done a bit of work for Aldo.
   const vito: Hood = {
-    id: `h${nextId++}`, name: 'Vito Russo', nickname: 'Shoes', family: 'player', under: 'boss',
-    muscle: 6, brains: 3, nerve: 5, charm: 3, traits: ['hothead'], loyalty: 75, xp: 2, status: 'active', recover: 0,
+    id: `h${nextId++}`,
+    name: 'Vito Russo',
+    nickname: 'Shoes',
+    family: 'player',
+    under: 'boss',
+    muscle: 6,
+    brains: 3,
+    nerve: 5,
+    charm: 3,
+    traits: ['hothead'],
+    loyalty: 75,
+    xp: 2,
+    status: 'active',
+    recover: 0,
     bio: 'Your cousin. Shined shoes outside the courthouse; knows every cop by his feet.',
   };
   const carlo: Hood = {
-    id: `h${nextId++}`, name: 'Carlo Russo', nickname: '', family: 'player', under: 'boss',
-    muscle: 3, brains: 5, nerve: 4, charm: 6, traits: ['loyal'], loyalty: 80, xp: 2, status: 'active', recover: 0,
+    id: `h${nextId++}`,
+    name: 'Carlo Russo',
+    nickname: '',
+    family: 'player',
+    under: 'boss',
+    muscle: 3,
+    brains: 5,
+    nerve: 4,
+    charm: 6,
+    traits: ['loyal'],
+    loyalty: 80,
+    xp: 2,
+    status: 'active',
+    recover: 0,
     bio: 'Your other cousin. Sold insurance, the legal kind, until nobody bought it.',
   };
   // Calloway's men: an established outfit with seasoned crews.
   const hoods: Hood[] = [vito, carlo];
-  for (const [under, n] of [['calloway', 2], ['dutch', 4], ['eddie', 3], ['frankie', 3]] as const) {
+  for (const [under, n] of [
+    ['calloway', 2],
+    ['dutch', 4],
+    ['eddie', 3],
+    ['frankie', 3],
+  ] as const) {
     for (let i = 0; i < n; i++) {
       const x = makeHood(h, `h${nextId++}`, 'rival', under, under === 'dutch' ? 1 : 0);
       x.xp = int(h, 1, 3);
@@ -289,6 +535,7 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
         cash: 300,
         heat: 0,
         heatLog: [],
+        stances: {},
         ledger: [],
         actions: 2,
         actionDebt: 0,
@@ -299,6 +546,7 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
         specialists: [],
         captain: false,
         grudge: false,
+        provoked: 0,
         notice: false,
       },
       rival: {
@@ -308,6 +556,7 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
         cash: 1500,
         heat: 15,
         heatLog: [],
+        stances: {},
         ledger: [],
         actions: 2,
         actionDebt: 0,
@@ -318,6 +567,7 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
         specialists: ['armourer'],
         captain: false,
         grudge: false,
+        provoked: 0,
         notice: false,
       },
     },
@@ -341,6 +591,13 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
     nextId,
     candidates: [],
     lessons: { on: true, index: 0 },
+    blockHeat: {},
+    blockHeatLog: [],
+    mood: {},
+    notices: [],
+    briefing: null,
+    history: [],
+    moodLog: [],
     stats: { fights: 0, changes: 0, demandsSeen: 0, raids: 0 },
   };
   return state;
