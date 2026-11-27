@@ -105,7 +105,7 @@ import type { MapMode } from './map';
 // ---------------------------------------------------------------- state
 
 type Phase = 'paper' | 'orders' | 'watch' | 'plans' | 'over';
-const SAVE_KEY = 'capo-slice-v10';
+const SAVE_KEY = 'capo-slice-v11';
 const SPEEDS = [0, 1100, 550, 220];
 
 interface Hot {
@@ -608,7 +608,7 @@ function meetings(): string {
     ${note ? `<p class="hint" style="color:var(--lamp)">${esc(note)}</p>` : ''}
     <div class="meeting"><span><b>Promote a lieutenant</b><small>${lieutenants(s, 'player').length} of ${LT_CAP}. Lieutenants come from your own hoods: anyone with ${PROMOTE_XP} experience can be promoted from their row in a crew. ${ready ? `${ready} ready now.` : 'Nobody is ready yet.'}</small></span></div>
     <h4 class="sub">Specialists</h4>
-    ${(['recruiter', 'armourer', 'mechanic', 'lawyer'] as SpecialistKind[]).map(spec).join('')}
+    ${(['consigliere', 'recruiter', 'armourer', 'mechanic', 'lawyer'] as SpecialistKind[]).map(spec).join('')}
     ${lts.length ? `<div class="meeting"><span><b>An envelope</b><small>Loyalty up. ${money(REWARD_COST)}.</small></span><select id="reward-lt" aria-label="Who gets the envelope">${lts.map((l) => `<option value="${l.id}">${esc(first(l))}</option>`).join('')}</select>${actButton({ kind: 'reward', lt: lts[0].id }, 'Give', 'data-pickreward="1"')}</div>` : ''}
   </section>`;
 }
@@ -739,6 +739,7 @@ function renderEdition(): string {
       <div class="trouble"><h3>Trouble at home</h3>${trouble.length ? trouble.map((x) => `<p>${esc(label(x))} ${esc(x.demand!.text)}.</p>`).join('') : '<p>Nobody is asking for anything. Yet.</p>'}
       ${l ? `<p><b>Lesson ${s.lessons.index + 1}:</b> ${esc(l.title)}. ${esc(l.goal)}.</p>` : ''}</div>
     </div>
+    ${paperBrief()}
     ${paperDesk()}
     <button class="primary go" data-act="to-work">To work</button>
   </div>`;
@@ -1331,12 +1332,35 @@ function noticeRow(n: Notice & { i: number }, controls: boolean): string {
   }</div>`;
 }
 
+/** The consigliere's lines, with how sure he is. */
+function adviceRows(): string {
+  const b = s.briefing;
+  if (!b?.advice.length) return '';
+  const who = SPECIALISTS.consigliere.name.split(' ').at(-1);
+  return `<div class="advice"><h4>${esc(who!)} says</h4>${b.advice
+    .map((a) => `<p>${a.confidence ? `<em>${a.confidence}</em>` : ''}${esc(a.text)}</p>`)
+    .join('')}</div>`;
+}
+
+/** In the Morning Edition: the month in numbers, and the consigliere's reading if we have one. */
+function paperBrief(): string {
+  const b = s.briefing;
+  if (!b) return '';
+  return `<div class="paper-brief"><div><h3>The month in numbers</h3>${b.facts.map((f) => `<p>${esc(f)}</p>`).join('')}</div>${
+    adviceRows() ||
+    `<div class="advice none"><h3>No consigliere</h3><p>Nobody reads these numbers for you. A consigliere would (Meetings).</p></div>`
+  }</div>`;
+}
+
 /** On the orders screen: what last month left on the desk. */
 function deskPanel(): string {
   const all = onDesk();
-  if (!s.notices.length) return '';
+  if (!s.notices.length && !s.briefing) return '';
+  const numbers = s.briefing ? `<div class="desk-facts">${s.briefing.facts.map((f) => `<p>${esc(f)}</p>`).join('')}</div>` : '';
+  if (!s.notices.length)
+    return `<section class="desk"><h3>On your desk</h3>${numbers}${adviceRows()}<p class="hint">Nothing else.</p></section>`;
   const shown = deskAll ? all : all.slice(0, DESK_SHOWN);
-  return `<section class="desk"><h3>On your desk (${all.length})</h3>${
+  return `<section class="desk"><h3>On your desk (${all.length})</h3>${numbers}${adviceRows()}${
     all.length
       ? shown.map((n) => noticeRow(n, true)).join('') +
         (all.length > DESK_SHOWN

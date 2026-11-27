@@ -31,6 +31,7 @@ import {
   startMonth,
   stepDay,
 } from '../src/sim/engine';
+import { brief } from '../src/sim/brief';
 import { LESSONS } from '../src/sim/lessons';
 import { blankJob, freshMarket, isLot } from '../src/sim/setup';
 import type { GameState } from '../src/sim/types';
@@ -564,6 +565,36 @@ describe('the desk', () => {
     expect(s.notices.some((x) => x.kind === 'hq')).toBe(true);
     startMonth(s);
     expect(s.notices.some((x) => x.kind === 'hq')).toBe(true);
+  });
+});
+
+describe('the briefing', () => {
+  it('gives everyone the numbers against last month, and no advice without a consigliere', () => {
+    const s = createGame(14);
+    s.lessons.on = false;
+    for (let m = 0; m < 2; m++) {
+      startMonth(s);
+      let n = 0;
+      while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+      endMonth(s);
+    }
+    expect(s.briefing!.facts[0]).toMatch(/^Net for the month: .*\(last month /);
+    expect(s.briefing!.advice).toEqual([]);
+    expect(s.history.length).toBe(2);
+  });
+  it('a consigliere forecasts doors about to go quiet and reads where Calloway has been working', () => {
+    const s = createGame(14);
+    s.families.player.specialists.push('consigliere');
+    const b = s.buildings.find((x) => x.kind === 'shop' && !x.owner && !x.protectedBy)!;
+    b.protectedBy = 'player';
+    b.uncollected = 1;
+    const moved = { kind: 'rival' as const, level: 'alarm' as const, title: 'x', text: 'x', at: { x: b.x, y: b.y } };
+    brief(s, [moved]);
+    const second = brief(s, [moved]);
+    expect(second.advice.some((a) => a.text.includes('could go quiet') && a.confidence === 'Likely')).toBe(true);
+    expect(second.advice.some((a) => a.text.includes('two months running'))).toBe(true);
+    // Options, never orders: every line he gives is his view, and the facts stay facts.
+    expect(second.facts.length).toBeGreaterThan(0);
   });
 });
 

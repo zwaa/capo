@@ -319,6 +319,55 @@ button {
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
+.paper-brief {
+  border-top: 1px solid var(--paper-ink);
+  padding-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 12px 22px;
+}
+.paper-brief h3,
+.advice h4 {
+  margin: 0 0 6px;
+  font: 700 12px var(--head);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.paper-brief p {
+  margin: 0 0 4px;
+  font: 12.5px/1.4 var(--type);
+}
+.advice p {
+  margin: 0 0 6px;
+  font: 13px/1.45 var(--type);
+}
+.advice em {
+  font-style: normal;
+  font: 700 10px var(--head);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 1px 4px;
+  border: 1px solid currentColor;
+  margin-right: 6px;
+  opacity: 0.8;
+}
+.paper-brief .advice {
+  background: #ded5c1;
+  padding: 10px 12px;
+}
+.paper-brief .advice.none p {
+  color: var(--paper-dim);
+}
+.desk .advice {
+  background: var(--paper);
+  color: var(--paper-ink);
+  padding: 10px 12px;
+}
+.desk-facts p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dim);
+}
 .paper-desk {
   border-top: 1px solid var(--paper-ink);
   padding-top: 12px;

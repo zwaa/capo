@@ -166,6 +166,11 @@ export const GRIP_PULL = 0.3;
 export const GRIP_HOLD = 0.3;
 /** A dial at least this high counts: a feared or liked block keeps paying a month longer when nobody collects, each. */
 export const LOYAL_MOOD = 40;
+/** Months a door goes uncollected before it may stop paying: two, plus one each if the block fears or likes its holder. */
+export function patience(s: GameState, f: FamilyId, b: Building): number {
+  const m = moodOf(s, f, b);
+  return 2 + (m.fear >= LOYAL_MOOD ? 1 : 0) + (m.goodwill >= LOYAL_MOOD ? 1 : 0);
+}
 /** Each month fear fades by this much, goodwill by this much, and goodwill by one for every HEAT_SOURS of block heat. */
 export const FEAR_FADE = 2;
 export const GOODWILL_FADE = 1;
@@ -599,6 +604,12 @@ export const SPECIALISTS: Record<SpecialistKind, { name: string; title: string; 
   },
   armourer: { name: 'Ziggy Novak', title: 'Armourer', retainer: 150, hint: 'Guns cost $25 instead of $40; crews hit harder' },
   mechanic: { name: 'Lena Sorensen', title: 'Mechanic', retainer: 120, hint: 'Cars cost $180 instead of $300; faster, and half the tails' },
+  consigliere: {
+    name: 'Aurelio Ferro',
+    title: 'Consigliere',
+    retainer: 150,
+    hint: 'Reads the month for you: trends, forecasts, a read on Calloway, and options. A worrier, and not always right',
+  },
   lawyer: { name: 'J. Whitcombe Pruitt', title: 'Lawyer', retainer: 200, hint: 'Arrests stick half as often; time inside is shorter' },
 };
 
