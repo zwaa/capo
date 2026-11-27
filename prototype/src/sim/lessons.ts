@@ -28,7 +28,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'street',
     title: 'Work the street',
-    body: 'You have your cousins Vito and Carlo, two pistols and $300. Start where everyone starts: protection. Your list already has **Collect protection** and one **Sign up a shop** job. Add more sign-ups for the shops near your room: **click a shop on the map** and choose an order. Homes pay too, a little: click one to **sign up the whole block**, door to door. Each job takes whoever suits it best: Carlo can talk, Vito can lean. Every shop that signs up pays each month, as long as someone goes round to collect.',
+    body: 'You have your cousins Vito and Carlo, two pistols and $300. Start where everyone starts: protection. Your list already has **Collect protection** and one **Sign up a shop** job. Add more sign-ups for the shops near your room: **click a shop on the map** and choose an order. Homes pay too, a little: click one to **sign up the whole block**, door to door. Each job takes whoever suits it best: Carlo can talk, Vito can lean. Every shop that signs up pays each month, as long as someone goes round to collect. How you ask matters: a quiet word earns goodwill, a firm or loud one earns fear, and the street remembers both.',
     goal: 'Get 4 shops paying protection',
     done: (s) => protectedShops(s, 'player').length >= 4,
     start: (s) => {
@@ -65,7 +65,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'trouble',
     title: 'Calloway notices',
-    body: "Rosa Marchetti, who knows every bar in the ward, wants in. Take her on; with her charm she'd run the speakeasies well once you promote her. And Big Jim Calloway has noticed you. Expect his men leaning on your shops, and fists if yours are about. Hurt his people or take his property and it turns to guns. **Guard** what matters (Enforcement), put a **telephone** where your people work (Fronts), and when the clock stops for bad news, use a **Change of Plans**.",
+    body: "Rosa Marchetti, who knows every bar in the ward, wants in. Take her on; with her charm she'd run the speakeasies well once you promote her. And Big Jim Calloway has noticed you. Expect his men leaning on your shops, and fists if yours are about. Hurt his people or take his property and it turns to guns. **Guard** what matters (Enforcement), put a **telephone** where your people work (Fronts), and when the clock stops for bad news, use a **Change of Plans**. His old blocks know him, and doors there are hard to take: the **Mood** map shows how each block feels about you. **Charity** and **Intimidation** (click a block) and a **stance** on your own blocks work that. Each month, what needs your attention lands **On your desk**, above these lessons, and is marked on the map.",
     goal: 'Survive a fight, or make a Change of Plans',
     done: (s) => s.stats.fights >= 1 || s.stats.changes >= 1,
     start: (s) => notice(s),
@@ -73,15 +73,15 @@ export const LESSONS: Lesson[] = [
   {
     id: 'fixing',
     title: 'Fix the police',
-    body: 'Heat brings raids, and raids shut rackets and catch people. Add **Pay the captain** under **The Police**: it cools HQ and halves raids everywhere. For one hot block, **Pay off the beat** there (click the block). Mickey Doyle, an ex-precinct clerk who knows which captain takes what, wants in: take him on, and promote him if you want someone else to run it.',
-    goal: 'Put the captain on the payroll',
-    done: (s) => hasJob(s, 'payoff'),
+    body: 'Heat brings raids, and raids shut rackets and catch people. Heat sits on the blocks where things happen (the **Heat** map), and whoever started it, everyone with business there pays. **HQ heat** in the top bar is about the family itself; too much and they raid HQ. Add **Pay the captain** under **The Police**: it cools HQ and halves raids everywhere. For one hot block, **Pay off the beat** there (click the block). Mickey Doyle, an ex-precinct clerk who knows which captain takes what, wants in: take him on, and promote him if you want someone else to run it.',
+    goal: 'Pay the captain, or pay off the beat on a block',
+    done: (s) => hasJob(s, 'payoff') || hasJob(s, 'beat'),
     start: (s) => offer(s, 2),
   },
   {
     id: 'specialists',
     title: 'Hire a specialist',
-    body: "Specialists look after the family's resources: a **recruiter** for hoods, an **armourer** for guns, a **mechanic** for cars, a **lawyer** for when someone's inside. You can always buy on the open market without one; they make it cheaper or safer. Hire one in **Meetings**.",
+    body: "Specialists look after the family's resources: a **recruiter** for hoods, an **armourer** for guns, a **mechanic** for cars, a **lawyer** for when someone's inside, and a **consigliere** to read the month for you. You can always buy on the open market without one; they make it cheaper or safer. Hire one in **Meetings**.",
     goal: 'Hire a specialist',
     done: (s) => s.families.player.specialists.length >= 1,
   },
