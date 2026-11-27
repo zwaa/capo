@@ -273,7 +273,8 @@ Bootlegging margins stay high until 1931, then fall every month. Legit holdings 
 
 ### 8.1 Heat
 - **Block heat** (local): from violence, raids and witnesses on that block. It **spreads a little** to neighbouring blocks each month. A hot block gets **more raids** on its rackets, **slower jobs** (patrols), **more arrests** of hoods working it, and **less goodwill** (tenants don't want cops on the stairs).
-- **Family heat lands on the HQ.** Heat that's about the family rather than a block builds up at the boss's headquarters, so the big danger is a raid on HQ. **HQ only moves by losing it** (raided or taken): a real blow, not a way to shed heat.
+- **Block heat is shared.** It is police on the beat, not a mark against one family: whoever started it, everyone with business on that block pays. Shooting up a rival's streets heats his rackets too, and his violence on your blocks heats yours.
+- **Family heat lands on the HQ.** Heat that's about the family rather than a place (loose talk, the papers tying shootings to you, owning too much of the ward, a patrolman's complaint) builds up at the boss's headquarters, so the big danger is a raid on HQ: cash seized and whoever is at home arrested. **HQ only moves by losing it** (raided or taken): a real blow, not a way to shed heat. (The prototype has the HQ raid but not losing HQ.)
 - **Federal Attention** (global): from your **share of the city** plus headline-making violence. See §9.
 
 ### 8.2 Officials
@@ -490,6 +491,8 @@ The grilling notes behind §5.2, §5.7, §7.1, §8.1 and §14 are in [IDEAS-gran
 | Blocks as power bases | Blocks aren't provinces; they're where a lieutenant's power lies. Granted by the boss; lieutenants ask for and swap them. Block bonuses go to the holder, so lieutenants specialise by territory. One cut rate per lieutenant. The boss holds only a few |
 | Fear and goodwill | Two separate dials per block. Fear belongs to the lieutenant, goodwill to the family; a defector takes his feared blocks. Respected is the hardest corner. Stances on our blocks, jobs (charity, intimidation) against theirs |
 | Heat | Local to blocks and spreads a little: more raids, slower jobs, more arrests, less goodwill. Family heat lands on the HQ, which only moves by losing it |
+| Heat ownership | Block heat is shared by everyone with business on the block, whoever caused it: it's police on the beat. Family heat becomes HQ heat (talk, papers, ward share, complaints), and high HQ heat risks a raid on HQ. The prototype adds a Heat map mode and dim streetlamps where it's hot (2026-11-27) |
+| Heat jobs | The captain handles HQ heat and halves raids everywhere. **Pay off the beat** (Police) is a monthly envelope for the cops on one block: it cools that block fast and the blocks around it a little, and halves raids there. Rivals use it on their hottest racket's block (2026-11-27) |
 | Layers of command | Grow with the family: promoted capos get lieutenants of their own. Same job lists, bigger jobs; capos write their people's lists. Honest reports. Reach down freely while small, at a rising cost later. Cards come up the chain |
 | Map modes | Turf, fear and goodwill, heat, who holds what, income. Light hints on the normal map |
 | Rival grievances | Taken blocks, insults and broken deals. Looser than grand-strategy war rules: ganging up on one family costs little reputation |
