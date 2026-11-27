@@ -23,7 +23,10 @@ export type JobKind =
   | 'distill'
   | 'supply'
   | 'payoff'
-  | 'beat';
+  | 'beat'
+  | 'charity'
+  | 'intimidate'
+  | 'badmouth';
 
 /** What a person's idle hoods do when nothing on the list needs them. */
 export type IdleOrder = 'rest' | 'patrol' | 'canvass';
@@ -158,6 +161,8 @@ export interface Family {
   name: string;
   bossId: string;
   cash: number;
+  /** Our stance on each block we hold (by block id): it nudges fear and goodwill there each month. Missing means Firm. */
+  stances: Record<string, Stance>;
   /** HQ heat: what's about the family rather than a place (talk, the papers, complaints). High HQ heat risks a raid on HQ. */
   heat: number;
   heatLog: Line[];
@@ -242,6 +247,14 @@ export interface Stats {
   raids: number;
 }
 
+/** How a block feels about a family. */
+export interface Mood {
+  fear: number;
+  goodwill: number;
+}
+/** What we do on a block we hold, month in, month out. */
+export type Stance = 'generous' | 'firm' | 'ironfist';
+
 export interface GameState {
   seed: number;
   rng: number;
@@ -264,6 +277,10 @@ export interface GameState {
   candidates: number[];
   lessons: { on: boolean; index: number };
   stats: Stats;
+  /** How each block feels about each family (by block id): fear and goodwill, 0-100 each. Missing means 0. */
+  mood: Record<string, Record<FamilyId, Mood>>;
+  /** Why fear and goodwill moved since the month began (cleared when the next month starts). */
+  moodLog: { block: string; family: FamilyId; dial: 'fear' | 'goodwill'; label: string; amount: number }[];
   /** Heat on each city block, by block id: police on the beat, shared by everyone with business there. */
   blockHeat: Record<string, number>;
   /** Why each block's heat moved since the month began (cleared when the next month starts). */

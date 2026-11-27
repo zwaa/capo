@@ -20,6 +20,7 @@ import type {
   Posture,
   ScheduledEvent,
   SpecialistKind,
+  Stance,
 } from './types';
 import {
   BRANCHES,
@@ -97,6 +98,20 @@ import {
   blockId,
   heatAt,
   hottestHeld,
+  BADMOUTH,
+  CHARITY_COST,
+  CHARITY_GOODWILL,
+  FEAR_FADE,
+  GENEROUS_COST,
+  GOODWILL_FADE,
+  GRIP_HOLD,
+  GRIP_PULL,
+  HEAT_SOURS,
+  INTIMIDATE_FEAR,
+  LOYAL_MOOD,
+  blockBuildings,
+  grip,
+  moodOf,
   BEAT_AROUND,
   BEAT_COOL,
   BEAT_COST,
@@ -138,6 +153,29 @@ export function addBlockHeat(s: GameState, id: string, n: number, why: string, f
   if (after === before) return;
   s.blockHeat[id] = after;
   s.blockHeatLog.push({ block: id, label: why, amount: after - before, family: f });
+}
+/** Move one of a family's dials on a block, with the reason (for the block's history). */
+export function addMood(
+  s: GameState,
+  f: FamilyId,
+  at: { x: number; y: number } | string,
+  dial: 'fear' | 'goodwill',
+  n: number,
+  why: string,
+): void {
+  const id = typeof at === 'string' ? at : blockId(at);
+  const row = (s.mood[id] ??= { player: { fear: 0, goodwill: 0 }, rival: { fear: 0, goodwill: 0 } });
+  const before = row[f][dial];
+  const after = Math.max(0, Math.min(100, before + n));
+  if (after === before) return;
+  row[f][dial] = after;
+  s.moodLog.push({ block: id, family: f, dial, label: why, amount: after - before });
+}
+/** Set a family's stance on a block it holds something on (Firm is the default). */
+export function setStance(s: GameState, f: FamilyId, id: string, stance: Stance): void {
+  if (!blockBuildings(s, id).some((b) => holder(b) === f)) return;
+  if (stance === 'firm') delete s.families[f].stances[id];
+  else s.families[f].stances[id] = stance;
 }
 export function spend(s: GameState, f: FamilyId, n: number, why: string): void {
   if (!n) return;
@@ -528,6 +566,13 @@ export function needFor(s: GameState, f: FamilyId, j: Job, p: Person): number {
     case 'block':
       n = 2;
       break;
+    case 'charity':
+    case 'badmouth':
+      n = 1;
+      break;
+    case 'intimidate':
+      n = 2;
+      break;
     case 'guard':
       n = 2;
       break;
@@ -593,7 +638,15 @@ export function allocate(s: GameState, f: FamilyId): void {
       }
       if (j.need === 0) continue;
       const cost =
-        j.kind === 'buy' ? price(building(s, j.target)!, f) : j.kind === 'fitout' ? FITOUT_COST : j.kind === 'phone' ? PHONE_COST : 0;
+        j.kind === 'buy'
+          ? price(building(s, j.target)!, f)
+          : j.kind === 'fitout'
+            ? FITOUT_COST
+            : j.kind === 'phone'
+              ? PHONE_COST
+              : j.kind === 'charity'
+                ? CHARITY_COST
+                : 0;
       // Only jobs that cost money wait for it: collecting must never stall on debt.
       if (cost > 0 && cost > s.families[f].cash) {
         j.stalled = `Needs $${cost} (we have $${Math.max(0, Math.round(s.families[f].cash))})`;
@@ -640,6 +693,7 @@ export function startMonth(s: GameState): void {
     s.families[f].heatLog = [];
   }
   s.blockHeatLog = [];
+  s.moodLog = [];
   s.run = { day: 0, queue: [], scheduled: [], changesLeft: 2, rivalChangesLeft: 2, nextCardId: 1, log: [], news: [], hqRaided: [] };
   for (const f of ['player', 'rival'] as const) {
     allocate(s, f);
@@ -788,7 +842,9 @@ function schedule(s: GameState): void {
     for (const j of r.jobs) {
       if (JOBS[j.kind].ongoing || j.stalled || !targetsPlayer(s, j)) continue;
       const eta = Math.ceil(dist(r, targetPos(s, j)) / (j.car ? 2 : 1)) + j.days;
-      if (eta > 3 && chance(s, 0.4 + (r.traits.includes('looselips') ? 0.3 : 0)))
+      // A block that likes us talks: the more goodwill, the likelier the warning.
+      const talk = moodOf(s, 'player', targetPos(s, j)).goodwill / 200;
+      if (eta > 3 && chance(s, 0.4 + talk + (r.traits.includes('looselips') ? 0.3 : 0)))
         run.scheduled.push({ day: Math.max(1, eta - 3), kind: 'tip', ref: j.id });
     }
   }
@@ -801,7 +857,7 @@ function targetsPlayer(s: GameState, j: Job): boolean {
 }
 
 function targetPos(s: GameState, j: Job): { x: number; y: number } {
-  if (isBlockId(j.target)) return nextDoor(s, j) ?? blockCentre(s, j.target);
+  if (isBlockId(j.target)) return (j.kind === 'block' && nextDoor(s, j)) || blockCentre(s, j.target);
   return building(s, j.target) ?? person(s, j.target) ?? { x: j.x, y: j.y };
 }
 
@@ -821,7 +877,7 @@ function doorDays(s: GameState, p: Person, j: Job, b: Building): number {
 }
 
 /** The chance a shopkeeper (or a tenant) says yes. */
-function signupOdds(s: GameState, f: FamilyId, j: Job, b: Building): number {
+export function signupOdds(s: GameState, f: FamilyId, j: Job, b: Building): number {
   return Math.max(
     0.15,
     Math.min(
@@ -832,7 +888,9 @@ function signupOdds(s: GameState, f: FamilyId, j: Job, b: Building): number {
         (j.posture === 'quiet' ? -0.1 : j.posture === 'loud' ? 0.15 : 0) +
         // Shopkeepers next to our turf have seen what happens to the ones who say no.
         (onTurf(s, f, b, b.id) ? TURF_BONUS : -TURF_BONUS) +
-        (isHome(b) ? HOME_EASE : 0),
+        (isHome(b) ? HOME_EASE : 0) +
+        // A block that fears or likes us is easier to sign up.
+        grip(s, f, b) * GRIP_PULL,
     ),
   );
 }
@@ -958,7 +1016,9 @@ function raids(s: GameState): void {
     if (!b.owner || !b.racket || b.raided) continue;
     const fam = s.families[b.owner];
     const paid = (fam.captain ? 0.5 : 1) * (beatPaid(s, b.owner, blockId(b)) ? 0.5 : 1);
-    if (!chance(s, (heatAt(s, b) / RAID_ODDS) * paid)) continue;
+    // Residents who like the family don't talk to the police.
+    const quiet = 1 - moodOf(s, b.owner, b).goodwill / 200;
+    if (!chance(s, (heatAt(s, b) / RAID_ODDS) * paid * quiet)) continue;
     b.raided = true;
     s.stats.raids += b.owner === 'player' ? 1 : 0;
     addHeat(s, b.owner, -5, `Raid on ${b.name} let off steam`, b);
@@ -995,7 +1055,9 @@ function hqRaid(s: GameState, f: FamilyId): void {
   const fam = s.families[f];
   const run = s.run!;
   if (fam.heat < HQ_RAID_FROM || run.hqRaided.includes(f)) return;
-  if (!chance(s, ((fam.heat - HQ_RAID_FROM) / HQ_RAID_ODDS) * (fam.captain ? 0.5 : 1))) return;
+  const hq = bossOf(s, f);
+  const quiet = 1 - moodOf(s, f, { x: hq.homeX, y: hq.homeY }).goodwill / 200;
+  if (!chance(s, ((fam.heat - HQ_RAID_FROM) / HQ_RAID_ODDS) * (fam.captain ? 0.5 : 1) * quiet)) return;
   run.hqRaided.push(f);
   const boss = bossOf(s, f);
   const seized = Math.min(HQ_SEIZE_MAX, Math.max(0, Math.round(fam.cash * HQ_SEIZE)));
@@ -1248,12 +1310,46 @@ function complete(s: GameState, p: Person, j: Job): void {
         });
       } else if (j.posture !== 'quiet') {
         addHeat(s, f, 8, `Shopkeeper beaten at ${b.name}`, b);
+        roughed(s, f, b);
         signUp(s, b, p, 'quiet');
       }
       return;
     }
     case 'block':
       return knock(s, p, j);
+    case 'charity': {
+      const id = j.target!;
+      if (fam.cash < CHARITY_COST) return log(s, `${name} couldn't raise the $${CHARITY_COST} for charity.`, f);
+      spend(s, f, CHARITY_COST, `Charity on ${blockName(s, id)}`);
+      addMood(s, f, id, 'goodwill', CHARITY_GOODWILL, 'Charity: coal for the stoves');
+      seasoned(s, j);
+      log(s, `${squadNames(s, j) || name} handed out coal and turkeys on ${blockName(s, id)}.`, f);
+      if (f === 'player')
+        story(
+          s,
+          `MYSTERY BENEFACTOR WARMS ${streetOf(blockCentre(s, id)).toUpperCase()}`,
+          'Families report deliveries of coal "from a friend." The friend did not leave a card. He did not need to.',
+          3,
+        );
+      return;
+    }
+    case 'intimidate': {
+      const id = j.target!;
+      addMood(s, f, id, 'fear', INTIMIDATE_FEAR, 'Intimidation: windows broken');
+      addMood(s, f, id, 'goodwill', -4, 'Intimidation: windows broken');
+      addHeat(s, f, 4, `Windows broken on ${blockName(s, id)}`, blockCentre(s, id));
+      seasoned(s, j);
+      log(s, `${squadNames(s, j) || name} put the fear into ${blockName(s, id)}.`, f);
+      return;
+    }
+    case 'badmouth': {
+      const id = j.target!;
+      const foe = other(f);
+      addMood(s, foe, id, 'goodwill', -BADMOUTH, `Talk going round about ${s.families[foe].name}`);
+      seasoned(s, j);
+      log(s, `${squadNames(s, j) || name} spread some talk about ${s.families[foe].name} on ${blockName(s, id)}.`, f);
+      return;
+    }
     case 'buy': {
       if (!b || b.owner) return;
       const cost = price(b, f);
@@ -1332,6 +1428,7 @@ function knock(s: GameState, p: Person, j: Job): void {
       log(s, `${b.name} turned ${squadNames(s, j) || first(p)} away. They'll try again next month.`, f);
     } else {
       addHeat(s, f, isHome(b) ? 2 : 8, `${isHome(b) ? 'Tenants' : 'Shopkeeper'} leaned on at ${b.name}`, b);
+      roughed(s, f, b);
       signUp(s, b, p, 'quiet', j);
     }
   }
@@ -1350,6 +1447,12 @@ function knock(s: GameState, p: Person, j: Job): void {
   }
 }
 
+/** Someone got roughed up: the block fears us more and likes us less. */
+function roughed(s: GameState, f: FamilyId, b: Building): void {
+  addMood(s, f, b, 'fear', 4, `${b.name}: someone got hurt`);
+  addMood(s, f, b, 'goodwill', -3, `${b.name}: someone got hurt`);
+}
+
 function signUp(s: GameState, b: Building, p: Person, posture: Posture, j?: Job): void {
   const f = p.family;
   b.protectedBy = f;
@@ -1358,6 +1461,11 @@ function signUp(s: GameState, b: Building, p: Person, posture: Posture, j?: Job)
   // Tenants don't make the papers the way a shopkeeper does.
   const heat = isHome(b) ? Math.floor(HEAT[posture] / 4) : HEAT[posture];
   if (heat) addHeat(s, f, heat, `${b.name} "persuaded" (${posture})`, b);
+  // Asking nicely builds goodwill; leaning builds fear (and loud costs goodwill). Homes count for half.
+  const k = isHome(b) ? 0.5 : 1;
+  if (posture === 'quiet') addMood(s, f, b, 'goodwill', Math.ceil(2 * k), `${b.name} signed up politely`);
+  else addMood(s, f, b, 'fear', Math.ceil((posture === 'loud' ? 4 : 2) * k), `${b.name} signed up (${posture})`);
+  if (posture === 'loud') addMood(s, f, b, 'goodwill', -Math.ceil(2 * k), `${b.name} signed up (loud)`);
   log(s, `${(j && squadNames(s, j)) || first(p)} signed up ${b.name}. It pays $${b.protection} a month.`, f);
   allocate(s, f);
   advanceLessons(s);
@@ -1539,6 +1647,10 @@ function resolveFight(s: GameState, ctx: FightCtx, mod: number): void {
   const noise = posture === 'loud' ? 18 : posture === 'firm' ? 10 : 5;
   addHeat(s, af, noise + (defs.length ? 4 : 0), `Gunfire at ${place}`, spot);
   addHeat(s, af, Math.ceil(noise / PAPERS_SHARE), `Papers tie the gunfire at ${place} to the family`);
+  // Shooting frightens the block and nobody thanks you for it.
+  addMood(s, af, spot, 'fear', 5, `Gunfire at ${place}`);
+  addMood(s, af, spot, 'goodwill', -5, `Gunfire at ${place}`);
+  if (defs.length) addMood(s, df, spot, 'goodwill', -2, `Gunfire at ${place}`);
 
   // Named hoods lost on each side: the losers lose more.
   const side = (csv: string | number) =>
@@ -1705,6 +1817,7 @@ function lean(s: GameState, p: Person, j: Job, b: Building): void {
     ...patrolsNear(s, b).flatMap((w) => w.hoods),
   ];
   addHeat(s, f, LEAN_HEAT[j.posture], `Leaning on ${b.name} (${j.posture})`, b);
+  addMood(s, f, b, 'fear', 2, `Leaning on ${b.name}`);
   let edge = 0;
   if (theirHoods.length) {
     const won = chance(s, brawn(ours) / (brawn(ours) + brawn(theirHoods) * 1.1));
@@ -1733,7 +1846,8 @@ function lean(s: GameState, p: Person, j: Job, b: Building): void {
   const held =
     (b.uncollected === 0 ? HELD_BONUS : -HELD_BONUS) +
     (s.buildings.some((x) => x.id !== b.id && holder(x) === df && dist(x, b) <= TURF_REACH) ? HELD_BONUS : 0);
-  const odds = Math.max(0.1, Math.min(0.85, signupOdds(s, f, j, b) - 0.15 - held + edge));
+  // The holder's grip on the block defends the door: a block held for months is hard (not impossible) to crack.
+  const odds = Math.max(0.1, Math.min(0.85, signupOdds(s, f, j, b) - 0.15 - held - grip(s, df, b) * GRIP_HOLD + edge));
   if (chance(s, odds)) {
     b.protectedBy = f;
     b.uncollected = 0;
@@ -1914,6 +2028,7 @@ export function answer(s: GameState, cardId: number, optionId: string): Card | n
       if (!p || !b) break;
       if (optionId === 'lean') {
         addHeat(s, 'player', 8, `Shopkeeper roughed up at ${b.name}`, b);
+        roughed(s, 'player', b);
         signUp(s, b, p, 'quiet');
       } else if (optionId === 'sweeten') {
         spend(s, 'player', 100, `Sweetener for ${b.name}`);
@@ -2075,6 +2190,7 @@ export function endMonth(s: GameState): void {
   for (const b of s.buildings) b.took = 0;
   for (const f of ['player', 'rival'] as const) settle(s, f);
   coolBlocks(s);
+  settleMood(s);
   people(s);
   // A month on the job is a month of experience; the laid-up mend.
   const worked = new Set(s.people.flatMap((p) => p.jobs.filter((j) => !j.stalled && j.hoods).flatMap((j) => j.squad)));
@@ -2152,7 +2268,9 @@ function settle(s: GameState, f: FamilyId): void {
       b.uncollected = 0;
     } else {
       b.uncollected++;
-      if (b.uncollected >= 2 && chance(s, 0.5)) {
+      const m = moodOf(s, f, b);
+      const patience = 2 + (m.fear >= LOYAL_MOOD ? 1 : 0) + (m.goodwill >= LOYAL_MOOD ? 1 : 0);
+      if (b.uncollected >= patience && chance(s, 0.5)) {
         b.protectedBy = null;
         b.uncollected = 0;
         log(s, `${b.name} stopped paying. Nobody had been round in months.`, f);
@@ -2243,6 +2361,39 @@ export function coolBlocks(s: GameState): void {
     }
   }
   for (const id of allBlocks(s)) addBlockHeat(s, id, -BLOCK_COOL, 'Quiet nights', null);
+}
+
+/** Month end for fear and goodwill: stances on our blocks, then fear fades, goodwill fades and heat sours it. */
+export function settleMood(s: GameState): void {
+  for (const f of ['player', 'rival'] as const) {
+    const fam = s.families[f];
+    for (const [id, stance] of Object.entries(fam.stances)) {
+      const held = blockBuildings(s, id).filter((b) => holder(b) === f).length;
+      if (!held) {
+        delete fam.stances[id];
+        continue;
+      }
+      if (stance === 'generous') {
+        spend(s, f, held * GENEROUS_COST, `Generosity on ${blockName(s, id)}`);
+        addMood(s, f, id, 'goodwill', 5, 'Generous: loans forgiven, a doctor paid');
+        addMood(s, f, id, 'fear', -1, 'Generous: loans forgiven, a doctor paid');
+      } else if (stance === 'ironfist') {
+        addMood(s, f, id, 'fear', 5, 'Iron fist: examples made');
+        addMood(s, f, id, 'goodwill', -3, 'Iron fist: examples made');
+        addBlockHeat(s, id, 2, 'Iron fist: examples made', f);
+      }
+    }
+  }
+  for (const id of allBlocks(s)) {
+    const sour = Math.floor((s.blockHeat[id] ?? 0) / HEAT_SOURS);
+    for (const f of ['player', 'rival'] as const) {
+      // On a block we hold, the Firm stance (the default) keeps fear where it is; anywhere else it fades without reminders.
+      const firm = blockBuildings(s, id).some((b) => holder(b) === f) && !s.families[f].stances[id];
+      if (!firm) addMood(s, f, id, 'fear', -FEAR_FADE, 'Memories fade');
+      addMood(s, f, id, 'goodwill', -GOODWILL_FADE, 'Memories fade');
+      if (sour) addMood(s, f, id, 'goodwill', -sour, "Police on the stairs: nobody's grateful");
+    }
+  }
 }
 
 /** A lieutenant given a building of their own keeps half its takings. */
@@ -2380,9 +2531,17 @@ export const DRAW_SCORE = 4000;
 
 // ---------------------------------------------------------------- new game
 
+/** Calloway's standing on his own blocks at the start. */
+const RIVAL_FEAR = 30;
+const RIVAL_GOODWILL = 20;
+
 export function createGame(seed: number, boss?: string, lessons = true): GameState {
   const s = newGame(seed, boss);
   s.lessons.on = lessons;
+  // Calloway's blocks have been his for years: they know him, and some of them even like him.
+  for (const id of allBlocks(s))
+    if (blockBuildings(s, id).some((b) => holder(b) === 'rival'))
+      s.mood[id] = { player: { fear: 0, goodwill: 0 }, rival: { fear: RIVAL_FEAR, goodwill: RIVAL_GOODWILL } };
   planFamily(s, 'rival');
   allocate(s, 'rival');
   allocate(s, 'player');

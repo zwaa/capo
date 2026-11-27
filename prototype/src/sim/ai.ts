@@ -30,6 +30,10 @@ import {
   gunHands,
   hottestRacket,
   blockId,
+  blockBuildings,
+  building,
+  holder,
+  moodOf,
 } from './util';
 
 /** How often a family that's at odds leans on one of the other side's doors, per month. */
@@ -44,6 +48,10 @@ export const TAKEOVER_ANGER = 2;
 const BEAT_FROM = 25;
 const BEAT_STOP = 10;
 const MAX_BEATS = 2;
+
+/** Spend on goodwill (a generous stance) only with this much in hand; charity with this much. */
+const GENEROUS_FROM = 3000;
+const CHARITY_FROM = 2000;
 
 export function planFamily(s: GameState, f: FamilyId): void {
   const fam = s.families[f];
@@ -92,6 +100,22 @@ export function planFamily(s: GameState, f: FamilyId): void {
   const home = runner(s, f, 'protection');
   const near = <T extends { x: number; y: number }>(xs: T[], from: Person = home) => xs.sort((a, b) => dist(a, from) - dist(b, from));
 
+  // Fear and goodwill. A stance on every block we hold: generous where we're rich and unloved,
+  // iron fist where a hothead runs protection and the block doesn't fear us yet, firm otherwise.
+  const ours = (id: string) => blockBuildings(s, id).filter((b) => holder(b) === f).length;
+  for (const bid of allBlocks(s)) {
+    const n = ours(bid);
+    const m = moodOf(s, f, bid);
+    if (!n) delete fam.stances[bid];
+    else if (fam.cash > GENEROUS_FROM && n >= 3 && m.goodwill < 30) fam.stances[bid] = 'generous';
+    else if (home.traits.includes('hothead') && m.fear < 30) fam.stances[bid] = 'ironfist';
+    else delete fam.stances[bid];
+  }
+  // Charity where we hold the most and are liked the least.
+  const cold = allBlocks(s)
+    .filter((bid) => ours(bid) >= 2 && moodOf(s, f, bid).goodwill < 10)
+    .sort((a, b) => ours(b) - ours(a))[0];
+  if (cold && fam.cash > CHARITY_FROM) oneOff('charity', cold);
   // Protection: sign up the nearest free shop; once at war, muscle in on theirs.
   // Before the war, Calloway keeps to the east end of the ward.
   const inReach = (b: { x: number }) => aggressive || f === 'player' || b.x >= s.width / 2;
@@ -179,6 +203,21 @@ export function planFamily(s: GameState, f: FamilyId): void {
   while (fam.guns < gunHands(s, f) && fam.cash > gunPrice(s, f) + 300) buy('gun');
 
   // Standing orders for idle hoods: whoever runs Protection drums up business; everyone else watches the turf.
+  // The dial jobs only where they help a fight we're in: on a block where we're going after their doors,
+  // frighten it if it doesn't fear us yet, and sour their name if it likes them.
+  const contested = [
+    ...new Set(
+      members(s, f)
+        .flatMap((p) => p.jobs)
+        .filter((j) => j.kind === 'signup' && !j.done && building(s, j.target)?.protectedBy === foe)
+        .map((j) => blockId(building(s, j.target)!)),
+    ),
+  ];
+  const scare = contested.find((bid) => moodOf(s, f, bid).fear < 30);
+  if (scare) oneOff('intimidate', scare);
+  const sour = contested.find((bid) => moodOf(s, foe, bid).goodwill >= 15);
+  if (sour) oneOff('badmouth', sour);
+
   for (const p of members(s, f)) p.idle = branchesOf(s, p).includes('protection') ? 'canvass' : 'patrol';
 
   // Ongoing work first, then one-off jobs.

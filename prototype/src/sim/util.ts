@@ -1,4 +1,4 @@
-import type { Branch, Building, FamilyId, GameState, Hood, IdleOrder, Job, JobKind, Person, SpecialistKind } from './types';
+import type { Branch, Building, FamilyId, GameState, Hood, IdleOrder, Job, JobKind, Person, SpecialistKind, Mood, Stance } from './types';
 
 export const MONTHS = [
   'January',
@@ -150,6 +150,43 @@ export const HQ_RAID_ODDS = 2000;
 /** An HQ raid seizes this share of the cash in hand, up to a cap. */
 export const HQ_SEIZE = 0.25;
 export const HQ_SEIZE_MAX = 1500;
+// Fear and goodwill: two dials per block per family, 0-100 each.
+/** How a block feels about a family (by a spot on it, or its id). */
+export function moodOf(s: GameState, f: FamilyId, at: { x: number; y: number } | string): Mood {
+  const id = typeof at === 'string' ? at : blockId(at);
+  return s.mood[id]?.[f] ?? { fear: 0, goodwill: 0 };
+}
+/** A family's grip on a block, 0-1: fear and goodwill together. */
+export const grip = (s: GameState, f: FamilyId, at: { x: number; y: number } | string): number => {
+  const m = moodOf(s, f, at);
+  return (m.fear + m.goodwill) / 200;
+};
+/** Our grip adds this much (at most) to sign-up odds; the holder's grip takes this much off ours when we lean on their door. */
+export const GRIP_PULL = 0.3;
+export const GRIP_HOLD = 0.3;
+/** A dial at least this high counts: a feared or liked block keeps paying a month longer when nobody collects, each. */
+export const LOYAL_MOOD = 40;
+/** Each month fear fades by this much, goodwill by this much, and goodwill by one for every HEAT_SOURS of block heat. */
+export const FEAR_FADE = 2;
+export const GOODWILL_FADE = 1;
+export const HEAT_SOURS = 20;
+/** Liked blocks (goodwill at least LIKED_MOOD) send recruits: one liked block adds a hood to the hiring hall, two make them better. */
+export const LIKED_MOOD = 40;
+/** The three jobs: what they cost and how far they move the dials. */
+export const CHARITY_COST = 150;
+export const CHARITY_GOODWILL = 12;
+export const INTIMIDATE_FEAR = 12;
+export const BADMOUTH = 10;
+/** Stances on our own blocks, applied at month end. Generous costs this much per place we hold on the block. */
+export const GENEROUS_COST = 10;
+export const STANCES: Record<Stance, { label: string; hint: string }> = {
+  generous: {
+    label: 'Generous',
+    hint: '$10 a month for each place we hold here: a loan forgiven, a doctor paid. Goodwill grows; fear fades a little.',
+  },
+  firm: { label: 'Firm', hint: 'Business as usual: fear holds steady.' },
+  ironfist: { label: 'Iron fist', hint: 'Make examples. Fear grows, goodwill falls, and the block warms up.' },
+};
 /** Paying off the beat on a block: a monthly envelope (less with Charm), and how much it cools the block and those around it. */
 export const BEAT_COST = 100;
 export const BEAT_MIN = 50;
@@ -190,7 +227,20 @@ export const branchInfo = (b: Branch) => BRANCHES.find((x) => x.id === b)!;
 
 // ---------------------------------------------------------------- jobs
 
-export type TargetRule = 'none' | 'signup' | 'block' | 'guard' | 'hit' | 'wreck' | 'buy' | 'takeover' | 'fitout' | 'phone' | 'beat';
+export type TargetRule =
+  | 'none'
+  | 'signup'
+  | 'block'
+  | 'guard'
+  | 'hit'
+  | 'wreck'
+  | 'buy'
+  | 'takeover'
+  | 'fitout'
+  | 'phone'
+  | 'beat'
+  | 'area'
+  | 'foeArea';
 
 export interface JobInfo {
   branch: Branch;
@@ -399,6 +449,42 @@ export const JOBS: Record<JobKind, JobInfo> = {
     stat: 'charm',
     hint: 'About $100 a month (less with Charm). The cops on that block look the other way: it cools fast, the blocks around it a little, and raids there are halved.',
   },
+  charity: {
+    branch: 'protection',
+    label: 'Charity',
+    verb: 'Handing out charity on',
+    target: 'area',
+    ongoing: false,
+    car: false,
+    work: 2,
+    risky: false,
+    stat: 'charm',
+    hint: 'One hood and $150: coal for the stoves, a turkey at the church. Goodwill on that block.',
+  },
+  intimidate: {
+    branch: 'enforcement',
+    label: 'Intimidation',
+    verb: 'Putting the fear into',
+    target: 'area',
+    ongoing: false,
+    car: false,
+    work: 2,
+    risky: false,
+    stat: 'muscle',
+    hint: 'Two hoods walk the block and break a window or two. Fear on that block, a little less goodwill, a little heat.',
+  },
+  badmouth: {
+    branch: 'protection',
+    label: 'Bad-mouth them',
+    verb: 'Spreading talk on',
+    target: 'foeArea',
+    ongoing: false,
+    car: false,
+    work: 3,
+    risky: false,
+    stat: 'charm',
+    hint: 'One hood in the bars and barbershops, telling everyone what the other lot are really like. Sours their goodwill on that block.',
+  },
 };
 
 export const jobsForBranch = (b: Branch) => (Object.keys(JOBS) as JobKind[]).filter((k) => JOBS[k].branch === b);
@@ -435,6 +521,15 @@ export function targets(s: GameState, f: FamilyId, kind: JobKind): { id: string;
       return s.buildings.filter((b) => b.owner === f && !b.telephone).map((b) => bl(b));
     case 'beat':
       return allBlocks(s).map((id) => ({ id, label: `${cap(blockName(s, id))} (heat ${s.blockHeat[id] ?? 0})` }));
+    case 'area':
+      return allBlocks(s).map((id) => {
+        const m = moodOf(s, f, id);
+        return { id, label: `${cap(blockName(s, id))} (fear ${m.fear}, goodwill ${m.goodwill})` };
+      });
+    case 'foeArea':
+      return allBlocks(s)
+        .filter((id) => moodOf(s, foe, id).goodwill > 0)
+        .map((id) => ({ id, label: `${cap(blockName(s, id))} (their goodwill ${moodOf(s, foe, id).goodwill})` }));
     default:
       return [];
   }
