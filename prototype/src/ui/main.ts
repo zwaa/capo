@@ -809,6 +809,8 @@ function renderModes(): void {
     const short = ours.filter((b) => shortfall(b)).length;
     key = `Last month our places took ${money(took)}${short ? ` · ${short} came up short` : ''} (before wages and cuts) · ${key}`;
   }
+  if (map.mode === 'wealth' || map.mode === 'income' || map.mode === 'heat')
+    key += ' · Outlines: who holds each place (solid: owns it, dashed: pays them)';
   const scale = (steps: Step[]) =>
     `<span class="scale">${steps.map((x) => `<span><i style="background:${x.colour}"></i>${esc(x.label)}</span>`).join('')}</span>`;
   keyEl.innerHTML =

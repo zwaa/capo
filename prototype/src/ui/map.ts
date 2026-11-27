@@ -691,7 +691,28 @@ export class WardMap {
     };
     this.ctx.fillStyle = colour;
     this.ctx.fillRect(r.x, r.y, r.w, r.h);
+    this.outlineHoldings(id);
     return r;
+  }
+
+  /** Over a block colour: who holds each place, as an outline in their colour (solid if owned, thin if it pays them). */
+  private outlineHoldings(id: string): void {
+    const s = this.state!;
+    const g = this.ctx;
+    const T = this.tile;
+    g.save();
+    for (const b of blockBuildings(s, id)) {
+      const f = holder(b);
+      if (!f) continue;
+      const owns = !!b.owner;
+      const w = owns ? Math.max(2, T * 0.06) : Math.max(1, T * 0.03);
+      const inset = T * (owns ? 0.1 : 0.14);
+      g.strokeStyle = famColour(f);
+      g.lineWidth = w;
+      g.setLineDash(owns ? [] : [Math.max(3, T * 0.08), Math.max(2, T * 0.05)]);
+      g.strokeRect(this.ox + b.x * T + inset, this.oy + b.y * T + inset, T - inset * 2, T - inset * 2);
+    }
+    g.restore();
   }
 
   /** A dashed frame round a whole city block, just outside its kerbs. */
