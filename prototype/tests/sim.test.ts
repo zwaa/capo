@@ -219,6 +219,32 @@ describe('homes and blocks', () => {
     // Calloway already collects on his own doorstep.
     expect(homes.some((b) => b.protectedBy === 'rival')).toBe(true);
   });
+  it('records what each place paid at month end, and nothing for doors nobody collected', () => {
+    const s = createGame(14);
+    s.lessons.on = false; // the first lesson would put the collect job back
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const free = s.buildings.filter((b) => b.kind === 'shop' && !b.owner && !b.protectedBy);
+    const [paid, front] = free;
+    paid.protectedBy = 'player';
+    front.owner = 'player';
+    addJob(s, boss.id, 'collect', null);
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    endMonth(s);
+    expect(paid.took).toBe(paid.protection);
+    expect(front.took).toBe(50);
+    // Same door, nobody collecting next month: it pays nothing.
+    boss.jobs = [];
+    startMonth(s);
+    n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    endMonth(s);
+    expect(paid.protectedBy).toBe('player');
+    expect(paid.took).toBe(0);
+    expect(s.buildings.filter((b) => !b.owner && !b.protectedBy).every((b) => b.took === 0)).toBe(true);
+  });
   it('a pair of hands collects from ten homes, or five shops', () => {
     const s = createGame(14);
     const boss = bossOf(s, 'player');

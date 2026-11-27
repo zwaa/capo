@@ -461,6 +461,21 @@ export const REWARD_COST = 300;
 /** Experience a hood needs before they can be made a lieutenant. */
 export const PROMOTE_XP = 5;
 export const INCOME: Record<string, number> = { speakeasy: 600, gambling: 450 };
+/** What an owned building makes from its legitimate front each month. */
+export const LEGIT_TRADE = 50;
+/** Rough monthly worth of a still's liquor, for the Wealth map only. */
+const STILL_WORTH = 250;
+
+/**
+ * How rich a place is, roughly: what it would bring in if properly run. Indicative only:
+ * the Wealth map shows it as a glow, never as a number, so it gives nothing away about
+ * Calloway's books that the street wouldn't.
+ */
+export function wealth(b: Building): number {
+  if (b.racket === 'still') return STILL_WORTH;
+  if (b.racket) return INCOME[b.racket];
+  return b.protection + (b.owner ? LEGIT_TRADE : 0);
+}
 
 // ---------------------------------------------------------------- hoods
 

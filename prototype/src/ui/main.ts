@@ -76,13 +76,13 @@ import {
   gunHands,
   visible,
 } from '../sim/util';
-import { MAP_MODES, WardMap, monthly } from './map';
+import { MAP_MODES, WardMap } from './map';
 import type { MapMode } from './map';
 
 // ---------------------------------------------------------------- state
 
 type Phase = 'paper' | 'orders' | 'watch' | 'plans' | 'over';
-const SAVE_KEY = 'capo-slice-v6';
+const SAVE_KEY = 'capo-slice-v7';
 const SPEEDS = [0, 1100, 550, 220];
 
 interface Hot {
@@ -767,9 +767,10 @@ function renderModes(): void {
   const mode = MAP_MODES.find((m) => m.id === map.mode)!;
   let key = mode.key;
   if (map.mode === 'income') {
-    const ours = s.buildings.filter((b) => holder(b) === 'player').reduce((n, b) => n + monthly(b), 0);
-    const near = s.buildings.filter((b) => !holder(b) && onTurf(s, 'player', b, b.id)).reduce((n, b) => n + b.protection, 0);
-    key = `Ours: about ${money(ours)} a month · next to our turf and paying nobody: ${money(near)} · ${key}`;
+    const ours = s.buildings.filter((b) => holder(b) === 'player');
+    const took = ours.reduce((n, b) => n + b.took, 0);
+    const dry = ours.filter((b) => !b.took && b.racket !== 'still' && (b.owner || b.uncollected)).length;
+    key = `Last month our places took ${money(took)}${dry ? ` · ${dry} paid nothing` : ''} (before wages and cuts) · ${key}`;
   }
   keyEl.textContent = key;
 }

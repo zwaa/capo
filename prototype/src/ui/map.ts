@@ -6,17 +6,17 @@
 //    A solid border means the family owns the building; a flag means it pays them protection
 //    (homes pay too, and fly a smaller flag).
 //  - A block picked for orders, or with a block sign-up on it, is framed with a dashed line.
-//  - Map modes put one question on the map at a time: Turf (who holds what), Income (what each
-//    place brings in, and what's going uncollected) and Reach (where sign-ups come easy, what
-//    our people can see).
+//  - Map modes put one question on the map at a time: Turf (who holds what), Wealth (where the
+//    money is, as a glow), Income (what each of our places paid last month) and Reach (where
+//    sign-ups come easy).
 //  - Who holds what is public knowledge. Fog of war (a light hatch) only hides people:
 //    rival lieutenants, crews out on jobs and guards.
 
 import { isLot } from '../sim/setup';
 import type { Building, FamilyId, GameState, Person } from '../sim/types';
 import {
-  INCOME,
   onTurf,
+  wealth,
   BLOCK_H,
   BLOCK_W,
   JOBS,
@@ -61,7 +61,7 @@ const C = {
 
 const famColour = (f: FamilyId) => (f === 'player' ? C.lamp : C.steel);
 
-export type MapMode = 'turf' | 'income' | 'reach';
+export type MapMode = 'turf' | 'wealth' | 'income' | 'reach';
 
 /** The map modes, in switcher order, with what each one's legend says. */
 export const MAP_MODES: { id: MapMode; label: string; key: string }[] = [
@@ -71,9 +71,14 @@ export const MAP_MODES: { id: MapMode; label: string; key: string }[] = [
     key: 'Click a shop or home for orders, for it or its whole block · Tinted ground: turf · Border: owned · Flag: pays protection · Hatched: out of sight · S speakeasy · G gambling · D still · ■ telephone',
   },
   {
+    id: 'wealth',
+    label: 'Wealth',
+    key: 'Where the money is: the brighter the glow, the richer the place, whoever holds it. Back rooms glow brightest, homes barely',
+  },
+  {
     id: 'income',
     label: 'Income',
-    key: 'What each place brings in a month, in the colour of whoever takes it · Grey: pays nobody yet · Red "!": ours, but nobody went round to collect',
+    key: 'What each of our places paid last month · Red $0: paid nothing (nobody collected, nobody ran it, or raided) · New: signed this month',
   },
   {
     id: 'reach',
@@ -82,12 +87,8 @@ export const MAP_MODES: { id: MapMode; label: string; key: string }[] = [
   },
 ];
 
-/** What a place brings in a month to whoever holds it (owned stills supply the bars instead). */
-export function monthly(b: Building): number {
-  if (!b.owner) return b.protection;
-  if (b.racket === 'speakeasy' || b.racket === 'gambling') return INCOME[b.racket];
-  return b.racket === 'still' ? 0 : 50;
-}
+/** The worth at which a place glows its brightest on the Wealth map (a busy bar). */
+const WEALTH_TOP = 600;
 
 interface Pos {
   x: number;
@@ -304,6 +305,7 @@ export class WardMap {
 
     if (this.mode === 'reach') this.drawReach();
     if (this.mode === 'income') this.drawIncome();
+    if (this.mode === 'wealth') this.drawWealth();
 
     // Orders: dashed lines from each of our people to their one-off jobs.
     if (this.showOrders && !s.run) {
@@ -498,31 +500,56 @@ export class WardMap {
     }
   }
 
-  /** Income: a dark scrim, and each place's monthly worth in the colour of whoever takes it. */
+  /** Wealth: a dark scrim with a warm glow on each place, brighter the richer it is. No numbers. */
+  private drawWealth(): void {
+    const s = this.state!;
+    const g = this.ctx;
+    const T = this.tile;
+    this.scrim(0.8);
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    for (const b of s.buildings) {
+      const w = Math.min(1, Math.sqrt(wealth(b) / WEALTH_TOP));
+      const c = this.px(b);
+      const r = T * (0.5 + w * 1.3);
+      const glow = g.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
+      glow.addColorStop(0, `rgba(240, 180, 70, ${(w * w * 0.75).toFixed(3)})`);
+      glow.addColorStop(1, 'rgba(240, 180, 70, 0)');
+      g.fillStyle = glow;
+      g.fillRect(c.x - r, c.y - r, r * 2, r * 2);
+    }
+    g.restore();
+  }
+
+  /** Darken the lots so an overlay reads over the buildings. */
+  private scrim(alpha: number): void {
+    const s = this.state!;
+    const g = this.ctx;
+    const T = this.tile;
+    g.fillStyle = `rgba(5, 7, 10, ${alpha})`;
+    for (let y = 0; y < s.height; y++)
+      for (let x = 0; x < s.width; x++) if (isLot(x, y)) g.fillRect(this.ox + x * T, this.oy + y * T, T, T);
+  }
+
+  /** Income: what each of our places paid last month. Nobody else's books are shown. */
   private drawIncome(): void {
     const s = this.state!;
     const g = this.ctx;
     const T = this.tile;
-    for (let y = 0; y < s.height; y++) {
-      for (let x = 0; x < s.width; x++) {
-        if (!isLot(x, y)) continue;
-        g.fillStyle = 'rgba(5, 7, 10, 0.62)';
-        g.fillRect(this.ox + x * T, this.oy + y * T, T, T);
-      }
-    }
+    this.scrim(0.66);
     g.save();
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.font = `700 ${Math.max(9, Math.round(T * 0.26))}px Oswald, 'Arial Narrow', sans-serif`;
     for (const b of s.buildings) {
-      const f = holder(b);
+      if (holder(b) !== 'player') continue;
       const c = this.px(b);
-      const owed = b.protectedBy === 'player' && !b.owner && b.uncollected > 0;
-      const text = b.racket === 'still' && b.owner ? 'still' : `$${monthly(b)}${owed ? '!' : ''}`;
+      const fresh = !b.owner && !b.took && !b.uncollected;
+      const text = b.racket === 'still' ? 'still' : fresh ? 'new' : `$${b.took}`;
       g.lineWidth = 3;
       g.strokeStyle = C.night;
       g.strokeText(text, c.x, c.y);
-      g.fillStyle = owed ? C.blood : f ? famColour(f) : C.dim;
+      g.fillStyle = b.racket === 'still' || fresh ? C.dim : b.took ? C.lamp : C.blood;
       g.fillText(text, c.x, c.y);
     }
     g.restore();

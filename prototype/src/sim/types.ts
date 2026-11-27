@@ -76,6 +76,8 @@ export interface Building {
   raided: boolean;
   /** Months in a row nobody collected. Shops stop paying after a while. */
   uncollected: number;
+  /** What it brought its holder last month, before costs and skims (for the Income map). */
+  took: number;
   /** Turned away a block sign-up this month (quietly): the crew moves on until next month. */
   refused: boolean;
 }
