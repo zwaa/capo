@@ -200,12 +200,13 @@ Each specialist has a **standing service** that applies everywhere, and can take
 
 **Advice never takes agency away.** The desk (the month's notices) only states facts and consequences: what happened, where, and what it means. Interpretation comes from a person, the consigliere, who has a temperament and can be wrong. Without one you get the facts and the numbers, and spotting the pattern is your job.
 
-**Later: hiring a consigliere is a choice of person, not a purchase.** Instead of one fixed advisor, a few candidates come through, and you interview them (a short card each) before taking one on:
-- **Temperament** colours the advice: *cautious* (overstates danger, careful options first), *ambitious* (always sees an opening, pushes expansion), *old-world* (prefers respect to fear, distrusts loud work), *cynical* (assumes the worst of your own people).
-- **Judgement** (their Brains) sets how often forecasts and reads on the rival are right, and how many they make. A cheap one is often wrong; a good one costs more.
-- **History and ties:** each has a past (a disbarred lawyer, a retired bookmaker, an old family friend) and maybe a tie to the rival or the police, which can surface later as a betrayal or a favour.
-- **Trust builds:** advice that proves right raises how much weight they get on the desk; advice you ignore and that proves right makes them bolder; repeated bad calls make them quieter. Fire one, and they know where the bodies are buried.
-- The interview shows a sample of how they would read *this* month, so the choice is felt, not read off a stat sheet.
+**Later: hiring any specialist is a choice of person, not a purchase, and only the boss can do it.** Instead of one fixed recruiter, armourer, lawyer or consigliere, a few candidates come through for each post, and the boss meets them in person before taking one on:
+- **Only the boss hires.** Specialists answer to the family, not to a lieutenant, so lieutenants can't take one on, and the interview is a **boss job**: an evening at a café or a back room somewhere on the map, which takes the boss's own days and puts him on the street (where he can be seen, or hit). A busy month leaves no time to interview; a quiet one is a chance to staff up.
+- **Temperament** colours the work. A consigliere's advice: *cautious* (overstates danger, careful options first), *ambitious* (always sees an opening), *old-world* (prefers respect to fear), *cynical* (assumes the worst of your own people). The same idea for the rest: a flashy armourer gets better guns but talks about it; a cautious lawyer wins fewer cases but never gets you in deeper.
+- **Skill** sets how good the service is (a consigliere's forecasts and reads on the rival, a recruiter's hoods, a mechanic's cars). A cheap one is worse; a good one costs more.
+- **History and ties:** each has a past (a disbarred lawyer, a retired bookmaker, an old family friend, a gunsmith the army let go) and maybe a tie to the rival or the police, which can surface later as a betrayal or a favour.
+- **Trust builds:** good work raises their standing and what they'll do on request; repeated failures make them careless. Fire one, and they know where the bodies are buried.
+- **The interview shows a sample:** how a consigliere would read *this* month, what a recruiter would bring in, the price an armourer would quote. The choice is felt, not read off a stat sheet.
 
 Driving isn't a specialism: every hood drives, and how well is part of their stats.
 
@@ -450,7 +451,7 @@ After that the lessons switch off, and the run carries on in the same city. Less
 9. **Heat does a lot.** Block heat drives raids, job speed, arrests and goodwill (§8.1). Does that read clearly, or does it need trimming?
 10. **Capos acting alone.** When a card comes up the chain and you don't answer, what does each kind of capo do (§5.7)?
 11. **Zoom on a city map.** Map modes colour whole blocks so they read from far out, and show each place's figure only when there's room (the prototype decides by tile size, as real zoom would). How far out does a city map go: wards, then districts? Real zoom and pan wait until the map is bigger than one ward.
-12. **Interactive advisor hiring.** How many consigliere candidates, how often, and does a fired advisor become a risk (§6.4)?
+12. **Hiring specialists in person.** How many candidates per post, how often they come through, how long a boss's interview takes, and when a fired specialist becomes a risk (§6.4)?
 
 The grilling notes behind §5.2, §5.7, §7.1, §8.1 and §14 are in [IDEAS-grand-strategy.md](IDEAS-grand-strategy.md).
 
@@ -506,6 +507,7 @@ The grilling notes behind §5.2, §5.7, §7.1, §8.1 and §14 are in [IDEAS-gran
 | Heat ownership | Block heat is shared by everyone with business on the block, whoever caused it: it's police on the beat. Family heat becomes HQ heat (talk, papers, ward share, complaints), and high HQ heat risks a raid on HQ. The prototype adds a Heat map mode and dim streetlamps where it's hot (2026-11-27) |
 | Fear and goodwill (prototype) | Per family for now. Effects: sign-ups and door fights, paying and drifting, hiding (raids) and warnings (tip-offs), recruits. Tools: a stance per block (Generous, Firm, Iron fist) and three jobs (Charity, Intimidation, Bad-mouth them). A Mood map mode shows our standing (2026-11-27) |
 | Heat jobs | The captain handles HQ heat and halves raids everywhere. **Pay off the beat** (Police) is a monthly envelope for the cops on one block: it cools that block fast and the blocks around it a little, and halves raids there. Rivals use it on their hottest racket's block (2026-11-27) |
+| Hiring specialists (later) | Every specialist is a person chosen from a few candidates, met by the boss in person: only the boss hires, and the interview is a boss job that takes his days and puts him on the street. Temperament, skill, history and ties, trust over time, and a sample of their work in the interview (2026-11-27) |
 | Advice and the consigliere | Notices state facts and consequences, never instructions. A monthly briefing compares the month with the last (takings, places held, HQ heat, Calloway's holdings). A consigliere (a specialist) adds trends, forecasts, a read on Calloway and options, in his voice and with his bias (the prototype's is cautious); he reads only what we can see, so he can be wrong (2026-11-27) |
 | Notices (the desk) | What last month left to deal with, built at month end: things that happened to us (Calloway took or leaned on a door, broke windows on or bad-mouthed us on our blocks, signed up a shop next to our turf; a door stopped paying; raids, an HQ raid) and what the ward's state says (HQ heat near the raid line, hot blocks we do business on, doors not collected, back rooms nobody ran). Worst first. Shown in the Morning Edition, kept on the orders screen with Show (switches to the map mode that explains it) and dismiss, and marked on the map (2026-11-27) |
 | Layers of command | Grow with the family: promoted capos get lieutenants of their own. Same job lists, bigger jobs; capos write their people's lists. Honest reports. Reach down freely while small, at a rising cost later. Cards come up the chain |
