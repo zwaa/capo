@@ -26,6 +26,7 @@ import {
   DAYS,
   FITOUT_COST,
   INCOME,
+  LEGIT_TRADE,
   PROMOTE_XP,
   onTurf,
   crewOf,
@@ -1995,6 +1996,7 @@ export function answer(s: GameState, cardId: number, optionId: string): Card | n
 export function endMonth(s: GameState): void {
   const run = s.run;
   if (!run || run.queue.length || run.day < DAYS) return;
+  for (const b of s.buildings) b.took = 0;
   for (const f of ['player', 'rival'] as const) settle(s, f);
   people(s);
   // A month on the job is a month of experience; the laid-up mend.
@@ -2068,6 +2070,7 @@ function settle(s: GameState, f: FamilyId): void {
     if (room >= cost) {
       room -= cost;
       take += b.protection;
+      b.took = b.protection;
       got++;
       b.uncollected = 0;
     } else {
@@ -2104,7 +2107,7 @@ function settle(s: GameState, f: FamilyId): void {
     }
     if (need) spend(s, f, need * MARKET_LIQUOR, `${need} cases bought on the open market`);
     let inc = 0;
-    for (const b of bars.slice(0, open)) inc += ownCut(s, f, b, INCOME.speakeasy);
+    for (const b of bars.slice(0, open)) inc += b.took = ownCut(s, f, b, INCOME.speakeasy);
     earn(s, f, inc, `${open} speakeas${open === 1 ? 'y' : 'ies'}`);
     skim(s, f, run_!.p, inc, 'Speakeasies');
   }
@@ -2114,7 +2117,7 @@ function settle(s: GameState, f: FamilyId): void {
   const dealing = gam && !gam.j.stalled ? Math.min(dens.length, gam.j.hoods) : 0;
   if (dealing) {
     let inc = 0;
-    for (const b of dens.slice(0, dealing)) inc += ownCut(s, f, b, INCOME.gambling);
+    for (const b of dens.slice(0, dealing)) inc += b.took = ownCut(s, f, b, INCOME.gambling);
     earn(s, f, inc, `${dealing} gambling den${dealing === 1 ? '' : 's'}`);
     skim(s, f, gam!.p, inc, 'Gambling');
   }
@@ -2124,8 +2127,9 @@ function settle(s: GameState, f: FamilyId): void {
     fam.liquor = 40;
     earn(s, f, sell * WHOLESALE_LIQUOR, `${sell} spare cases sold to other bars`);
   }
+  for (const b of owned(s, f)) b.took += LEGIT_TRADE;
   const fronts = owned(s, f).length;
-  if (fronts) earn(s, f, fronts * 50, `Legit trade at ${fronts} front${fronts === 1 ? '' : 's'}`);
+  if (fronts) earn(s, f, fronts * LEGIT_TRADE, `Legit trade at ${fronts} front${fronts === 1 ? '' : 's'}`);
 
   // Costs.
   const pay = jobOf(s, f, 'payoff');

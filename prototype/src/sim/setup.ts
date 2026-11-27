@@ -403,6 +403,7 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
     telephone: false,
     raided: false,
     uncollected: 0,
+    took: 0,
     refused: false,
   }));
 
@@ -438,6 +439,7 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
       telephone: false,
       raided: false,
       uncollected: 0,
+      took: 0,
       refused: false,
     });
   });

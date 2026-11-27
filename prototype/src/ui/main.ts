@@ -76,13 +76,14 @@ import {
   gunHands,
   visible,
 } from '../sim/util';
-import { MAP_MODES, WardMap, monthly } from './map';
+import { INCOME_SCALE, MAP_MODES, WEALTH_SCALE, WardMap, incomeLabel, shortfall } from './map';
+import type { Step } from './map';
 import type { MapMode } from './map';
 
 // ---------------------------------------------------------------- state
 
 type Phase = 'paper' | 'orders' | 'watch' | 'plans' | 'over';
-const SAVE_KEY = 'capo-slice-v6';
+const SAVE_KEY = 'capo-slice-v7';
 const SPEEDS = [0, 1100, 550, 220];
 
 interface Hot {
@@ -767,11 +768,15 @@ function renderModes(): void {
   const mode = MAP_MODES.find((m) => m.id === map.mode)!;
   let key = mode.key;
   if (map.mode === 'income') {
-    const ours = s.buildings.filter((b) => holder(b) === 'player').reduce((n, b) => n + monthly(b), 0);
-    const near = s.buildings.filter((b) => !holder(b) && onTurf(s, 'player', b, b.id)).reduce((n, b) => n + b.protection, 0);
-    key = `Ours: about ${money(ours)} a month · next to our turf and paying nobody: ${money(near)} · ${key}`;
+    const ours = s.buildings.filter((b) => holder(b) === 'player');
+    const took = ours.reduce((n, b) => n + b.took, 0);
+    const short = ours.filter((b) => shortfall(b)).length;
+    key = `Last month our places took ${money(took)}${short ? ` · ${short} came up short` : ''} (before wages and cuts) · ${key}`;
   }
-  keyEl.textContent = key;
+  const scale = (steps: Step[]) =>
+    `<span class="scale">${steps.map((x) => `<span><i style="background:${x.colour}"></i>${esc(x.label)}</span>`).join('')}</span>`;
+  keyEl.innerHTML =
+    (map.mode === 'wealth' ? scale(WEALTH_SCALE) : map.mode === 'income' ? scale(INCOME_SCALE) : '') + `<span>${esc(key)}</span>`;
 }
 
 function render(): void {
@@ -1111,7 +1116,21 @@ function blockSummary(id: string): string {
     Boolean,
   );
   const free = bs.filter((b) => !holder(b)).reduce((t, b) => t + b.protection, 0);
-  return `${homes} homes, ${bs.length - homes} shops<br>${parts.join(' · ')}${free ? `<br>Up for grabs: ${money(free)} a month` : ''}`;
+  return `${homes} homes, ${bs.length - homes} shops<br>${parts.join(' · ')}${free ? `<br>Up for grabs: ${money(free)} a month` : ''}${
+    map.mode === 'income' ? blockBooks(bs) : ''
+  }`;
+}
+
+/** On the Income map: what each of our places in a block took last month, and why any came up short. */
+function blockBooks(bs: Building[]): string {
+  const ours = bs.filter((b) => holder(b) === 'player').sort((a, b) => b.took - a.took);
+  if (!ours.length) return '';
+  const rows = ours.map((b) => {
+    const l = incomeLabel(b);
+    const why = shortfall(b) ?? (l.kind === 'new' ? 'new: nothing due yet' : l.kind === 'still' ? 'makes liquor for the bars' : '');
+    return `<div class="books-row ${l.kind}"><span>${esc(b.name)}${why ? `<small>${esc(why)}</small>` : ''}</span><em>${esc(l.text === 'new' || l.text === 'still' ? '·' : l.text)}</em></div>`;
+  });
+  return `<div class="books"><b>Last month</b>${rows.join('')}</div>`;
 }
 
 /** The order buttons in the map menu. */
