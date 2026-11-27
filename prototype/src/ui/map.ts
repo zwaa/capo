@@ -196,6 +196,8 @@ export class WardMap {
   private flashes: { at: Pos; t: number }[] = [];
   raf = 0;
   showOrders = true;
+  private clearTop = 0;
+  private clearBottom = 18;
   /** Notices to mark on the map (the UI passes the ones still on the desk, between months). */
   notices: Notice[] = [];
   mode: MapMode = 'turf';
@@ -253,9 +255,20 @@ export class WardMap {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     if (!this.state) return;
     const pad = 20;
-    this.tile = Math.max(8, Math.floor(Math.min((r.width - pad * 2) / this.state.width, (r.height - pad * 2 - 18) / this.state.height)));
+    // Keep the ward clear of the mode switcher above and the legend below, however much they wrap.
+    const top = Math.max(pad, this.clearTop + 6);
+    const bottom = Math.max(pad, this.clearBottom + 6);
+    this.tile = Math.max(8, Math.floor(Math.min((r.width - pad * 2) / this.state.width, (r.height - top - bottom) / this.state.height)));
     this.ox = Math.round((r.width - this.tile * this.state.width) / 2);
-    this.oy = Math.round((r.height - 18 - this.tile * this.state.height) / 2);
+    this.oy = Math.round(top + (r.height - top - bottom - this.tile * this.state.height) / 2);
+  }
+
+  /** Space the overlays take at the top and bottom of the map, in CSS pixels: the ward is fitted between them. */
+  keepClear(top: number, bottom: number): void {
+    if (top === this.clearTop && bottom === this.clearBottom) return;
+    this.clearTop = top;
+    this.clearBottom = bottom;
+    this.resize();
   }
 
   setState(s: GameState): void {

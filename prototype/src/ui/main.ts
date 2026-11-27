@@ -831,6 +831,9 @@ function renderModes(): void {
           : map.mode === 'mood'
             ? scale(MOOD_SCALE)
             : '') + `<span>${esc(key)}</span>`;
+  const legend = keyEl.parentElement!;
+  // Measured only while the map is on screen (on a phone the newspaper hides it, and everything measures zero).
+  if (legend.offsetParent) map.keepClear(modesEl.offsetTop + modesEl.offsetHeight, legend.offsetHeight + 12);
 }
 
 function render(): void {

@@ -2,10 +2,22 @@
 // Usage: npm run sim -- [games]   (CAPO_RANDOM=1 answers cards at random,
 // CAPO_NOLESSONS=1 plays without the tutorial lessons)
 import { planFamily } from '../src/sim/ai';
-import { answer, assignBranch, bossAction, canAct, createGame, endMonth, startMonth, stepDay, transferHoods } from '../src/sim/engine';
+import {
+  addJob,
+  answer,
+  assignBranch,
+  bossAction,
+  canAct,
+  createGame,
+  endMonth,
+  startMonth,
+  stepDay,
+  transferHoods,
+} from '../src/sim/engine';
+import { currentLesson } from '../src/sim/lessons';
 import { rand } from '../src/sim/rng';
 import type { Branch, GameState } from '../src/sim/types';
-import { PROMOTE_XP, bossOf, crewSize, lieutenants, owned, protectedBy, rackets, totalHoods } from '../src/sim/util';
+import { PROMOTE_XP, bossOf, crewSize, lieutenants, owned, protectedBy, rackets, runner, totalHoods } from '../src/sim/util';
 
 const PLAN: Branch[][] = [
   ['protection', 'enforcement'],
@@ -34,6 +46,14 @@ function manage(s: GameState): void {
     if (l.demand && canAct(s, { kind: 'grant', lt: l.id }) === null) bossAction(s, { kind: 'grant', lt: l.id });
   }
   planFamily(s, 'player');
+  // Do what the police lesson asks, once: pay the captain for a month (planning drops it again if HQ stays cool).
+  const lesson = currentLesson(s);
+  if (lesson?.id === 'specialists' && fam.cash > 500 && canAct(s, { kind: 'specialist', which: 'recruiter' }) === null)
+    bossAction(s, { kind: 'specialist', which: 'recruiter' });
+  if (lesson?.id === 'fixing' && fam.cash > 400) {
+    const r = runner(s, 'player', 'police');
+    if (!r.jobs.some((j) => j.kind === 'payoff')) addJob(s, r.id, 'payoff', null);
+  }
   // Spread the boss's hoods to lieutenants who need them.
   const boss = bossOf(s, 'player');
   for (const l of lieutenants(s, 'player').filter((x) => x.status === 'active')) {
