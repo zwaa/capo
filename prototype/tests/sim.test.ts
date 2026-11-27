@@ -4,6 +4,10 @@ import { planFamily } from '../src/sim/ai';
 import {
   addHeat,
   addJob,
+  addMood,
+  setStance,
+  settleMood,
+  signupOdds,
   allocate,
   coolBlocks,
   assignBranch,
@@ -27,7 +31,7 @@ import {
   stepDay,
 } from '../src/sim/engine';
 import { LESSONS } from '../src/sim/lessons';
-import { blankJob, isLot } from '../src/sim/setup';
+import { blankJob, freshMarket, isLot } from '../src/sim/setup';
 import type { GameState } from '../src/sim/types';
 import {
   BRANCHES,
@@ -51,6 +55,9 @@ import {
   allBlocks,
   heatAt,
   nextBlocks,
+  moodOf,
+  CHARITY_GOODWILL,
+  FEAR_FADE,
 } from '../src/sim/util';
 
 /** Take Sal on (as the first lesson would) and promote him. */
@@ -267,7 +274,7 @@ describe('homes and blocks', () => {
     const s = createGame(14);
     const boss = bossOf(s, 'player');
     const blk = blockId({ x: boss.homeX, y: boss.homeY });
-    expect(ordersFor(s, blk).map((o) => o.kind)).toEqual(['block', 'beat']);
+    expect(ordersFor(s, blk).map((o) => o.kind)).toEqual(['block', 'beat', 'charity', 'intimidate']);
   });
   it('a block sign-up goes door to door through the block', () => {
     const s = createGame(14);
@@ -443,6 +450,85 @@ describe('local heat', () => {
       playMonth(cool);
       expect(cool.families.player.ledger.some((l) => l.label === 'Cash seized in the raid on HQ')).toBe(false);
     }
+  });
+});
+
+describe('fear and goodwill', () => {
+  const playMonth = (s: GameState) => {
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    endMonth(s);
+  };
+  const freeShop = (s: GameState) => s.buildings.find((x) => x.kind === 'shop' && !x.owner && !x.protectedBy)!;
+  it('a block that fears or likes us is easier to sign up', () => {
+    const s = createGame(14);
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const b = freeShop(s);
+    const j = addJob(s, boss.id, 'signup', b.id)!;
+    const cold = signupOdds(s, 'player', j, b);
+    addMood(s, 'player', b, 'goodwill', 50, 'test');
+    expect(signupOdds(s, 'player', j, b)).toBeGreaterThan(cold);
+    expect(s.moodLog.at(-1)).toMatchObject({ family: 'player', dial: 'goodwill', amount: 50, label: 'test' });
+  });
+  it('a feared door keeps paying a month longer when nobody collects', () => {
+    const s = createGame(14);
+    s.lessons.on = false;
+    bossOf(s, 'player').jobs = [];
+    const b = freeShop(s);
+    b.protectedBy = 'player';
+    b.uncollected = 1;
+    addMood(s, 'player', b, 'fear', 60, 'test');
+    playMonth(s);
+    expect(b.protectedBy).toBe('player');
+    expect(b.uncollected).toBe(2);
+  });
+  it('stances: generous costs money and builds goodwill; iron fist builds fear and heat; firm holds fear', () => {
+    const s = createGame(14);
+    const [a, b, c] = s.buildings.filter((x) => !x.owner && !x.protectedBy && x.x < 4);
+    const blocks = [...new Set([a, b, c].map((x) => blockId(x)))];
+    expect(blocks.length).toBe(1);
+    const id = blocks[0];
+    a.protectedBy = 'player';
+    s.families.player.cash = 500;
+    setStance(s, 'player', id, 'generous');
+    settleMood(s);
+    expect(s.families.player.cash).toBe(490);
+    expect(moodOf(s, 'player', id).goodwill).toBe(5 - 1);
+    setStance(s, 'player', id, 'ironfist');
+    settleMood(s);
+    expect(moodOf(s, 'player', id).fear).toBe(5 - FEAR_FADE);
+    expect(s.blockHeat[id]).toBe(2);
+    setStance(s, 'player', id, 'firm');
+    const fear = moodOf(s, 'player', id).fear;
+    settleMood(s);
+    expect(moodOf(s, 'player', id).fear).toBe(fear);
+    // Stances only stick where we hold something.
+    setStance(s, 'player', 'blk2-2', 'ironfist');
+    expect(s.families.player.stances['blk2-2']).toBeUndefined();
+  });
+  it('charity costs $150 and buys goodwill on the block', () => {
+    const s = createGame(14);
+    s.lessons.on = false;
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const id = blockId({ x: boss.homeX, y: boss.homeY });
+    s.families.player.cash = 1000;
+    addJob(s, boss.id, 'charity', id);
+    playMonth(s);
+    expect(s.families.player.ledger.some((l) => l.label.startsWith('Charity on') && l.amount === -150)).toBe(true);
+    expect(s.moodLog.some((l) => l.block === id && l.dial === 'goodwill' && l.amount === CHARITY_GOODWILL)).toBe(true);
+  });
+  it('heat sours goodwill, and liked blocks send recruits', () => {
+    const s = createGame(14);
+    const id = blockId({ x: bossOf(s, 'player').homeX, y: bossOf(s, 'player').homeY });
+    addMood(s, 'player', id, 'goodwill', 50, 'test');
+    s.blockHeat[id] = 60;
+    settleMood(s);
+    expect(moodOf(s, 'player', id).goodwill).toBe(50 - 1 - 3);
+    freshMarket(s);
+    expect(s.market.length).toBeGreaterThanOrEqual(4);
   });
 });
 

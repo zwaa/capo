@@ -3,6 +3,7 @@ import {
   DRAW_SCORE,
   WIN_SCORE,
   addJob,
+  setStance,
   answer,
   ordersFor,
   assignBranch,
@@ -43,6 +44,7 @@ import type {
   Person,
   Posture,
   SpecialistKind,
+  Stance,
 } from '../sim/types';
 import {
   BRANCHES,
@@ -92,15 +94,17 @@ import {
   allBlocks,
   SLOW_HEAT,
   heatAt,
+  STANCES,
+  moodOf,
 } from '../sim/util';
-import { HEAT_SCALE, INCOME_SCALE, MAP_MODES, WEALTH_SCALE, WardMap, incomeLabel, shortfall } from './map';
+import { HEAT_SCALE, INCOME_SCALE, MAP_MODES, MOOD_SCALE, WEALTH_SCALE, WardMap, incomeLabel, moodStep, shortfall } from './map';
 import type { Step } from './map';
 import type { MapMode } from './map';
 
 // ---------------------------------------------------------------- state
 
 type Phase = 'paper' | 'orders' | 'watch' | 'plans' | 'over';
-const SAVE_KEY = 'capo-slice-v8';
+const SAVE_KEY = 'capo-slice-v9';
 const SPEEDS = [0, 1100, 550, 220];
 
 interface Hot {
@@ -809,7 +813,7 @@ function renderModes(): void {
     const short = ours.filter((b) => shortfall(b)).length;
     key = `Last month our places took ${money(took)}${short ? ` · ${short} came up short` : ''} (before wages and cuts) · ${key}`;
   }
-  if (map.mode === 'wealth' || map.mode === 'income' || map.mode === 'heat')
+  if (map.mode === 'wealth' || map.mode === 'income' || map.mode === 'heat' || map.mode === 'mood')
     key += ' · Outlines: who holds each place (solid: owns it, dashed: pays them)';
   const scale = (steps: Step[]) =>
     `<span class="scale">${steps.map((x) => `<span><i style="background:${x.colour}"></i>${esc(x.label)}</span>`).join('')}</span>`;
@@ -820,7 +824,9 @@ function renderModes(): void {
         ? scale(INCOME_SCALE)
         : map.mode === 'heat'
           ? scale(HEAT_SCALE)
-          : '') + `<span>${esc(key)}</span>`;
+          : map.mode === 'mood'
+            ? scale(MOOD_SCALE)
+            : '') + `<span>${esc(key)}</span>`;
 }
 
 function render(): void {
@@ -923,6 +929,12 @@ document.addEventListener('click', (e) => {
   }
   if (d.act === 'pick-close') return closePick();
   if (d.mode) return setMode(d.mode as MapMode);
+  if (d.stance) {
+    const [id, stance] = d.stance.split('|');
+    setStance(s, 'player', id, stance as Stance);
+    save();
+    return render();
+  }
   if (d.fire) {
     if (firing !== d.fire) {
       firing = d.fire;
@@ -1107,6 +1119,9 @@ map.onHover = (b: Building | null, p: Person | null, px: number, py: number) => 
 const ORDER_VERB: Partial<Record<JobKind, string>> = {
   signup: 'Sign them up for protection',
   beat: 'Pay off the beat cops here',
+  charity: 'Charity on this block',
+  intimidate: 'Put the fear into this block',
+  badmouth: 'Bad-mouth Calloway here',
   block: 'Sign up the whole block',
   guard: 'Guard it',
   hit: 'Hit them',
@@ -1162,8 +1177,34 @@ function blockSummary(id: string): string {
   );
   const free = bs.filter((b) => !holder(b)).reduce((t, b) => t + b.protection, 0);
   return `${homes} homes, ${bs.length - homes} shops<br>${parts.join(' · ')}${free ? `<br>Up for grabs: ${money(free)} a month` : ''}${
-    map.mode === 'income' ? blockBooks(bs) : map.mode === 'heat' ? blockHeatWhy(id) : ''
-  }`;
+    map.mode === 'income' ? blockBooks(bs) : map.mode === 'heat' ? blockHeatWhy(id) : map.mode === 'mood' ? blockMoodWhy(id) : ''
+  }${stanceControl(id)}`;
+}
+
+/** Our stance on a block we hold something on: what we do there month in, month out. */
+function stanceControl(id: string): string {
+  if (!blockBuildings(s, id).some((b) => holder(b) === 'player')) return '';
+  const now = s.families.player.stances[id] ?? 'firm';
+  const buttons = (Object.keys(STANCES) as Stance[])
+    .map(
+      (k) =>
+        `<button data-stance="${id}|${k}" aria-pressed="${now === k}" title="${esc(STANCES[k].hint)}">${esc(STANCES[k].label)}</button>`,
+    )
+    .join('');
+  return `<div class="stance"><span>Stance here</span><span class="seg" role="group" aria-label="Our stance on this block">${buttons}</span><small>${esc(STANCES[now].hint)}</small></div>`;
+}
+
+/** On the Mood map: how a block feels about each family, and what moved it since last month began. */
+function blockMoodWhy(id: string): string {
+  const us = moodOf(s, 'player', id);
+  const them = moodOf(s, 'rival', id);
+  const rows = s.moodLog
+    .filter((l) => l.block === id)
+    .map(
+      (l) =>
+        `<div class="books-row"><span>${esc(l.label)}<small>${l.family === 'player' ? 'Our' : "Calloway's"} ${l.dial}</small></span><em>${signed(l.amount)}</em></div>`,
+    );
+  return `<div class="books"><b>Us: fear ${us.fear}, goodwill ${us.goodwill} (${esc(moodStep(us).label.toLowerCase())})</b><small>Calloway: fear ${them.fear}, goodwill ${them.goodwill}</small>${rows.join('') || '<small>Nothing new.</small>'}</div>`;
 }
 
 /** On the Heat map: how hot a block is, and what moved it since last month began. */
@@ -1181,10 +1222,13 @@ function blockHeatWhy(id: string): string {
   return `<div class="books"><b>Heat ${h}</b><small>${effect}</small>${rows.join('') || '<small>Nothing new.</small>'}</div>`;
 }
 
-/** A line for the tooltip when the block around a place has police on it. */
+/** Lines for the tooltip: police on the block, and how it feels about us. */
 function heatLine(b: Building): string {
   const h = heatAt(s, b);
-  return h ? `Block heat ${h}${h >= SLOW_HEAT ? ': jobs here slower' : ''}<br>` : '';
+  const m = moodOf(s, 'player', b);
+  return `${h ? `Block heat ${h}${h >= SLOW_HEAT ? ': jobs here slower' : ''}<br>` : ''}${
+    m.fear || m.goodwill ? `The block: ${moodStep(m).label.toLowerCase()} (fear ${m.fear}, goodwill ${m.goodwill})<br>` : ''
+  }`;
 }
 
 /** On the Income map: what each of our places in a block took last month, and why any came up short. */

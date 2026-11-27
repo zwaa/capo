@@ -13,12 +13,13 @@
 //    rival lieutenants, crews out on jobs and guards.
 
 import { isLot } from '../sim/setup';
-import type { Building, FamilyId, GameState, Person } from '../sim/types';
+import type { Building, FamilyId, GameState, Mood, Person } from '../sim/types';
 import {
   LEGIT_TRADE,
   SLOW_HEAT,
   allBlocks,
   blockBuildings,
+  moodOf,
   onTurf,
   wealth,
   BLOCK_H,
@@ -65,7 +66,7 @@ const C = {
 
 const famColour = (f: FamilyId) => (f === 'player' ? C.lamp : C.steel);
 
-export type MapMode = 'turf' | 'wealth' | 'income' | 'heat' | 'reach';
+export type MapMode = 'turf' | 'wealth' | 'income' | 'heat' | 'mood' | 'reach';
 
 /** The map modes, in switcher order, with what each one's legend says. */
 export const MAP_MODES: { id: MapMode; label: string; key: string }[] = [
@@ -88,6 +89,11 @@ export const MAP_MODES: { id: MapMode; label: string; key: string }[] = [
     id: 'heat',
     label: 'Heat',
     key: 'Police on each block, whoever brought them: hot blocks mean raids on rackets there, and from 40 every job there takes a day longer · HQ: heat about the family itself · Click a block for why',
+  },
+  {
+    id: 'mood',
+    label: 'Mood',
+    key: "How each block feels about us: fear and goodwill, 30 or more counts · Close up: our numbers, and Calloway's in blue · Click a block for both, its history and our stance",
   },
   {
     id: 'reach',
@@ -120,6 +126,21 @@ export const HEAT_SCALE: Step[] = [
   { from: SLOW_HEAT, label: 'Hot: jobs slower', colour: 'rgb(170, 66, 46)' },
   { from: 65, label: 'Crawling with cops', colour: 'rgb(222, 86, 56)' },
 ];
+/** How a block feels about us: the four corners of fear and goodwill, and "known" in between. */
+export const MOOD_SCALE: Step[] = [
+  { from: 0, label: 'Strangers', colour: 'rgb(28, 32, 40)' },
+  { from: 1, label: 'Known', colour: 'rgb(58, 64, 76)' },
+  { from: 2, label: 'Liked', colour: 'rgb(50, 112, 78)' },
+  { from: 3, label: 'Feared', colour: 'rgb(116, 50, 92)' },
+  { from: 4, label: 'Respected', colour: 'rgb(196, 150, 62)' },
+];
+/** A dial at least this high counts on the Mood map. */
+export const MOOD_COUNTS = 30;
+export function moodStep(m: Mood): Step {
+  const fear = m.fear >= MOOD_COUNTS;
+  const liked = m.goodwill >= MOOD_COUNTS;
+  return MOOD_SCALE[fear && liked ? 4 : fear ? 3 : liked ? 2 : Math.max(m.fear, m.goodwill) >= 10 ? 1 : 0];
+}
 /** What our places in a block took last month. */
 export const INCOME_SCALE: Step[] = [
   { from: 0, label: '$0', colour: 'rgb(92, 36, 30)' },
@@ -374,6 +395,7 @@ export class WardMap {
     if (this.mode === 'income') this.drawIncome();
     if (this.mode === 'wealth') this.drawWealth();
     if (this.mode === 'heat') this.drawHeat();
+    if (this.mode === 'mood') this.drawMood();
 
     // Orders: dashed lines from each of our people to their one-off jobs.
     if (this.showOrders && !s.run) {
@@ -405,7 +427,7 @@ export class WardMap {
 
     // Fog of war: a light hatch over what our people can't see. It hides people, not buildings.
     // The block-coloured modes leave it off: it would make one block look like two shades.
-    const blocky = this.mode === 'wealth' || this.mode === 'income' || this.mode === 'heat';
+    const blocky = this.mode === 'wealth' || this.mode === 'income' || this.mode === 'heat' || this.mode === 'mood';
     g.save();
     g.lineWidth = 1;
     for (let y = 0; y < s.height && !blocky; y++) {
@@ -676,6 +698,36 @@ export class WardMap {
     g.restore();
   }
 
+  /** Mood: each block by how it feels about us; close up, our fear and goodwill, and Calloway's beneath. */
+  private drawMood(): void {
+    const s = this.state!;
+    const g = this.ctx;
+    const T = this.tile;
+    g.save();
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.lineWidth = 3;
+    g.strokeStyle = C.night;
+    const text = (str: string, x: number, y: number, colour: string) => {
+      g.strokeText(str, x, y);
+      g.fillStyle = colour;
+      g.fillText(str, x, y);
+    };
+    for (const id of allBlocks(s)) {
+      const us = moodOf(s, 'player', id);
+      const r = this.fillBlock(id, moodStep(us).colour);
+      if (T < DETAIL_TILE) continue;
+      const them = moodOf(s, 'rival', id);
+      g.font = `700 ${Math.round(T * 0.3)}px Oswald, 'Arial Narrow', sans-serif`;
+      if (us.fear || us.goodwill) text(`Fear ${us.fear} · Goodwill ${us.goodwill}`, r.x + r.w / 2, r.y + r.h / 2 - T * 0.12, C.ink);
+      if (them.fear || them.goodwill) {
+        g.font = `700 ${Math.round(T * 0.22)}px Oswald, 'Arial Narrow', sans-serif`;
+        text(`Calloway: ${them.fear} · ${them.goodwill}`, r.x + r.w / 2, r.y + r.h / 2 + T * 0.24, C.steel);
+      }
+    }
+    g.restore();
+  }
+
   /** Paint a block's lots in one solid colour; returns the rectangle it covered. */
   private fillBlock(id: string, colour: string): { x: number; y: number; w: number; h: number } {
     const s = this.state!;
@@ -798,7 +850,9 @@ export class WardMap {
     // Windows: two rows of three, some lit.
     const ws = Math.max(2, T * 0.07);
     for (let i = 0; i < 6; i++) {
-      const lit = bossHome ? i === 4 || rnd(i + 3) < 0.35 : rnd(i + 3) < 0.3;
+      // More windows lit where the block likes us: a light hint of goodwill on the ordinary map.
+      const warm = this.state ? moodOf(this.state, 'player', { x, y }).goodwill / 150 : 0;
+      const lit = bossHome ? i === 4 || rnd(i + 3) < 0.35 + warm : rnd(i + 3) < 0.3 + warm;
       g.fillStyle = lit ? C.homeWindow : 'rgba(0,0,0,0.35)';
       g.fillRect(X + m + w * (0.18 + (i % 3) * 0.28), Y + m + w * (0.42 + Math.floor(i / 3) * 0.26), ws, ws);
     }

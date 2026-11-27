@@ -1,7 +1,7 @@
 import { chance, int, pick, shuffle } from './rng';
 import type { RngHolder } from './rng';
 import type { Branch, Building, FamilyId, GameState, Hood, Job, JobKind, Person, Posture, Racket, Trait } from './types';
-import { BRANCHES, STREET_NAMES, dist } from './util';
+import { BRANCHES, LIKED_MOOD, STREET_NAMES, dist } from './util';
 
 export const WIDTH = 12;
 export const HEIGHT = 8;
@@ -365,9 +365,12 @@ export function makePerson(
 /** Three hoods looking for work this month (four with a recruiter, and better). */
 export function freshMarket(s: GameState): void {
   const good = s.families.player.specialists.includes('recruiter');
-  const n = good ? 4 : 3;
+  // Blocks that like us send their sons: one liked block, one more hood; two, better ones.
+  const liked = Object.values(s.mood).filter((m) => (m.player?.goodwill ?? 0) >= LIKED_MOOD).length;
+  const n = (good ? 4 : 3) + (liked >= 1 ? 1 : 0);
+  const bonus = (good ? 1 : 0) + (liked >= 2 ? 1 : 0);
   s.market = [];
-  for (let i = 0; i < n; i++) s.market.push(makeHood(s, `h${s.nextId++}`, 'player', '', good ? 1 : 0));
+  for (let i = 0; i < n; i++) s.market.push(makeHood(s, `h${s.nextId++}`, 'player', '', bonus));
   // Now and then a notable turns up (when lessons aren't handing them out).
   if (!s.lessons.on && chance(s, 0.2)) {
     const free = POOL.map((_, i) => i).filter(
@@ -532,6 +535,7 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
         cash: 300,
         heat: 0,
         heatLog: [],
+        stances: {},
         ledger: [],
         actions: 2,
         actionDebt: 0,
@@ -552,6 +556,7 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
         cash: 1500,
         heat: 15,
         heatLog: [],
+        stances: {},
         ledger: [],
         actions: 2,
         actionDebt: 0,
@@ -588,6 +593,8 @@ export function newGame(seed: number, bossName = 'Nico Russo'): GameState {
     lessons: { on: true, index: 0 },
     blockHeat: {},
     blockHeatLog: [],
+    mood: {},
+    moodLog: [],
     stats: { fights: 0, changes: 0, demandsSeen: 0, raids: 0 },
   };
   return state;

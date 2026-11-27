@@ -262,6 +262,32 @@ button {
   border-top: 2px dashed var(--paper-dim);
   padding-top: 8px;
 }
+.stance {
+  display: grid;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--paper-dim);
+  font-size: 12px;
+}
+.stance .seg {
+  border-color: var(--paper-dim);
+  justify-self: start;
+}
+.stance .seg button {
+  color: var(--paper-dim);
+}
+.stance .seg button + button {
+  border-left-color: var(--paper-dim);
+}
+.stance .seg button[aria-pressed='true'] {
+  background: var(--paper-ink);
+  color: var(--paper);
+}
+.stance small {
+  color: var(--paper-dim);
+  font-size: 11px;
+}
 .books {
   display: grid;
   gap: 3px;
