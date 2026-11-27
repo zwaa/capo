@@ -13,7 +13,7 @@
 //    rival lieutenants, crews out on jobs and guards.
 
 import { isLot } from '../sim/setup';
-import type { Building, FamilyId, GameState, Mood, Person } from '../sim/types';
+import type { Building, FamilyId, GameState, Mood, Notice, Person } from '../sim/types';
 import {
   LEGIT_TRADE,
   SLOW_HEAT,
@@ -101,6 +101,10 @@ export const MAP_MODES: { id: MapMode; label: string; key: string }[] = [
     key: "Lit: next to our turf, where sign-ups are easier and quicker · Blue: next to Calloway's · Dark and hatched: out of our sight",
   },
 ];
+
+/** How notices are marked: worst first. */
+export const NOTICE_COLOUR: Record<Notice['level'], string> = { alarm: '#c4473a', warn: '#d9a95a', info: '#5f9fb8' };
+const NOTICE_RANK: Record<Notice['level'], number> = { alarm: 0, warn: 1, info: 2 };
 
 /** A stepped colour scale: a block takes the colour of the highest step its total reaches. */
 export interface Step {
@@ -192,6 +196,8 @@ export class WardMap {
   private flashes: { at: Pos; t: number }[] = [];
   raf = 0;
   showOrders = true;
+  /** Notices to mark on the map (the UI passes the ones still on the desk, between months). */
+  notices: Notice[] = [];
   mode: MapMode = 'turf';
   state: GameState | null = null;
   onHover: (b: Building | null, p: Person | null, px: number, py: number) => void = () => {};
@@ -533,6 +539,7 @@ export class WardMap {
     }
 
     // The block picked for orders, then the tile: dashed frames.
+    this.drawNotices();
     if (this.selectedBlock) this.frameBlock(this.selectedBlock, 'rgba(230,225,214,0.55)', -(now / 90) % 9);
     if (this.selected) {
       g.save();
@@ -724,6 +731,38 @@ export class WardMap {
         g.font = `700 ${Math.round(T * 0.22)}px Oswald, 'Arial Narrow', sans-serif`;
         text(`Calloway: ${them.fear} · ${them.goodwill}`, r.x + r.w / 2, r.y + r.h / 2 + T * 0.24, C.steel);
       }
+    }
+    g.restore();
+  }
+
+  /** A marker in the corner of each place with something on the desk: red for alarms, amber for warnings, blue for news. */
+  private drawNotices(): void {
+    const g = this.ctx;
+    const T = this.tile;
+    const worst = new Map<string, Notice>();
+    for (const n of this.notices) {
+      if (!n.at) continue;
+      const k = `${n.at.x},${n.at.y}`;
+      const was = worst.get(k);
+      if (!was || NOTICE_RANK[n.level] < NOTICE_RANK[was.level]) worst.set(k, n);
+    }
+    g.save();
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    for (const n of worst.values()) {
+      const x = this.ox + n.at!.x * T + T * 0.2;
+      const y = this.oy + n.at!.y * T + T * 0.2;
+      const r = Math.max(6, T * 0.15);
+      g.fillStyle = NOTICE_COLOUR[n.level];
+      g.strokeStyle = C.night;
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(x, y, r, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+      g.fillStyle = C.night;
+      g.font = `700 ${Math.round(r * 1.4)}px Oswald, 'Arial Narrow', sans-serif`;
+      g.fillText('!', x, y + 0.5);
     }
     g.restore();
   }

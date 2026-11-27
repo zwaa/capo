@@ -5,6 +5,7 @@ import {
   addHeat,
   addJob,
   addMood,
+  desk,
   setStance,
   settleMood,
   signupOdds,
@@ -529,6 +530,40 @@ describe('fear and goodwill', () => {
     expect(moodOf(s, 'player', id).goodwill).toBe(50 - 1 - 3);
     freshMarket(s);
     expect(s.market.length).toBeGreaterThanOrEqual(4);
+  });
+});
+
+describe('the desk', () => {
+  it('lists hot blocks we do business on, a warm HQ, uncollected doors and idle back rooms, worst first', () => {
+    const s = createGame(14);
+    const [a, b] = s.buildings.filter((x) => x.kind === 'shop' && !x.owner && !x.protectedBy);
+    a.protectedBy = 'player';
+    a.uncollected = 1;
+    b.owner = 'player';
+    b.racket = 'speakeasy';
+    b.took = 50;
+    s.blockHeat[blockId(a)] = 45;
+    s.families.player.heat = 60;
+    const d = desk(s, []);
+    expect(d.map((n) => n.kind)).toEqual(expect.arrayContaining(['hq', 'heat', 'slipping', 'short']));
+    expect(d[0]).toMatchObject({ kind: 'hq', level: 'alarm' });
+    expect(d.find((n) => n.kind === 'heat')!.at).not.toBeNull();
+    // Hot blocks where we hold nothing aren't our business.
+    const quiet = createGame(14);
+    quiet.blockHeat[blockId(quiet.buildings.find((x) => x.owner === 'rival')!)] = 80;
+    expect(desk(quiet, []).filter((n) => n.kind === 'heat')).toEqual([]);
+  });
+  it('fills at month end and stays through planning', () => {
+    const s = createGame(14);
+    s.lessons.on = false;
+    s.families.player.heat = 100;
+    startMonth(s);
+    let n = 0;
+    while (stepDay(s) !== 'done' && n++ < 100) if (s.run!.queue.length) s.run!.queue = [];
+    endMonth(s);
+    expect(s.notices.some((x) => x.kind === 'hq')).toBe(true);
+    startMonth(s);
+    expect(s.notices.some((x) => x.kind === 'hq')).toBe(true);
   });
 });
 

@@ -221,6 +221,8 @@ export interface MonthRun {
   news: NewsItem[];
   /** Families whose HQ was raided this month (once a month at most). */
   hqRaided: FamilyId[];
+  /** Things that happened to us this month that go on the desk at month end. */
+  notices: Notice[];
 }
 
 export interface NewsItem {
@@ -245,6 +247,17 @@ export interface Stats {
   changes: number;
   demandsSeen: number;
   raids: number;
+}
+
+/** Something on the boss's desk: what happened last month that needs a decision, and where. */
+export interface Notice {
+  kind: 'heat' | 'hq' | 'rival' | 'stopped' | 'slipping' | 'raid' | 'short';
+  /** alarm: something lost or about to be; warn: act soon; info: worth knowing. */
+  level: 'alarm' | 'warn' | 'info';
+  title: string;
+  text: string;
+  /** Where on the map, if anywhere. */
+  at: { x: number; y: number } | null;
 }
 
 /** How a block feels about a family. */
@@ -277,6 +290,8 @@ export interface GameState {
   candidates: number[];
   lessons: { on: boolean; index: number };
   stats: Stats;
+  /** The boss's desk: what last month left to deal with (rebuilt at each month end). */
+  notices: Notice[];
   /** How each block feels about each family (by block id): fear and goodwill, 0-100 each. Missing means 0. */
   mood: Record<string, Record<FamilyId, Mood>>;
   /** Why fear and goodwill moved since the month began (cleared when the next month starts). */
