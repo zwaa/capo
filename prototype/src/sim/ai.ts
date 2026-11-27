@@ -29,6 +29,7 @@ import {
   targets,
   gunHands,
   hottestRacket,
+  blockId,
 } from './util';
 
 /** How often a family that's at odds leans on one of the other side's doors, per month. */
@@ -38,6 +39,11 @@ export const LEANS_PER_MONTH = 2;
 
 /** How angry (see Family.provoked) a family must be before it takes buildings by force. */
 export const TAKEOVER_ANGER = 2;
+
+/** Pay off the beat on a racket's block from this heat; stop paying once it's below the other line; at most this many blocks. */
+const BEAT_FROM = 25;
+const BEAT_STOP = 10;
+const MAX_BEATS = 2;
 
 export function planFamily(s: GameState, f: FamilyId): void {
   const fam = s.families[f];
@@ -62,6 +68,20 @@ export function planFamily(s: GameState, f: FamilyId): void {
   ensure('distill', stills > 0);
   ensure('supply', stills > 0 && bars > 0 && fam.cars > 0);
   ensure('payoff', Math.max(fam.heat, hottestRacket(s, f)) > 25 && fam.cash > 400);
+
+  // The beat: pay off the cops on the block of our hottest racket; drop it once the block has cooled.
+  const police = runner(s, f, 'police');
+  police.jobs = police.jobs.filter((j) => j.kind !== 'beat' || (s.blockHeat[j.target!] ?? 0) >= BEAT_STOP);
+  const hotSpot = [...new Set(rackets(s, f).map((b) => blockId(b)))].sort((a, b) => (s.blockHeat[b] ?? 0) - (s.blockHeat[a] ?? 0))[0];
+  const beats = police.jobs.filter((j) => j.kind === 'beat');
+  if (
+    hotSpot &&
+    (s.blockHeat[hotSpot] ?? 0) >= BEAT_FROM &&
+    fam.cash > 600 &&
+    beats.length < MAX_BEATS &&
+    !beats.some((j) => j.target === hotSpot)
+  )
+    police.jobs.push(blankJob(id(), 'beat', hotSpot));
 
   const oneOff = (kind: JobKind, target: string | null, posture: Posture = 'firm', max = 1) => {
     const r = runner(s, f, JOBS[kind].branch);

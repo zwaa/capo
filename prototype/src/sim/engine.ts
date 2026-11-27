@@ -97,6 +97,11 @@ import {
   blockId,
   heatAt,
   hottestHeld,
+  BEAT_AROUND,
+  BEAT_COOL,
+  BEAT_COST,
+  BEAT_MIN,
+  beatPaid,
   nextBlocks,
 } from './util';
 
@@ -551,6 +556,7 @@ export function needFor(s: GameState, f: FamilyId, j: Job, p: Person): number {
       n = rackets(s, f, 'still').length && rackets(s, f, 'speakeasy').length ? 1 : 0;
       break;
     case 'payoff':
+    case 'beat':
       n = 0;
       break;
   }
@@ -951,7 +957,8 @@ function raids(s: GameState): void {
   for (const b of s.buildings) {
     if (!b.owner || !b.racket || b.raided) continue;
     const fam = s.families[b.owner];
-    if (!chance(s, (heatAt(s, b) / RAID_ODDS) * (fam.captain ? 0.5 : 1))) continue;
+    const paid = (fam.captain ? 0.5 : 1) * (beatPaid(s, b.owner, blockId(b)) ? 0.5 : 1);
+    if (!chance(s, (heatAt(s, b) / RAID_ODDS) * paid)) continue;
     b.raided = true;
     s.stats.raids += b.owner === 'player' ? 1 : 0;
     addHeat(s, b.owner, -5, `Raid on ${b.name} let off steam`, b);
@@ -2204,6 +2211,14 @@ function settle(s: GameState, f: FamilyId): void {
   // Costs.
   const pay = jobOf(s, f, 'payoff');
   if (fam.captain && pay) spend(s, f, Math.max(150, 250 - pay.p.charm * 10), 'Captain Hollis');
+  for (const p of members(s, f)) {
+    for (const j of p.jobs.filter((x) => x.kind === 'beat' && x.target && !x.stalled)) {
+      const id = j.target!;
+      spend(s, f, Math.max(BEAT_MIN, BEAT_COST - p.charm * 5), `The beat on ${blockName(s, id)}`);
+      addBlockHeat(s, id, -BEAT_COOL, `Beat cops paid to look the other way`, f);
+      for (const n of nextBlocks(s, id)) addBlockHeat(s, n, -BEAT_AROUND, `Beat cops next door paid off`, f);
+    }
+  }
   const crew = totalHoods(s, f);
   if (crew) spend(s, f, crew * WAGE, `Wages for ${crew} hoods`);
   for (const l of lieutenants(s, f))

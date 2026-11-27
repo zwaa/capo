@@ -22,7 +22,8 @@ export type JobKind =
   | 'runGamble'
   | 'distill'
   | 'supply'
-  | 'payoff';
+  | 'payoff'
+  | 'beat';
 
 /** What a person's idle hoods do when nothing on the list needs them. */
 export type IdleOrder = 'rest' | 'patrol' | 'canvass';

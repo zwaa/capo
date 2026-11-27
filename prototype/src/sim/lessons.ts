@@ -73,7 +73,7 @@ export const LESSONS: Lesson[] = [
   {
     id: 'fixing',
     title: 'Fix the police',
-    body: 'Heat brings raids, and raids shut rackets and catch people. Add **Pay the captain** under **The Police**. Mickey Doyle, an ex-precinct clerk who knows which captain takes what, wants in: take him on, and promote him if you want someone else to run it.',
+    body: 'Heat brings raids, and raids shut rackets and catch people. Add **Pay the captain** under **The Police**: it cools HQ and halves raids everywhere. For one hot block, **Pay off the beat** there (click the block). Mickey Doyle, an ex-precinct clerk who knows which captain takes what, wants in: take him on, and promote him if you want someone else to run it.',
     goal: 'Put the captain on the payroll',
     done: (s) => hasJob(s, 'payoff'),
     start: (s) => offer(s, 2),

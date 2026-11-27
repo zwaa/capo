@@ -1104,6 +1104,7 @@ map.onHover = (b: Building | null, p: Person | null, px: number, py: number) => 
 
 const ORDER_VERB: Partial<Record<JobKind, string>> = {
   signup: 'Sign them up for protection',
+  beat: 'Pay off the beat cops here',
   block: 'Sign up the whole block',
   guard: 'Guard it',
   hit: 'Hit them',

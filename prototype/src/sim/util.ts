@@ -150,6 +150,15 @@ export const HQ_RAID_ODDS = 2000;
 /** An HQ raid seizes this share of the cash in hand, up to a cap. */
 export const HQ_SEIZE = 0.25;
 export const HQ_SEIZE_MAX = 1500;
+/** Paying off the beat on a block: a monthly envelope (less with Charm), and how much it cools the block and those around it. */
+export const BEAT_COST = 100;
+export const BEAT_MIN = 50;
+export const BEAT_COOL = 10;
+export const BEAT_AROUND = 3;
+/** Whether a family has the beat on this block paid off (a live job for it, not stalled). */
+export function beatPaid(s: GameState, f: FamilyId, id: string): boolean {
+  return members(s, f).some((p) => p.jobs.some((j) => j.kind === 'beat' && j.target === id && !j.done && !j.stalled));
+}
 /** Heat on the block around a spot. */
 export const heatAt = (s: GameState, at: { x: number; y: number }): number => s.blockHeat[blockId(at)] ?? 0;
 /** The hottest block where a family holds anything (owned or paying it). */
@@ -181,7 +190,7 @@ export const branchInfo = (b: Branch) => BRANCHES.find((x) => x.id === b)!;
 
 // ---------------------------------------------------------------- jobs
 
-export type TargetRule = 'none' | 'signup' | 'block' | 'guard' | 'hit' | 'wreck' | 'buy' | 'takeover' | 'fitout' | 'phone';
+export type TargetRule = 'none' | 'signup' | 'block' | 'guard' | 'hit' | 'wreck' | 'buy' | 'takeover' | 'fitout' | 'phone' | 'beat';
 
 export interface JobInfo {
   branch: Branch;
@@ -378,6 +387,18 @@ export const JOBS: Record<JobKind, JobInfo> = {
     stat: 'charm',
     hint: 'About $250 a month (less with Charm). Halves raids and cools heat.',
   },
+  beat: {
+    branch: 'police',
+    label: 'Pay off the beat',
+    verb: 'Paying off the beat on',
+    target: 'beat',
+    ongoing: true,
+    car: false,
+    work: 0,
+    risky: false,
+    stat: 'charm',
+    hint: 'About $100 a month (less with Charm). The cops on that block look the other way: it cools fast, the blocks around it a little, and raids there are halved.',
+  },
 };
 
 export const jobsForBranch = (b: Branch) => (Object.keys(JOBS) as JobKind[]).filter((k) => JOBS[k].branch === b);
@@ -412,6 +433,8 @@ export function targets(s: GameState, f: FamilyId, kind: JobKind): { id: string;
       return s.buildings.filter((b) => b.owner === f && !b.racket).map((b) => bl(b, ` (${b.suits})`));
     case 'phone':
       return s.buildings.filter((b) => b.owner === f && !b.telephone).map((b) => bl(b));
+    case 'beat':
+      return allBlocks(s).map((id) => ({ id, label: `${cap(blockName(s, id))} (heat ${s.blockHeat[id] ?? 0})` }));
     default:
       return [];
   }

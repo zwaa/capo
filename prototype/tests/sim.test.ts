@@ -267,7 +267,7 @@ describe('homes and blocks', () => {
     const s = createGame(14);
     const boss = bossOf(s, 'player');
     const blk = blockId({ x: boss.homeX, y: boss.homeY });
-    expect(ordersFor(s, blk).map((o) => o.kind)).toEqual(['block']);
+    expect(ordersFor(s, blk).map((o) => o.kind)).toEqual(['block', 'beat']);
   });
   it('a block sign-up goes door to door through the block', () => {
     const s = createGame(14);
@@ -408,6 +408,22 @@ describe('local heat', () => {
     const before = forecast(s, boss).jobs[j.id].end!;
     s.blockHeat[blockId(b)] = SLOW_HEAT;
     expect(forecast(s, boss).jobs[j.id].end).toBe(before + 1);
+  });
+  it('paying off the beat costs an envelope a month and cools that block, and a little around it', () => {
+    const s = createGame(14);
+    s.lessons.on = false;
+    const boss = bossOf(s, 'player');
+    boss.jobs = [];
+    const id = blockId({ x: boss.homeX, y: boss.homeY });
+    s.blockHeat[id] = 40;
+    for (const n of nextBlocks(s, id)) s.blockHeat[n] = 20;
+    expect(ordersFor(s, id).some((o) => o.kind === 'beat')).toBe(true);
+    addJob(s, boss.id, 'beat', id);
+    playMonth(s);
+    expect(s.families.player.ledger.some((l) => l.label.startsWith('The beat on') && l.amount < 0)).toBe(true);
+    expect(s.blockHeatLog).toContainEqual({ block: id, label: 'Beat cops paid to look the other way', amount: -10, family: 'player' });
+    for (const n of nextBlocks(s, id))
+      expect(s.blockHeatLog.some((l) => l.block === n && l.label === 'Beat cops next door paid off')).toBe(true);
   });
   it('a hot HQ gets raided: cash seized; a cool one does not', () => {
     const hot = createGame(14);
