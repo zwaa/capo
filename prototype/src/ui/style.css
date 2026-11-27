@@ -262,6 +262,139 @@ button {
   border-top: 2px dashed var(--paper-dim);
   padding-top: 8px;
 }
+.desk {
+  gap: 8px;
+}
+.note {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+  padding: 7px 8px;
+  background: var(--street);
+  border-left: 3px solid var(--steel);
+}
+.note.alarm {
+  border-left-color: var(--blood);
+}
+.note.warn {
+  border-left-color: #d9a95a;
+}
+.note > i {
+  font: 700 11px/18px var(--head);
+  font-style: normal;
+  text-align: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--steel);
+  color: var(--night);
+}
+.note.alarm > i {
+  background: var(--blood);
+}
+.note.warn > i {
+  background: #d9a95a;
+}
+.note span {
+  display: grid;
+  min-width: 0;
+}
+.note b {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.note small {
+  font-size: 11.5px;
+  color: var(--dim);
+}
+.note-acts {
+  display: flex !important;
+  gap: 4px;
+  align-items: center;
+}
+.note-level {
+  font: 700 10px var(--head);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.paper-brief {
+  border-top: 1px solid var(--paper-ink);
+  padding-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 12px 22px;
+}
+.paper-brief h3,
+.advice h4 {
+  margin: 0 0 6px;
+  font: 700 12px var(--head);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.paper-brief p {
+  margin: 0 0 4px;
+  font: 12.5px/1.4 var(--type);
+}
+.advice p {
+  margin: 0 0 6px;
+  font: 13px/1.45 var(--type);
+}
+.advice em {
+  font-style: normal;
+  font: 700 10px var(--head);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 1px 4px;
+  border: 1px solid currentColor;
+  margin-right: 6px;
+  opacity: 0.8;
+}
+.paper-brief .advice {
+  background: #ded5c1;
+  padding: 10px 12px;
+}
+.paper-brief .advice.none p {
+  color: var(--paper-dim);
+}
+.desk .advice {
+  background: var(--paper);
+  color: var(--paper-ink);
+  padding: 10px 12px;
+}
+.desk-facts p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dim);
+}
+.paper-desk {
+  border-top: 1px solid var(--paper-ink);
+  padding-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+.paper-desk h3 {
+  margin: 0 0 2px;
+  font: 700 12px var(--head);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.paper-desk .note {
+  background: transparent;
+  padding: 2px 0 2px 8px;
+}
+.paper-desk .note small {
+  color: var(--paper-dim);
+}
+.paper-desk .note b {
+  font: 13px/1.35 var(--type);
+}
+.paper-desk .more {
+  margin: 0;
+  font: 12.5px var(--type);
+  color: var(--paper-dim);
+}
 .stance {
   display: grid;
   gap: 4px;

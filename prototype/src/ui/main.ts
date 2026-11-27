@@ -43,6 +43,7 @@ import type {
   JobKind,
   Person,
   Posture,
+  Notice,
   SpecialistKind,
   Stance,
 } from '../sim/types';
@@ -104,7 +105,7 @@ import type { MapMode } from './map';
 // ---------------------------------------------------------------- state
 
 type Phase = 'paper' | 'orders' | 'watch' | 'plans' | 'over';
-const SAVE_KEY = 'capo-slice-v9';
+const SAVE_KEY = 'capo-slice-v11';
 const SPEEDS = [0, 1100, 550, 220];
 
 interface Hot {
@@ -607,7 +608,7 @@ function meetings(): string {
     ${note ? `<p class="hint" style="color:var(--lamp)">${esc(note)}</p>` : ''}
     <div class="meeting"><span><b>Promote a lieutenant</b><small>${lieutenants(s, 'player').length} of ${LT_CAP}. Lieutenants come from your own hoods: anyone with ${PROMOTE_XP} experience can be promoted from their row in a crew. ${ready ? `${ready} ready now.` : 'Nobody is ready yet.'}</small></span></div>
     <h4 class="sub">Specialists</h4>
-    ${(['recruiter', 'armourer', 'mechanic', 'lawyer'] as SpecialistKind[]).map(spec).join('')}
+    ${(['consigliere', 'recruiter', 'armourer', 'mechanic', 'lawyer'] as SpecialistKind[]).map(spec).join('')}
     ${lts.length ? `<div class="meeting"><span><b>An envelope</b><small>Loyalty up. ${money(REWARD_COST)}.</small></span><select id="reward-lt" aria-label="Who gets the envelope">${lts.map((l) => `<option value="${l.id}">${esc(first(l))}</option>`).join('')}</select>${actButton({ kind: 'reward', lt: lts[0].id }, 'Give', 'data-pickreward="1"')}</div>` : ''}
   </section>`;
 }
@@ -616,6 +617,7 @@ function renderOrders(): string {
   const people = members(s, 'player');
   const rivals = members(s, 'rival');
   return `
+    ${deskPanel()}
     ${lessonCard()}
     <section><h2>Orders for ${esc(monthName(s.month))}</h2>
       <p class="hint">Each person works down their own list. Hands go to the jobs at the top first, and jobs that get nobody stall. Ongoing jobs carry over each month; one-off jobs drop off when they're done.</p></section>
@@ -737,6 +739,8 @@ function renderEdition(): string {
       <div class="trouble"><h3>Trouble at home</h3>${trouble.length ? trouble.map((x) => `<p>${esc(label(x))} ${esc(x.demand!.text)}.</p>`).join('') : '<p>Nobody is asking for anything. Yet.</p>'}
       ${l ? `<p><b>Lesson ${s.lessons.index + 1}:</b> ${esc(l.title)}. ${esc(l.goal)}.</p>` : ''}</div>
     </div>
+    ${paperBrief()}
+    ${paperDesk()}
     <button class="primary go" data-act="to-work">To work</button>
   </div>`;
 }
@@ -833,6 +837,7 @@ function render(): void {
   map.setState(s);
   renderModes();
   map.showOrders = phase === 'orders';
+  map.notices = phase === 'orders' || phase === 'paper' ? onDesk() : [];
   renderBar();
   side.innerHTML = phase === 'watch' || phase === 'plans' ? renderWatch() : renderOrders();
   renderOverlay();
@@ -929,6 +934,15 @@ document.addEventListener('click', (e) => {
   }
   if (d.act === 'pick-close') return closePick();
   if (d.mode) return setMode(d.mode as MapMode);
+  if (d.noteShow) return showNotice(Number(d.noteShow));
+  if (d.noteHide) {
+    dismissed.add(`${s.month}:${d.noteHide}`);
+    return render();
+  }
+  if (d.act === 'desk-all') {
+    deskAll = !deskAll;
+    return render();
+  }
   if (d.stance) {
     const [id, stance] = d.stance.split('|');
     setStance(s, 'player', id, stance as Stance);
@@ -1275,6 +1289,105 @@ map.onPick = (b: Building | null, p: Person | null, px: number, py: number) => {
 };
 
 /** The details shown on hover and at the top of the orders menu. */
+// ---------------------------------------------------------------- the desk
+
+/** Notices dismissed this session (by month and index): they leave the desk and the map. */
+const dismissed = new Set<string>();
+/** Show every notice on the desk, not just the first few. */
+let deskAll = false;
+/** How many notices the desk shows before "show all". */
+const DESK_SHOWN = 6;
+const LEVEL_WORD: Record<Notice['level'], string> = { alarm: 'Urgent', warn: 'Soon', info: 'Note' };
+/** Which map mode shows a notice best. */
+const NOTICE_MODE: Record<Notice['kind'], MapMode> = {
+  heat: 'heat',
+  hq: 'heat',
+  raid: 'heat',
+  stopped: 'income',
+  slipping: 'income',
+  short: 'income',
+  rival: 'turf',
+};
+
+/** The notices still on the desk, with their index in s.notices. */
+function onDesk(): (Notice & { i: number })[] {
+  return s.notices.map((n, i) => ({ ...n, i })).filter((n) => !dismissed.has(`${s.month}:${n.i}`));
+}
+
+/** Show a notice: switch to the map mode that explains it, and pulse the place. */
+function showNotice(i: number): void {
+  const n = s.notices[i];
+  if (!n) return;
+  setMode(NOTICE_MODE[n.kind]);
+  if (n.at) map.focus(n.at);
+  if (narrow.matches) window.scrollTo({ top: 0, behavior: 'smooth' });
+  render();
+}
+
+function noticeRow(n: Notice & { i: number }, controls: boolean): string {
+  return `<div class="note ${n.level}"><i aria-hidden="true">!</i><span><b>${esc(n.title)}</b><small>${esc(n.text)}</small></span>${
+    controls
+      ? `<span class="note-acts">${n.at ? `<button class="small" data-note-show="${n.i}">Show</button>` : ''}<button class="ic" data-note-hide="${n.i}" aria-label="Dismiss" title="Done with it">✕</button></span>`
+      : `<span class="note-level">${LEVEL_WORD[n.level]}</span>`
+  }</div>`;
+}
+
+/** The consigliere's lines, with how sure he is. */
+function adviceRows(): string {
+  const b = s.briefing;
+  if (!b?.advice.length) return '';
+  const who = SPECIALISTS.consigliere.name.split(' ').at(-1);
+  return `<div class="advice"><h4>${esc(who!)} says</h4>${b.advice
+    .map((a) => `<p>${a.confidence ? `<em>${a.confidence}</em>` : ''}${esc(a.text)}</p>`)
+    .join('')}</div>`;
+}
+
+/** In the Morning Edition: the month in numbers, and the consigliere's reading if we have one. */
+function paperBrief(): string {
+  const b = s.briefing;
+  if (!b) return '';
+  return `<div class="paper-brief"><div><h3>The month in numbers</h3>${b.facts.map((f) => `<p>${esc(f)}</p>`).join('')}</div>${
+    adviceRows() ||
+    `<div class="advice none"><h3>No consigliere</h3><p>Nobody reads these numbers for you. A consigliere would (Meetings).</p></div>`
+  }</div>`;
+}
+
+/** On the orders screen: what last month left on the desk. */
+function deskPanel(): string {
+  const all = onDesk();
+  if (!s.notices.length && !s.briefing) return '';
+  const numbers = s.briefing ? `<div class="desk-facts">${s.briefing.facts.map((f) => `<p>${esc(f)}</p>`).join('')}</div>` : '';
+  if (!s.notices.length)
+    return `<section class="desk"><h3>On your desk</h3>${numbers}${adviceRows()}<p class="hint">Nothing else.</p></section>`;
+  const shown = deskAll ? all : all.slice(0, DESK_SHOWN);
+  return `<section class="desk"><h3>On your desk (${all.length})</h3>${numbers}${adviceRows()}${
+    all.length
+      ? shown.map((n) => noticeRow(n, true)).join('') +
+        (all.length > DESK_SHOWN
+          ? `<button class="link" data-act="desk-all">${deskAll ? 'Show fewer' : `Show all ${all.length}`}</button>`
+          : '')
+      : '<p class="hint">All dealt with.</p>'
+  }</section>`;
+}
+
+/** In the Morning Edition: the desk, briefly. */
+function paperDesk(): string {
+  if (!s.notices.length) return '';
+  const all = onDesk();
+  return `<div class="paper-desk"><h3>On your desk</h3>${all
+    .slice(0, DESK_SHOWN)
+    .map((n) => noticeRow(n, false))
+    .join(
+      '',
+    )}${all.length > DESK_SHOWN ? `<p class="more">And ${all.length - DESK_SHOWN} more, waiting when you get to work.</p>` : ''}</div>`;
+}
+
+/** Notices about a place, for its tooltip. */
+function noticesAt(b: Building): string {
+  const here = onDesk().filter((n) => n.at && n.at.x === b.x && n.at.y === b.y);
+  return here.map((n) => `<span class="turf far">${esc(n.title)}</span>`).join('');
+}
+
 function describe(b: Building | null, p: Person | null): string {
   let html = '';
   if (p) {
@@ -1309,6 +1422,7 @@ function describe(b: Building | null, p: Person | null): string {
         : '<span class="turf far">Off our turf: harder and slower to sign up</span>';
     }
   }
+  if (b) html += noticesAt(b);
   return html;
 }
 

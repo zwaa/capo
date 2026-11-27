@@ -31,7 +31,7 @@ export type JobKind =
 /** What a person's idle hoods do when nothing on the list needs them. */
 export type IdleOrder = 'rest' | 'patrol' | 'canvass';
 
-export type SpecialistKind = 'recruiter' | 'armourer' | 'mechanic' | 'lawyer';
+export type SpecialistKind = 'recruiter' | 'armourer' | 'mechanic' | 'lawyer' | 'consigliere';
 
 /**
  * A standing job. The plan part (kind, target, posture) persists month to
@@ -221,6 +221,8 @@ export interface MonthRun {
   news: NewsItem[];
   /** Families whose HQ was raided this month (once a month at most). */
   hqRaided: FamilyId[];
+  /** Things that happened to us this month that go on the desk at month end. */
+  notices: Notice[];
 }
 
 export interface NewsItem {
@@ -245,6 +247,39 @@ export interface Stats {
   changes: number;
   demandsSeen: number;
   raids: number;
+}
+
+/** Something on the boss's desk: what happened last month that needs a decision, and where. */
+export interface Notice {
+  kind: 'heat' | 'hq' | 'rival' | 'stopped' | 'slipping' | 'raid' | 'short';
+  /** alarm: something lost or about to be; warn: act soon; info: worth knowing. */
+  level: 'alarm' | 'warn' | 'info';
+  title: string;
+  text: string;
+  /** Where on the map, if anywhere. */
+  at: { x: number; y: number } | null;
+}
+
+/** A month in numbers, kept for comparisons and trends. */
+export interface MonthSummary {
+  month: number;
+  net: number;
+  income: number;
+  holds: number;
+  rivalHolds: number;
+  hq: number;
+  /** What our places on each block took (by block id). */
+  took: Record<string, number>;
+  /** Block heat at month end (by block id). */
+  heat: Record<string, number>;
+  /** Blocks where Calloway moved against us this month (from the desk). */
+  rivalMoves: string[];
+}
+
+/** The month's briefing: the numbers for everyone, and the consigliere's reading of them if we have one. */
+export interface Briefing {
+  facts: string[];
+  advice: { text: string; confidence: 'Likely' | 'Rumour' | null }[];
 }
 
 /** How a block feels about a family. */
@@ -277,6 +312,11 @@ export interface GameState {
   candidates: number[];
   lessons: { on: boolean; index: number };
   stats: Stats;
+  /** The boss's desk: what last month left to deal with (rebuilt at each month end). */
+  notices: Notice[];
+  /** Last month's briefing (null before the first month ends), and the last few months in numbers. */
+  briefing: Briefing | null;
+  history: MonthSummary[];
   /** How each block feels about each family (by block id): fear and goodwill, 0-100 each. Missing means 0. */
   mood: Record<string, Record<FamilyId, Mood>>;
   /** Why fear and goodwill moved since the month began (cleared when the next month starts). */

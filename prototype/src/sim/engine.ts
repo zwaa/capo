@@ -3,6 +3,7 @@
 // A month runs day by day; any day can raise a Card the player must answer.
 
 import { planFamily } from './ai';
+import { brief } from './brief';
 import { advanceLessons } from './lessons';
 import { chance, int, pick, rand } from './rng';
 import { NICKS, POOL, blankJob, freshMarket, makeHood, makePerson, newGame, notableHood, streetOf } from './setup';
@@ -21,6 +22,7 @@ import type {
   ScheduledEvent,
   SpecialistKind,
   Stance,
+  Notice,
 } from './types';
 import {
   BRANCHES,
@@ -98,6 +100,7 @@ import {
   blockId,
   heatAt,
   hottestHeld,
+  cap,
   BADMOUTH,
   CHARITY_COST,
   CHARITY_GOODWILL,
@@ -108,7 +111,7 @@ import {
   GRIP_PULL,
   HEAT_SOURS,
   INTIMIDATE_FEAR,
-  LOYAL_MOOD,
+  patience,
   blockBuildings,
   grip,
   moodOf,
@@ -154,6 +157,18 @@ export function addBlockHeat(s: GameState, id: string, n: number, why: string, f
   s.blockHeat[id] = after;
   s.blockHeatLog.push({ block: id, label: why, amount: after - before, family: f });
 }
+/** Put something on our desk for month end. Only what happens to us, or that we'd hear about. */
+function notice(
+  s: GameState,
+  kind: Notice['kind'],
+  level: Notice['level'],
+  title: string,
+  text: string,
+  at: { x: number; y: number } | null,
+): void {
+  s.run?.notices.push({ kind, level, title, text, at: at ? { x: at.x, y: at.y } : null });
+}
+
 /** Move one of a family's dials on a block, with the reason (for the block's history). */
 export function addMood(
   s: GameState,
@@ -694,7 +709,18 @@ export function startMonth(s: GameState): void {
   }
   s.blockHeatLog = [];
   s.moodLog = [];
-  s.run = { day: 0, queue: [], scheduled: [], changesLeft: 2, rivalChangesLeft: 2, nextCardId: 1, log: [], news: [], hqRaided: [] };
+  s.run = {
+    day: 0,
+    queue: [],
+    scheduled: [],
+    changesLeft: 2,
+    rivalChangesLeft: 2,
+    nextCardId: 1,
+    log: [],
+    news: [],
+    hqRaided: [],
+    notices: [],
+  };
   for (const f of ['player', 'rival'] as const) {
     allocate(s, f);
     const fam = s.families[f];
@@ -1028,6 +1054,15 @@ function raids(s: GameState): void {
       log(s, `${lost} cases of liquor seized at ${b.name}.`, b.owner);
     }
     const mine = b.owner === 'player';
+    if (mine)
+      notice(
+        s,
+        'raid',
+        'alarm',
+        `Police raided ${b.name}`,
+        `The ${b.racket} is shut for the month. The block's heat was ${heatAt(s, b)}.`,
+        b,
+      );
     log(s, `Police raid ${b.name}. The ${b.racket} is shut for the month.`, b.owner);
     story(
       s,
@@ -1062,6 +1097,7 @@ function hqRaid(s: GameState, f: FamilyId): void {
   const boss = bossOf(s, f);
   const seized = Math.min(HQ_SEIZE_MAX, Math.max(0, Math.round(fam.cash * HQ_SEIZE)));
   spend(s, f, seized, 'Cash seized in the raid on HQ');
+  const was = fam.heat;
   addHeat(s, f, -15, 'Raid on HQ let off steam');
   const home = crewOf(s, boss).filter((h) => h.status === 'active');
   const nabbed = home.length ? pick(s, home) : null;
@@ -1078,7 +1114,13 @@ function hqRaid(s: GameState, f: FamilyId): void {
     `Detectives spent the morning at the residence of ${boss.name}, leaving with ${seized ? 'a strongbox' : 'nothing but a parking ticket'}. ${boss.name} described the visit as "a social call."`,
     f === 'player' ? 8 : 5,
   );
-  if (f === 'player') emergency(s, 'Police at the door', `The police raided HQ. ${what}.`, { x: boss.homeX, y: boss.homeY });
+  if (f === 'player') {
+    emergency(s, 'Police at the door', `The police raided HQ. ${what}.`, { x: boss.homeX, y: boss.homeY });
+    notice(s, 'hq', 'alarm', 'Police raided HQ', `${what}. HQ heat had reached ${was}.`, {
+      x: boss.homeX,
+      y: boss.homeY,
+    });
+  }
 }
 
 function arrest(s: GameState, p: Person): void {
@@ -1340,6 +1382,15 @@ function complete(s: GameState, p: Person, j: Job): void {
       addHeat(s, f, 4, `Windows broken on ${blockName(s, id)}`, blockCentre(s, id));
       seasoned(s, j);
       log(s, `${squadNames(s, j) || name} put the fear into ${blockName(s, id)}.`, f);
+      if (f === 'rival' && blockBuildings(s, id).some((b) => holder(b) === 'player'))
+        notice(
+          s,
+          'rival',
+          'warn',
+          `Calloway's men broke windows on ${blockName(s, id)}`,
+          `The block fears him more now (fear ${moodOf(s, 'rival', id).fear}).`,
+          blockCentre(s, id),
+        );
       return;
     }
     case 'badmouth': {
@@ -1348,6 +1399,15 @@ function complete(s: GameState, p: Person, j: Job): void {
       addMood(s, foe, id, 'goodwill', -BADMOUTH, `Talk going round about ${s.families[foe].name}`);
       seasoned(s, j);
       log(s, `${squadNames(s, j) || name} spread some talk about ${s.families[foe].name} on ${blockName(s, id)}.`, f);
+      if (foe === 'player')
+        notice(
+          s,
+          'rival',
+          'warn',
+          `Talk going round about us on ${blockName(s, id)}`,
+          `Calloway's people are souring our name there. Our goodwill is down to ${moodOf(s, 'player', id).goodwill}.`,
+          blockCentre(s, id),
+        );
       return;
     }
     case 'buy': {
@@ -1467,6 +1527,8 @@ function signUp(s: GameState, b: Building, p: Person, posture: Posture, j?: Job)
   else addMood(s, f, b, 'fear', Math.ceil((posture === 'loud' ? 4 : 2) * k), `${b.name} signed up (${posture})`);
   if (posture === 'loud') addMood(s, f, b, 'goodwill', -Math.ceil(2 * k), `${b.name} signed up (loud)`);
   log(s, `${(j && squadNames(s, j)) || first(p)} signed up ${b.name}. It pays $${b.protection} a month.`, f);
+  if (f === 'rival' && !isHome(b) && onTurf(s, 'player', b, b.id))
+    notice(s, 'rival', 'info', `Calloway signed up ${b.name}`, 'It is right next to our turf.', b);
   allocate(s, f);
   advanceLessons(s);
 }
@@ -1713,15 +1775,26 @@ function resolveFight(s: GameState, ctx: FightCtx, mod: number): void {
       att.wins++;
       if (ctx.kind === 'wreck') {
         log(s, `${first(att)}'s crew wrecked the ${b.racket} at ${b.name}.`, af);
+        if (df === 'player')
+          notice(
+            s,
+            'rival',
+            'alarm',
+            `Calloway wrecked ${b.name}`,
+            `His crew smashed the ${b.racket}. The building is still ours; the back room is empty.`,
+            b,
+          );
         b.racket = null;
       } else if (ctx.kind === 'takeover') {
         b.owner = af;
         b.protectedBy = null;
         log(s, `${first(att)} took ${b.name} from ${s.families[df].name}.`, af);
+        if (df === 'player') notice(s, 'rival', 'alarm', `Calloway took ${b.name}`, 'He took the building by force. It is his now.', b);
       } else {
         b.protectedBy = af;
         b.uncollected = 0;
         log(s, `${first(att)} muscled in on ${b.name}. It pays us now.`, af);
+        if (df === 'player') notice(s, 'rival', 'alarm', `Calloway took ${b.name}`, 'His men muscled in. It pays Calloway now.', b);
       }
     } else log(s, `${first(att)} was driven off from ${b.name}.`, af);
   } else if (target) {
@@ -1854,12 +1927,17 @@ function lean(s: GameState, p: Person, j: Job, b: Building): void {
     p.wins++;
     seasoned(s, j, squadStat(s, j, 'charm') >= squadStat(s, j, 'muscle') ? 'charm' : 'muscle');
     log(s, `${b.name} now pays ${s.families[f].name}, not ${s.families[df].name}. ${who} made the case.`, null);
+    if (df === 'player')
+      notice(s, 'rival', 'alarm', `Calloway took ${b.name}`, `${who} leaned on the owner and he switched. It pays Calloway now.`, b);
     // Taking his paying customers adds up: one is a grumble, a few close together and he reaches for worse.
     if (f === 'player') s.families.rival.provoked = Math.min(PROVOKED_MAX, s.families.rival.provoked + 1);
     allocate(s, f);
     allocate(s, df);
     advanceLessons(s);
-  } else log(s, `The owner of ${b.name} is more afraid of ${s.families[df].name} than of ${who}. For now.`, null);
+  } else {
+    log(s, `The owner of ${b.name} is more afraid of ${s.families[df].name} than of ${who}. For now.`, null);
+    if (df === 'player') notice(s, 'rival', 'warn', `Calloway leaned on ${b.name}`, 'The owner stuck with us this time.', b);
+  }
   if (f === 'player') s.families.rival.notice = true;
 }
 
@@ -2217,6 +2295,8 @@ export function endMonth(s: GameState): void {
   }
   planFamily(s, 'rival');
   wire(s);
+  s.notices = desk(s, run.notices);
+  s.briefing = brief(s, run.notices);
   s.news = [...run.news].sort((a, b) => b.weight - a.weight).slice(0, 6);
   if (!s.news.length)
     s.news = [
@@ -2268,12 +2348,13 @@ function settle(s: GameState, f: FamilyId): void {
       b.uncollected = 0;
     } else {
       b.uncollected++;
-      const m = moodOf(s, f, b);
-      const patience = 2 + (m.fear >= LOYAL_MOOD ? 1 : 0) + (m.goodwill >= LOYAL_MOOD ? 1 : 0);
-      if (b.uncollected >= patience && chance(s, 0.5)) {
+      if (b.uncollected >= patience(s, f, b) && chance(s, 0.5)) {
+        const months = b.uncollected;
         b.protectedBy = null;
         b.uncollected = 0;
         log(s, `${b.name} stopped paying. Nobody had been round in months.`, f);
+        if (f === 'player')
+          notice(s, 'stopped', 'alarm', `${b.name} stopped paying`, `Nobody had been round for ${months} months. It pays nobody now.`, b);
       }
     }
   });
@@ -2361,6 +2442,74 @@ export function coolBlocks(s: GameState): void {
     }
   }
   for (const id of allBlocks(s)) addBlockHeat(s, id, -BLOCK_COOL, 'Quiet nights', null);
+}
+
+/** Warn about HQ heat this far below the raid line. */
+const HQ_WARNING = 10;
+const LEVELS: Notice['level'][] = ['alarm', 'warn', 'info'];
+/** At most this many notices on the desk, worst first. */
+const DESK_SIZE = 20;
+
+/**
+ * The boss's desk for the coming month: what happened to us, then what the state of the ward says needs
+ * attention (hot blocks and HQ, doors that missed a collection, back rooms nobody ran).
+ */
+export function desk(s: GameState, happened: Notice[]): Notice[] {
+  const out = [...happened];
+  const fam = s.families.player;
+  const boss = bossOf(s, 'player');
+  const hq = { x: boss.homeX, y: boss.homeY };
+  if (fam.heat >= HQ_RAID_FROM)
+    out.push({
+      kind: 'hq',
+      level: 'alarm',
+      title: `HQ heat is ${fam.heat}`,
+      text: `Above ${HQ_RAID_FROM} the police may raid HQ: cash seized, someone taken in.`,
+      at: hq,
+    });
+  else if (fam.heat >= HQ_RAID_FROM - HQ_WARNING)
+    out.push({
+      kind: 'hq',
+      level: 'warn',
+      title: `HQ heat is ${fam.heat}`,
+      text: `Above ${HQ_RAID_FROM} the police may raid HQ.`,
+      at: hq,
+    });
+  for (const id of allBlocks(s)) {
+    const ours = blockBuildings(s, id).filter((b) => holder(b) === 'player');
+    if (!ours.length) continue;
+    const h = s.blockHeat[id] ?? 0;
+    if (h >= SLOW_HEAT)
+      out.push({
+        kind: 'heat',
+        level: 'warn',
+        title: `${cap(blockName(s, id))} is hot (${h})`,
+        text: beatPaid(s, 'player', id)
+          ? 'Jobs there take a day longer; rackets there risk raids. The beat there is paid.'
+          : 'Jobs there take a day longer; rackets there risk raids.',
+        at: blockCentre(s, id),
+      });
+    const missed = ours.filter((b) => !b.owner && b.uncollected > 0);
+    if (missed.length)
+      out.push({
+        kind: 'slipping',
+        level: 'warn',
+        title: `${missed.length === 1 ? missed[0].name : `${missed.length} doors on ${blockName(s, id)}`} not collected`,
+        text: 'Doors stop paying after a month or two without a visit.',
+        at: missed.length === 1 ? missed[0] : blockCentre(s, id),
+      });
+  }
+  for (const b of owned(s, 'player')) {
+    if ((b.racket === 'speakeasy' || b.racket === 'gambling') && !b.raided && b.took <= LEGIT_TRADE)
+      out.push({
+        kind: 'short',
+        level: 'warn',
+        title: `${b.name}: the back room sat shut`,
+        text: `Nobody ran the ${b.racket} last month, so it made only its legit trade.`,
+        at: { x: b.x, y: b.y },
+      });
+  }
+  return out.sort((a, b) => LEVELS.indexOf(a.level) - LEVELS.indexOf(b.level)).slice(0, DESK_SIZE);
 }
 
 /** Month end for fear and goodwill: stances on our blocks, then fear fades, goodwill fades and heat sours it. */
