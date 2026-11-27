@@ -15,6 +15,8 @@
 import { isLot } from '../sim/setup';
 import type { Building, FamilyId, GameState, Person } from '../sim/types';
 import {
+  allBlocks,
+  blockBuildings,
   onTurf,
   wealth,
   BLOCK_H,
@@ -73,12 +75,12 @@ export const MAP_MODES: { id: MapMode; label: string; key: string }[] = [
   {
     id: 'wealth',
     label: 'Wealth',
-    key: 'Where the money is: the brighter the glow, the richer the place, whoever holds it. Back rooms glow brightest, homes barely',
+    key: 'How rich each block is, whoever holds it: back rooms count most, homes least',
   },
   {
     id: 'income',
     label: 'Income',
-    key: 'What each of our places paid last month · Red $0: paid nothing (nobody collected, nobody ran it, or raided) · New: signed this month',
+    key: 'What our places in each block took last month · Red border: something of ours paid nothing (nobody collected, nobody ran it, or raided) · Grey "new": signed this month, nothing due yet',
   },
   {
     id: 'reach',
@@ -87,8 +89,36 @@ export const MAP_MODES: { id: MapMode; label: string; key: string }[] = [
   },
 ];
 
-/** The worth at which a place glows its brightest on the Wealth map (a busy bar). */
-const WEALTH_TOP = 600;
+/** A stepped colour scale: a block takes the colour of the highest step its total reaches. */
+export interface Step {
+  from: number;
+  label: string;
+  colour: string;
+}
+const step = (scale: Step[], n: number): Step => [...scale].reverse().find((x) => n >= x.from) ?? scale[0];
+
+/** How rich a block is, all of it, whoever holds it (a block of homes alone stays in the bottom step). */
+export const WEALTH_SCALE: Step[] = [
+  { from: 0, label: 'Poor', colour: 'rgb(32, 38, 46)' },
+  { from: 250, label: 'Getting by', colour: 'rgb(38, 66, 50)' },
+  { from: 500, label: 'Comfortable', colour: 'rgb(46, 96, 58)' },
+  { from: 800, label: 'Well off', colour: 'rgb(74, 138, 74)' },
+  { from: 1200, label: 'Rich', colour: 'rgb(132, 184, 96)' },
+];
+/** What our places in a block took last month. */
+export const INCOME_SCALE: Step[] = [
+  { from: 0, label: '$0', colour: 'rgb(92, 36, 30)' },
+  { from: 1, label: 'Under $200', colour: 'rgb(70, 52, 24)' },
+  { from: 200, label: '$200+', colour: 'rgb(112, 78, 26)' },
+  { from: 500, label: '$500+', colour: 'rgb(166, 112, 34)' },
+  { from: 1000, label: '$1,000+', colour: 'rgb(227, 162, 59)' },
+];
+/** Blocks where we hold nothing, and blocks where all we hold was signed up this month. */
+const INCOME_NONE = 'rgb(20, 24, 30)';
+const INCOME_NEW = 'rgb(44, 49, 58)';
+
+/** One of ours that should have brought something in last month and didn't (stills supply the bars; new doors haven't paid yet). */
+export const paidNothing = (b: Building): boolean => !b.took && b.racket !== 'still' && (!!b.owner || b.uncollected > 0);
 
 interface Pos {
   x: number;
@@ -336,9 +366,11 @@ export class WardMap {
     }
 
     // Fog of war: a light hatch over what our people can't see. It hides people, not buildings.
+    // The block-coloured modes leave it off: it would make one block look like two shades.
+    const blocky = this.mode === 'wealth' || this.mode === 'income';
     g.save();
     g.lineWidth = 1;
-    for (let y = 0; y < s.height; y++) {
+    for (let y = 0; y < s.height && !blocky; y++) {
       for (let x = 0; x < s.width; x++) {
         if (seenTile(s, x, y)) continue;
         const { X, Y } = at(x, y);
@@ -500,59 +532,71 @@ export class WardMap {
     }
   }
 
-  /** Wealth: a dark scrim with a warm glow on each place, brighter the richer it is. No numbers. */
+  /** Wealth: each city block in one solid colour, by how rich it is. No numbers. */
   private drawWealth(): void {
     const s = this.state!;
-    const g = this.ctx;
-    const T = this.tile;
-    this.scrim(0.8);
-    g.save();
-    g.globalCompositeOperation = 'lighter';
-    for (const b of s.buildings) {
-      const w = Math.min(1, Math.sqrt(wealth(b) / WEALTH_TOP));
-      const c = this.px(b);
-      const r = T * (0.5 + w * 1.3);
-      const glow = g.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
-      glow.addColorStop(0, `rgba(240, 180, 70, ${(w * w * 0.75).toFixed(3)})`);
-      glow.addColorStop(1, 'rgba(240, 180, 70, 0)');
-      g.fillStyle = glow;
-      g.fillRect(c.x - r, c.y - r, r * 2, r * 2);
+    for (const id of allBlocks(s)) {
+      const worth = blockBuildings(s, id).reduce((n, b) => n + wealth(b), 0);
+      this.fillBlock(id, step(WEALTH_SCALE, worth).colour);
     }
-    g.restore();
   }
 
-  /** Darken the lots so an overlay reads over the buildings. */
-  private scrim(alpha: number): void {
-    const s = this.state!;
-    const g = this.ctx;
-    const T = this.tile;
-    g.fillStyle = `rgba(5, 7, 10, ${alpha})`;
-    for (let y = 0; y < s.height; y++)
-      for (let x = 0; x < s.width; x++) if (isLot(x, y)) g.fillRect(this.ox + x * T, this.oy + y * T, T, T);
-  }
-
-  /** Income: what each of our places paid last month. Nobody else's books are shown. */
+  /** Income: each block by what our places in it took last month, with the total. Nobody else's books. */
   private drawIncome(): void {
     const s = this.state!;
     const g = this.ctx;
     const T = this.tile;
-    this.scrim(0.66);
     g.save();
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.font = `700 ${Math.max(9, Math.round(T * 0.26))}px Oswald, 'Arial Narrow', sans-serif`;
-    for (const b of s.buildings) {
-      if (holder(b) !== 'player') continue;
-      const c = this.px(b);
-      const fresh = !b.owner && !b.took && !b.uncollected;
-      const text = b.racket === 'still' ? 'still' : fresh ? 'new' : `$${b.took}`;
+    for (const id of allBlocks(s)) {
+      const ours = blockBuildings(s, id).filter((b) => holder(b) === 'player');
+      const took = ours.reduce((n, b) => n + b.took, 0);
+      const dry = ours.filter(paidNothing).length;
+      // Only new sign-ups here: nothing was due yet, so it isn't a $0 block.
+      const fresh = ours.length > 0 && !took && !dry;
+      const r = this.fillBlock(id, !ours.length ? INCOME_NONE : fresh ? INCOME_NEW : step(INCOME_SCALE, took).colour);
+      if (!ours.length) continue;
+      const label = fresh ? 'new' : `$${took}`;
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
+      const ty = cy - (dry ? T * 0.14 : 0);
       g.lineWidth = 3;
       g.strokeStyle = C.night;
-      g.strokeText(text, c.x, c.y);
-      g.fillStyle = b.racket === 'still' || fresh ? C.dim : b.took ? C.lamp : C.blood;
-      g.fillText(text, c.x, c.y);
+      g.font = `700 ${Math.max(11, Math.round(T * 0.4))}px Oswald, 'Arial Narrow', sans-serif`;
+      g.strokeText(label, cx, ty);
+      g.fillStyle = fresh ? C.dim : C.ink;
+      g.fillText(label, cx, ty);
+      if (dry) {
+        g.font = `700 ${Math.max(9, Math.round(T * 0.24))}px Oswald, 'Arial Narrow', sans-serif`;
+        const note = `${dry} paid nothing`;
+        g.strokeText(note, cx, cy + T * 0.26);
+        g.fillStyle = '#ff9b8f';
+        g.fillText(note, cx, cy + T * 0.26);
+        g.strokeStyle = C.blood;
+        g.lineWidth = 2;
+        g.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
+      }
     }
     g.restore();
+  }
+
+  /** Paint a block's lots in one solid colour; returns the rectangle it covered. */
+  private fillBlock(id: string, colour: string): { x: number; y: number; w: number; h: number } {
+    const s = this.state!;
+    const T = this.tile;
+    const { bx, by } = blockXY(id);
+    const x0 = bx * BLOCK_W + 1;
+    const y0 = by * BLOCK_H + 1;
+    const r = {
+      x: this.ox + x0 * T,
+      y: this.oy + y0 * T,
+      w: (Math.min(s.width, (bx + 1) * BLOCK_W) - x0) * T,
+      h: (Math.min(s.height, (by + 1) * BLOCK_H) - y0) * T,
+    };
+    this.ctx.fillStyle = colour;
+    this.ctx.fillRect(r.x, r.y, r.w, r.h);
+    return r;
   }
 
   /** A dashed frame round a whole city block, just outside its kerbs. */

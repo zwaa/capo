@@ -325,6 +325,12 @@ button {
   background: var(--lamp);
   color: var(--paper-ink);
 }
+.scale {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-right: 10px;
+}
 .legend {
   position: absolute;
   left: max(12px, env(safe-area-inset-left, 0px));
@@ -1416,7 +1422,8 @@ h4.sub {
     gap: 10px;
     font-size: 10px;
   }
-  .legend .key {
+  /* No room for the words on a phone, but the colour scale stays. */
+  .legend .key > span:not(.scale) {
     display: none;
   }
   .side {

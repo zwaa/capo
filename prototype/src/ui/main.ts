@@ -76,7 +76,8 @@ import {
   gunHands,
   visible,
 } from '../sim/util';
-import { MAP_MODES, WardMap } from './map';
+import { INCOME_SCALE, MAP_MODES, WEALTH_SCALE, WardMap, paidNothing } from './map';
+import type { Step } from './map';
 import type { MapMode } from './map';
 
 // ---------------------------------------------------------------- state
@@ -769,10 +770,13 @@ function renderModes(): void {
   if (map.mode === 'income') {
     const ours = s.buildings.filter((b) => holder(b) === 'player');
     const took = ours.reduce((n, b) => n + b.took, 0);
-    const dry = ours.filter((b) => !b.took && b.racket !== 'still' && (b.owner || b.uncollected)).length;
+    const dry = ours.filter(paidNothing).length;
     key = `Last month our places took ${money(took)}${dry ? ` · ${dry} paid nothing` : ''} (before wages and cuts) · ${key}`;
   }
-  keyEl.textContent = key;
+  const scale = (steps: Step[]) =>
+    `<span class="scale">${steps.map((x) => `<span><i style="background:${x.colour}"></i>${esc(x.label)}</span>`).join('')}</span>`;
+  keyEl.innerHTML =
+    (map.mode === 'wealth' ? scale(WEALTH_SCALE) : map.mode === 'income' ? scale(INCOME_SCALE) : '') + `<span>${esc(key)}</span>`;
 }
 
 function render(): void {
